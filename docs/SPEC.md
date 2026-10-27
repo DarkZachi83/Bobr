@@ -193,7 +193,9 @@ Wspólny interfejs, osobne implementacje dla systemów, wybór w `factory.py`.
 | CPU, RAM | `psutil`, nazwa CPU z `/proc/cpuinfo` | `psutil`, nazwa CPU z rejestru |
 | NVIDIA | `nvidia-ml-py`, zapasowo `nvidia-smi` | jak na Linuksie |
 | AMD / Intel, VRAM całkowity | sysfs `mem_info_vram_total` | rejestr `HardwareInformation.qwMemorySize` (64-bit) |
-| AMD / Intel, VRAM zajęty | sysfs `mem_info_vram_used` | liczniki wydajności GPU |
+| AMD / Intel, VRAM zajęty | sysfs `mem_info_vram_used` | pomijany (tylko informacja; liczniki wydajności są powolne i trudne do przypisania karcie) |
+| Lista kart obecnych | `/sys/class/drm/cardN` | `Win32_VideoController` przez PowerShell (rejestr trzyma też karty dawno wyjęte) |
+| Typ i prędkość RAM | brak (wymaga roota) | `Win32_PhysicalMemory`, np. „DDR5-6000” |
 
 **Celowo nie używamy** `Win32_VideoController.AdapterRAM` (WMI): wartość 32-bitowa
 obcina VRAM do 4 GB.
@@ -203,11 +205,18 @@ obcina VRAM do 4 GB.
 zintegrowana obok osobnej karty się nie liczy. W trybie Zaawansowanym kartę można
 odznaczyć.
 
+**Grafika zintegrowana:** Intel poza kartami Arc (identyfikatory 0x56xx, 0xE2xx) oraz AMD
+z „VRAM” ≤ 2 GB (wydzielony kawałek RAM w procesorach APU). Karta Intel Arc na Linuksie ma
+VRAM „?” (sterownik nie podaje go w prosty sposób) i wymaga wpisu w trybie Zaawansowanym.
+
 **Karta, której runtime może nie obsłużyć:** pasek **liczy się z VRAM**,
-a obok stoi ostrzeżenie.
-- NVIDIA: odczyt compute capability, ostrzeżenie poniżej progu.
-- AMD / Intel: krótka uwaga, że wsparcie zależy od runtime'u, z odesłaniem do
-  jego dokumentacji.
+a obok stoi ostrzeżenie (`calculator/runtime_support.py`, progi według dokumentacji Ollamy):
+- NVIDIA compute capability < 5.0: nieobsługiwana przez CUDA (`warn.nvidia_unsupported`),
+- NVIDIA 5.0–7.4 (Maxwell, Pascal, Volta): CUDA 13 ich nie obsługuje, działają kompilacje
+  z CUDA 12 albo Vulkan (`warn.nvidia_legacy`),
+- sterownik NVIDIA < 550, a dla kart ≤ 6.2 < 570 (`warn.nvidia_driver_old`),
+- AMD / Intel: wsparcie zależy od runtime'u, często przez Vulkan (`warn.amd_runtime`,
+  `warn.intel_runtime`).
 
 **Gdy wykrycie się nie uda:** nie wolno po cichu przyjąć 0 GB. Pola nieodczytane
 mają „?”, werdykt się nie pojawia, program proponuje tryb Zaawansowany z tym, co
@@ -265,7 +274,7 @@ data/
   models/catalog.json       katalog do podpowiedzi
 aibobr/
   domain/      models.py, enums.py, units.py  HardwareProfile, GpuInfo, ModelSpec, Verdict; bajty ↔ GB
-  detection/   base.py, factory.py, linux.py, windows.py, nvidia.py, fake.py
+  detection/   base.py, factory.py, common.py, linux.py, windows.py, nvidia.py, profiles.py
   sources/     base.py, factory.py, http.py, huggingface.py, gguf_reader.py, manual.py
   calculator/  quants.py, memory.py, verdict.py  tabela kwantyzacji; wagi + KV + narzut → strefy, zapas
   knowledge/   catalog.py, advisor.py         warianty „co możesz zrobić”, aktualizacja katalogu
@@ -276,6 +285,7 @@ aibobr/
 tools/
   build_catalog.py
   try_source.py             narzędzie deweloperskie: co program odczytał z linku / pliku
+  try_detection.py          narzędzie deweloperskie: co program wykrył; --json zapisuje profil
 tests/
   fake_hardware/*.json      profile sprzętu (także dla --fake-hw)
   test_memory.py, test_verdict.py, test_gguf_reader.py, test_huggingface.py,
@@ -305,8 +315,6 @@ Z NIUCHACZA **nie przenosimy** `transport/`, `protocol/`, `reader_thread` ani
 - **Narzut runtime'u:** 0,5 GB to wartość startowa; do skalibrowania (etap 8).
 - **Szacunek KV bez danych architektury** (ręczny poziom podstawowy): reguła
   ostrożna, do skalibrowania na katalogu.
-- **Progi compute capability NVIDIA** dla Ollama / llama.cpp: sprawdzić
-  w dokumentacji przy pisaniu `nvidia.py`.
 - **macOS (opcja B):** po wersji 1.
 - **Nazwa repozytorium na GitHubie.**
 

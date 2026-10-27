@@ -1,0 +1,18 @@
+{
+  "_opis": "Typowy desktop: RTX 3060 12 GB, 32 GB RAM (makieta paska)",
+  "platform": "linux",
+  "cpu_name": "AMD Ryzen 5 5600X 6-Core Processor",
+  "ram_total_gb": 32,
+  "ram_used_gb": 6.4,
+  "ram_description": null,
+  "gpus": [
+    {
+      "name": "NVIDIA GeForce RTX 3060",
+      "vendor": "nvidia",
+      "vram_total_gb": 12,
+      "vram_used_gb": 0.6,
+      "compute_capability": "8.6",
+      "driver_version": "575.64.03"
+    }
+  ]
+}

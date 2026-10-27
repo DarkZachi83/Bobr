@@ -75,10 +75,41 @@ class MultiGpuTest(unittest.TestCase):
         self.assertEqual(v.capacity.vram_usable, gib(23))
         self.assertEqual(v.capacity.gpus_used, (amd,))
         self.assertIn("warn.mixed_gpu_vendors", v.warnings)
+        self.assertIn("warn.amd_runtime", v.warnings)
 
     def test_deselected_card_is_ignored(self):
         v = run(LLAMA_31_8B, pc(gpus=[gpu(), gpu(selected=False)]))
         self.assertEqual(v.capacity.vram_usable, gib(11))
+
+
+class RuntimeSupportTest(unittest.TestCase):
+    """SPEC §10: karta liczy się z VRAM, ale dostaje ostrzeżenie."""
+
+    def warnings(self, **kw):
+        v = run(LLAMA_31_8B, pc(gpus=[gpu(**kw)]))
+        self.assertEqual(v.capacity.vram_usable, gib(11))          # VRAM nadal liczony
+        return v.warnings
+
+    def test_modern_card_and_driver(self):
+        self.assertEqual(self.warnings(compute_capability=(8, 6), driver_version="575.64"), ())
+
+    def test_pascal_needs_cuda12_build_and_newer_driver(self):
+        w = self.warnings(compute_capability=(6, 1), driver_version="560.35")
+        self.assertEqual(w, ("warn.nvidia_legacy", "warn.nvidia_driver_old"))
+
+    def test_kepler_is_not_supported(self):
+        self.assertEqual(self.warnings(compute_capability=(3, 5)), ("warn.nvidia_unsupported",))
+
+    def test_old_driver_on_modern_card(self):
+        self.assertEqual(self.warnings(compute_capability=(8, 9), driver_version="535.1"),
+                         ("warn.nvidia_driver_old",))
+
+    def test_unknown_details_give_no_warning(self):
+        self.assertEqual(self.warnings(), ())
+
+    def test_intel_arc(self):
+        self.assertEqual(self.warnings(name="Intel Arc B580", vendor=GpuVendor.INTEL),
+                         ("warn.intel_runtime",))
 
 
 class IncompleteProfileTest(unittest.TestCase):

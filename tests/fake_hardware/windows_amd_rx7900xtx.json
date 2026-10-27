@@ -1,0 +1,21 @@
+{
+  "_opis": "Windows, Radeon RX 7900 XTX 24 GB + grafika w procesorze (pomijana)",
+  "platform": "windows",
+  "cpu_name": "AMD Ryzen 7 7800X3D 8-Core Processor",
+  "ram_total_gb": 32,
+  "ram_used_gb": 11.2,
+  "ram_description": "DDR5-6000",
+  "gpus": [
+    {
+      "name": "AMD Radeon RX 7900 XTX",
+      "vendor": "amd",
+      "vram_total_gb": 24
+    },
+    {
+      "name": "AMD Radeon(TM) Graphics",
+      "vendor": "amd",
+      "vram_total_gb": 0.5,
+      "integrated": true
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "_opis": "GTX 1070 (Pascal, CC 6.1) ze starszym sterownikiem – ostrzeżenia",
+  "platform": "linux",
+  "cpu_name": "Intel(R) Core(TM) i5-6600K CPU @ 3.50GHz",
+  "ram_total_gb": 16,
+  "ram_used_gb": 4,
+  "gpus": [
+    {
+      "name": "NVIDIA GeForce GTX 1070",
+      "vendor": "nvidia",
+      "vram_total_gb": 8,
+      "compute_capability": "6.1",
+      "driver_version": "560.35.03"
+    }
+  ]
+}
