@@ -1,0 +1,45 @@
+# Wydanie: wypchnięcie taga v* (np. v0.1.0) buduje AI-Bobr.exe i AI-Bobr-cli.exe na
+# Windowsie i dołącza je do wydania na GitHubie (SPEC §12). Ręcznie (workflow_dispatch)
+# – tylko budowa, pliki do pobrania jako artefakt przebiegu.
+name: Wydanie Windows
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Zależności
+        run: python -m pip install -r requirements.txt nvidia-ml-py pyinstaller
+      - name: Testy
+        run: python -m unittest discover -s tests -t .
+      - name: Budowa .exe
+        run: python tools/build_exe.py
+      - name: Sprawdzenie spakowanej wersji
+        run: |
+          dist\AI-Bobr-cli.exe --help
+          dist\AI-Bobr-cli.exe --update-catalog
+          dist\AI-Bobr-cli.exe --no-color --fake-hw tests\fake_hardware\windows_amd_rx7900xtx.json hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M --explain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AI-Bobr-windows
+          path: dist/*.exe
+      - name: Wydanie na GitHubie
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          generate_release_notes: true

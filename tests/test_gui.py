@@ -14,6 +14,7 @@ from aibobr.gui.bar_layout import bar_layout
 from aibobr.i18n import set_language
 from tests.fixtures import DESKTOP_3060, LLAMA_31_8B, LLAMA_33_70B, QUANTS, pc
 from tests.gguf_writer import llama_like
+from tests.sizes import stop_all, write_model
 
 PROFILES = Path(__file__).resolve().parent / "fake_hardware"
 
@@ -58,9 +59,8 @@ class GuiSmokeTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         d = Path(self.tmp.name)
         self.gguf = d / "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
-        with open(self.gguf, "wb") as f:
-            f.write(llama_like(name="Meta Llama 3.1 8B Instruct"))
-            f.truncate(4_920_000_000)
+        write_model(self.gguf, llama_like(name="Meta Llama 3.1 8B Instruct"), 4_920_000_000)
+        self.addCleanup(stop_all)
         set_language("pl")
         self.build = lambda profile: main.build_app(PROFILES / profile, user_dir=d / "cfg",
                                                     cache_dir=d / "cache")

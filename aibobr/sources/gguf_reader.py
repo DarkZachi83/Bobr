@@ -228,6 +228,12 @@ def display_name(header: GgufHeader, filename: str) -> str:
 
 # --------------------------------------------------------------------------- plik lokalny
 
+def file_size(path: Path) -> int:
+    """Rozmiar pliku – osobna funkcja, żeby testy mogły udawać pliki wielogigabajtowe
+    bez tworzenia ich na dysku (na Windowsie plik „rzadki” zajmuje prawdziwe miejsce)."""
+    return path.stat().st_size
+
+
 def split_parts(path: Path) -> list[Path]:
     """Wszystkie części pliku dzielonego (…-00001-of-00003.gguf) albo [path]."""
     match = SPLIT_RE.match(path.name)
@@ -253,7 +259,7 @@ def load_gguf_file(path: str | os.PathLike) -> LoadedModel:
         with open(part, "rb") as f:
             headers.append(read_header(LocalFile(f)))
     quant = quant_from_header(headers[0], parts[0].name)
-    size = sum(p.stat().st_size for p in parts)
+    size = sum(file_size(p) for p in parts)
     return LoadedModel(
         name=display_name(headers[0], parts[0].name),
         source=ModelSource.GGUF_FILE,

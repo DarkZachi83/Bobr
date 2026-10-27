@@ -12,6 +12,7 @@ from aibobr.i18n import set_language
 from tests.fake_http import FakeHttp
 from tests.fixtures import DESKTOP_3060, LLAMA_31_8B, LLAMA_33_70B, QUANTS
 from tests.gguf_writer import llama_like
+from tests.sizes import stop_all, write_model
 from tests.test_huggingface import gguf_fake
 
 PROFILES = Path(__file__).resolve().parent / "fake_hardware"
@@ -23,9 +24,8 @@ class CliRun(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
         self.gguf = self.dir / "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
-        with open(self.gguf, "wb") as f:
-            f.write(llama_like(name="Meta Llama 3.1 8B Instruct"))
-            f.truncate(4_920_000_000)                     # plik rzadki – nie zajmuje miejsca
+        write_model(self.gguf, llama_like(name="Meta Llama 3.1 8B Instruct"), 4_920_000_000)
+        self.addCleanup(stop_all)
         set_language("pl")
 
     def tearDown(self):
@@ -58,7 +58,10 @@ class CliTest(CliRun):
         self.assertIn("Model potrzebuje 7,1 GB:", out)
         self.assertIn("Twój komputer:", out)
         self.assertIn("Co możesz zrobić:", out)
-        self.assertIn("  → cache KV w q8_0 (opcja runtime'u) zmieści się w całości w karcie.", out)
+        self.assertIn("  → cache KV w q8_0 (opcja runtime'u) zmieści się w całości w karcie", out)
+        actions = out.split("Co możesz zrobić:")[1].strip().splitlines()
+        self.assertTrue(all(a.endswith(",") for a in actions[:-1]))
+        self.assertTrue(actions[-1].endswith("."))
 
     def test_bobr(self):
         code, out = self.run_cli(str(self.gguf), "--bobr", "--lang", "en",
