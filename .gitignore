@@ -15,3 +15,6 @@ dist/
 # system
 .DS_Store
 Thumbs.db
+
+# notatki lokalne / local notes
+*.local.md
