@@ -68,6 +68,10 @@ class Cli:
         self.say(self.p.paint(t("app.title", version=__version__), self.p.bold_yellow))
         self.say()
 
+        if getattr(args, "update_catalog", False):
+            code = self._update_catalog()
+            if not args.model:
+                return code
         text = args.model or self._ask_model()
         if not text:
             self.error("cli.no_model")
@@ -115,6 +119,18 @@ class Cli:
         if others and not args.quant:
             self.say(self.p.paint(t("cli.hint_quant", available=", ".join(others[:12])),
                                   self.p.dim))
+        return EXIT_OK
+
+    def _update_catalog(self) -> int:
+        try:
+            newer = self.c.update_catalog()
+        except SourceError as e:
+            self.error(e.code if e.code.startswith("catalog.") else "catalog.failed", e.detail)
+            return EXIT_SOURCE
+        cat = self.c.catalog
+        key = "catalog.updated" if newer else "catalog.current"
+        self.say(t(key, count=len(cat), date=cat.updated or "—"))
+        self.say()
         return EXIT_OK
 
     # ------------------------------------------------------------------ wydruk

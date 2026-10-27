@@ -11,18 +11,20 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from aibobr.app.config import ConfigStore, user_cache_dir
+from aibobr.app.config import ConfigStore, user_cache_dir, user_config_dir
 from aibobr.app.controller import AppController
 from aibobr.calculator.quants import QuantTable
 from aibobr.cli.cli import Cli, parse_context, parse_gb_list
 from aibobr.detection.factory import create_detector
 from aibobr.i18n import LANGUAGES, set_language, t
+from aibobr.knowledge import catalog
 from aibobr.sources.cache import ModelCache
 
 ROOT = Path(__file__).resolve().parent
 PATHS = {
     "config": ROOT / "config",
     "quants": ROOT / "data" / "quants.json",
+    "catalog": ROOT / "data" / "models" / "catalog.json",
 }
 
 
@@ -30,11 +32,14 @@ def build_app(fake_hw: Optional[Path] = None, user_dir: Optional[Path] = None,
               cache_dir: Optional[Path] = None) -> AppController:
     """Złożenie warstw bez interfejsu – używane też w testach."""
     config = ConfigStore(PATHS["config"], user_dir)
+    downloaded = (user_dir or user_config_dir()) / "catalog.json"
     return AppController(
         config=config,
         quants=QuantTable.load(PATHS["quants"]),
         detector=create_detector(fake_hw),
         cache=ModelCache(cache_dir or user_cache_dir() / "models"),
+        catalog=catalog.load(PATHS["catalog"], downloaded),
+        catalog_download=downloaded,
     )
 
 
@@ -51,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--fake-hw", type=Path, metavar="JSON", help=t("args.fake_hw"))
     p.add_argument("--lang", choices=LANGUAGES, help=t("args.lang"))
     p.add_argument("--no-color", action="store_true", help=t("args.no_color"))
+    p.add_argument("--update-catalog", action="store_true", help=t("args.update_catalog"))
     p.add_argument("-v", "--verbose", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--bobr", action="store_true", help=argparse.SUPPRESS)
     return p

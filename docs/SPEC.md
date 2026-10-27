@@ -195,6 +195,18 @@ Reguły dopracowane przy implementacji (etap 4, `knowledge/advisor.py`):
 - **`tools/build_catalog.py`** (dla autora): lista repozytoriów HF → gotowy JSON.
   Aktualizacja = dopisanie linijki i jedno uruchomienie.
 
+Szczegóły (etap 6, `knowledge/catalog.py`):
+- Lista repozytoriów: `data/models/catalog_sources.txt` (jedno repo GGUF na linię).
+- Format `catalog.json` (wersja 1): `updated` (data), `models[]` z nazwą, repozytorium,
+  architekturą (pola `ArchInfo`) i prawdziwymi rozmiarami wariantów.
+- Podpowiadany wariant: Q4_K_M (albo najbliższy: Q4_K_S, IQ4_XS…). Podpowiedź to
+  największy model z katalogu, który mieści się w całości w karcie **bez małego zapasu**;
+  pomijany jest analizowany model (ta sama nazwa albo repozytorium).
+- „Sprawdź aktualizacje listy modeli” (menu Ustawienia; w CLI `--update-catalog`) pobiera
+  `catalog.json` z gałęzi `main` repozytorium na GitHubie i zapisuje go w katalogu
+  użytkownika tylko wtedy, gdy jest poprawny, niepusty i nowszy. Program używa nowszej
+  z dwóch kopii (dołączonej albo pobranej).
+
 ## 10. Wykrywanie sprzętu
 
 Wspólny interfejs, osobne implementacje dla systemów, wybór w `factory.py`.

@@ -291,10 +291,10 @@ class Advisor:
         Bez karty nic nie jest zielone, więc lista jest pusta."""
         best = None
         for other in self.catalog:
-            if other.name == spec.name:
-                continue
+            if other.name == spec.name or (spec.origin and other.origin == spec.origin):
+                continue                                   # ten sam model
             r = self._eval(other, hw, settings)
-            if r and r.level == FitLevel.GREEN and (
+            if r and r.level == FitLevel.GREEN and not r.low_margin and (
                     best is None or (other.params_total or 0) > (best.params_total or 0)):
                 best = other
         return [Line("expl.act.model", {"name": best.name, "quant": best.quant})] if best else []
