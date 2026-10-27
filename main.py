@@ -72,10 +72,31 @@ def main(argv: Optional[list[str]] = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")
 
-    # GUI pojawi się w etapie 5; do tego czasu zawsze tryb tekstowy.
+    if args.context:
+        controller.settings["default_context"] = args.context
+    if not args.cli:
+        code = _try_gui(controller, args)
+        if code is not None:
+            return code
+        print(t("gui.unavailable"), file=sys.stderr)
+
     from aibobr.cli.bar import PLAIN, palette_for
     cli = Cli(controller, palette=PLAIN if args.no_color else palette_for(sys.stdout))
     return cli.run(args)
+
+
+def _try_gui(controller: AppController, args) -> Optional[int]:
+    """Okno, jeśli się da; None = brak tkintera albo ekranu → tryb tekstowy."""
+    try:
+        import tkinter
+        from aibobr.gui.main_window import run_gui
+    except ImportError:
+        return None
+    try:
+        return run_gui(controller, args.model, args.quant)
+    except tkinter.TclError as e:                    # np. brak ekranu (SSH bez X)
+        logging.getLogger(__name__).info("GUI unavailable: %s", e)
+        return None
 
 
 if __name__ == "__main__":
