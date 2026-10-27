@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 from typing import Any, Optional
 from urllib.parse import quote
@@ -79,9 +79,19 @@ class _File:
     size: Optional[int]
 
 
+def _preferred(ref: HfRef, variants) -> Optional[str]:
+    """Kwantyzacja wskazana w linku: znacznik :QUANT albo konkretny plik."""
+    if ref.path:
+        for v in variants:
+            if ref.path in v.files:
+                return v.quant
+    return ref.quant
+
+
 class HuggingFaceSource:
-    def __init__(self, client: HttpClient):
+    def __init__(self, client: HttpClient, cache=None):
         self.client = client
+        self.cache = cache          # ModelCache albo None
 
     # ------------------------------------------------------------------ adresy
     def _tree_url(self, ref: HfRef) -> str:
@@ -92,6 +102,15 @@ class HuggingFaceSource:
 
     # ------------------------------------------------------------------ wczytanie
     def load(self, ref: HfRef) -> LoadedModel:
+        key = f"{ref.repo_id}@{ref.revision}"
+        cached = self.cache.get(key) if self.cache else None
+        if cached is None:
+            cached = self._fetch(ref)
+            if self.cache:
+                self.cache.put(key, cached)
+        return replace(cached, preferred_quant=_preferred(ref, cached.variants))
+
+    def _fetch(self, ref: HfRef) -> LoadedModel:
         entries = self.client.get_json(self._tree_url(ref))
         if not isinstance(entries, list):
             raise SourceError("source.http_error", "unexpected tree response")
@@ -139,11 +158,7 @@ class HuggingFaceSource:
             raise SourceError("source.no_model_files", ref.repo_id)
         variants.sort(key=lambda v: v.size or 0, reverse=True)
 
-        preferred = ref.quant
-        if ref.path:
-            for v in variants:
-                if ref.path in v.files:
-                    preferred = v.quant
+        preferred = _preferred(ref, variants)
         model = LoadedModel(name="", source=ModelSource.HUGGINGFACE, arch=ArchInfo(),
                             variants=tuple(variants), origin=f"{HF}/{ref.repo_id}",
                             preferred_quant=preferred)

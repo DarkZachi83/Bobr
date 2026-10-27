@@ -13,7 +13,14 @@ from aibobr.sources.huggingface import HuggingFaceSource, parse_reference
 _UNSUPPORTED_SITES = re.compile(r"(^|//|\.)(ollama\.com|lmstudio\.ai|jan\.ai)(/|$)", re.I)
 
 
-def load_model(text: str, client: HttpClient) -> LoadedModel:
+def is_local(text: str) -> bool:
+    """Czy to ścieżka do pliku (a nie link)? GUI/CLI pokazują wtedy inny komunikat."""
+    text = text.strip().strip('"').strip("'")
+    path = Path(text).expanduser()
+    return path.suffix.lower() == ".gguf" or path.exists()
+
+
+def load_model(text: str, client: HttpClient, cache=None) -> LoadedModel:
     """Ścieżka do .gguf, link/identyfikator HF albo błąd z kluczem i18n."""
     text = text.strip().strip('"').strip("'")
     # Wklejone całe polecenie: "ollama run hf.co/bartowski/…:Q4_K_M"
@@ -33,4 +40,4 @@ def load_model(text: str, client: HttpClient) -> LoadedModel:
     ref = parse_reference(text)
     if ref is None:
         raise SourceError("source.unrecognized_input", text)
-    return HuggingFaceSource(client).load(ref)
+    return HuggingFaceSource(client, cache).load(ref)

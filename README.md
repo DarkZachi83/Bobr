@@ -2,7 +2,7 @@
 
 **AI Hardware Checker**
 
-🚧 **Work in progress / Prace trwają** – the core calculator works, no GUI yet. / Rdzeń liczy, GUI jeszcze nie ma.
+🚧 **Work in progress / Prace trwają** – text mode works, the GUI is coming. / Tryb tekstowy działa, GUI w drodze.
 
 **EN:** Will this local LLM run on my PC, and how fast? AI Bóbr reads a specific model
 (a Hugging Face link or a local `.gguf` file), scans your RAM and VRAM, and shows a memory
@@ -18,6 +18,9 @@ Linux · Windows · Python 3.10+ · [specyfikacja / specification (PL)](docs/SPE
 
 ```
 pip install -r requirements.txt
+python main.py --cli hf.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M --explain
+python main.py --cli /path/to/model.gguf --context 16k
+python main.py --help
 python -m unittest discover -s tests -t .
 ```
 
