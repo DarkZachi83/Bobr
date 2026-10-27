@@ -6,6 +6,7 @@ CLI i GUI rozmawiają tylko z nim. Bez tkintera, więc testy składają całą a
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Optional, Sequence
 
 from aibobr.app.config import ConfigStore, run_settings
@@ -14,7 +15,9 @@ from aibobr.detection.base import Detector
 from aibobr.domain.enums import GpuVendor, KvCacheType
 from aibobr.domain.models import GpuInfo, HardwareProfile, ModelSpec, RunSettings, Verdict
 from aibobr.domain.units import gib
+from aibobr.knowledge import catalog as catalog_mod
 from aibobr.knowledge.advisor import Advisor, Explanation
+from aibobr.knowledge.catalog import Catalog
 from aibobr.sources.base import LoadedModel
 from aibobr.sources.cache import ModelCache
 from aibobr.sources.factory import load_model
@@ -31,13 +34,28 @@ class Overrides:
 
 class AppController:
     def __init__(self, config: ConfigStore, quants: QuantTable, detector: Detector,
-                 cache: Optional[ModelCache] = None, catalog: Sequence[ModelSpec] = ()):
+                 cache: Optional[ModelCache] = None, catalog: Optional[Catalog] = None,
+                 catalog_download: Optional[Path] = None):
         self.config = config
         self.settings = config.load()
         self.quants = quants
         self.detector = detector
         self.cache = cache
-        self.advisor = Advisor(quants, catalog)
+        self.catalog_download = catalog_download
+        self.set_catalog(catalog or Catalog(updated="", models=()))
+
+    def set_catalog(self, catalog: Catalog) -> None:
+        self.catalog = catalog
+        self.advisor = Advisor(self.quants, catalog.suggestion_specs())
+
+    def update_catalog(self, client=None) -> bool:
+        """Pobiera nowszy katalog z repozytorium projektu (SPEC §9). True = zaktualizowano."""
+        if self.catalog_download is None:
+            return False
+        fresh, newer = catalog_mod.update(client or HttpClient(), self.catalog_download, self.catalog)
+        if newer:
+            self.set_catalog(fresh)
+        return newer
 
     # ------------------------------------------------------------------ model
     def http(self) -> HttpClient:

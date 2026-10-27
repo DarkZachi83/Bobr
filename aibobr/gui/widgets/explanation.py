@@ -71,6 +71,6 @@ class ExplanationPanel(ttk.Frame):
         pixels = self.text.count("1.0", "end", "ypixels")
         line = tkfont.nametofont("TkDefaultFont").metrics("linespace")
         value = pixels[0] if isinstance(pixels, tuple) else (pixels or 0)
-        lines = max(6, min(value // max(line, 1) + 3, 32))
+        lines = max(5, min(value // max(line, 1) + 1, 32))
         if int(self.text.cget("height")) != lines:      # bez pętli zdarzeń <Configure>
             self.text.configure(height=lines)

@@ -83,9 +83,17 @@ class YellowTest(unittest.TestCase):
     def test_catalog_suggests_biggest_model_that_fits(self):
         small = replace(LLAMA_31_8B, name="Llama 3.1 8B")
         mid = replace(QWEN_25_32B, name="Qwen 2.5 14B", params_total=14_770_000_000,
-                      weights_bytes=gib(8.4), n_layers=48)
+                      weights_bytes=gib(7.5), n_layers=48)
         _, e = explain(QWEN32, DESKTOP_3060, catalog=[small, mid])
         self.assertEqual(e.actions[-1], Line("expl.act.model", {"name": "Qwen 2.5 14B", "quant": "Q4_K_M"}))
+
+    def test_catalog_skips_tight_fit_and_same_model(self):
+        small = replace(LLAMA_31_8B, name="Llama 3.1 8B")
+        tight = replace(QWEN_25_32B, name="Qwen 2.5 14B", params_total=14_770_000_000,
+                        weights_bytes=gib(8.4), n_layers=48)          # zapas ~0,6 GB
+        same = replace(QWEN_25_32B, weights_bytes=gib(1))             # ta sama nazwa
+        _, e = explain(QWEN32, DESKTOP_3060, catalog=[small, tight, same])
+        self.assertEqual(e.actions[-1].fields["name"], "Llama 3.1 8B")
 
     def test_lowest_acceptable_quant_not_q2(self):
         # Karta 6 GB: mieszczą się Q3_K_S (3,5 bita), IQ3_XS (3,3) i warianty Q2 –

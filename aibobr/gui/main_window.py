@@ -102,6 +102,7 @@ class MainWindow:
 
         settings = tk.Menu(bar, tearoff=False)
         settings.add_command(label=t("gui.menu.token"), command=self.set_token)
+        settings.add_command(label=t("gui.menu.update_catalog"), command=self.update_catalog)
         lang = tk.Menu(settings, tearoff=False)
         self.lang_var = tk.StringVar(value=current_language())
         for code in LANGUAGES:
@@ -246,6 +247,21 @@ class MainWindow:
         if token is not None:
             self.c.config.save_user({"hf_token": token.strip()})
             self.c.settings = self.c.config.load()
+
+    def update_catalog(self) -> None:
+        def done(newer):
+            cat = self.c.catalog
+            key = "catalog.updated" if newer else "catalog.current"
+            messagebox.showinfo(t("gui.menu.update_catalog"),
+                                t(key, count=len(cat), date=cat.updated or "—"), parent=self.root)
+            if newer:
+                self.recompute()
+
+        def failed(e):
+            code = e.code if isinstance(e, SourceError) and e.code.startswith("catalog.") else "catalog.failed"
+            messagebox.showerror(t("gui.menu.update_catalog"), t(code), parent=self.root)
+
+        self.worker.run("catalog", self.c.update_catalog, done, failed)
 
     def about(self) -> None:
         if messagebox.askyesno(t("gui.menu.about"),
