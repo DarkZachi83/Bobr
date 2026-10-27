@@ -1,0 +1,14 @@
+{
+  "_opis": "Karta bez sterownika – VRAM nieodczytany (null): werdykt się nie pojawia",
+  "platform": "windows",
+  "cpu_name": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+  "ram_total_gb": 16,
+  "ram_used_gb": 5,
+  "gpus": [
+    {
+      "name": "Microsoft Basic Display Adapter",
+      "vendor": "nvidia",
+      "vram_total_gb": null
+    }
+  ]
+}

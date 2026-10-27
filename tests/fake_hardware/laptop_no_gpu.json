@@ -1,0 +1,16 @@
+{
+  "_opis": "Laptop bez osobnej karty: tylko grafika Intel w procesorze → tryb CPU",
+  "platform": "windows",
+  "cpu_name": "12th Gen Intel(R) Core(TM) i5-1235U",
+  "ram_total_gb": 16,
+  "ram_used_gb": 7.8,
+  "ram_description": "DDR4-3200",
+  "gpus": [
+    {
+      "name": "Intel(R) Iris(R) Xe Graphics",
+      "vendor": "intel",
+      "vram_total_gb": 0.13,
+      "integrated": true
+    }
+  ]
+}

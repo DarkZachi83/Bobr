@@ -1,0 +1,32 @@
+{
+  "_opis": "Prawdziwy skan autora (27.10.2026): laptop, RTX 5050 Laptop 8 GB + Intel UHD, Linux",
+  "platform": "linux",
+  "cpu_name": "13th Gen Intel(R) Core(TM) i5-13450HX",
+  "ram_total_gb": 15.32,
+  "ram_used_gb": 7.16,
+  "ram_description": null,
+  "gpus": [
+    {
+      "name": "NVIDIA GeForce RTX 5050 Laptop GPU",
+      "vendor": "nvidia",
+      "vram_total_gb": 7.96,
+      "vram_used_gb": 0.18,
+      "integrated": false,
+      "selected": true,
+      "compute_capability": "12.0",
+      "driver_version": "615.78.08",
+      "pci_bus": "0000:01:00.0"
+    },
+    {
+      "name": "Intel Raptor Lake-S UHD Graphics",
+      "vendor": "intel",
+      "vram_total_gb": null,
+      "vram_used_gb": null,
+      "integrated": true,
+      "selected": true,
+      "compute_capability": null,
+      "driver_version": null,
+      "pci_bus": "0000:00:02.0"
+    }
+  ]
+}

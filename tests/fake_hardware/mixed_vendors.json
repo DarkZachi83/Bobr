@@ -1,0 +1,20 @@
+{
+  "_opis": "NVIDIA + AMD w jednym komputerze – liczy się grupa z większym VRAM",
+  "platform": "linux",
+  "cpu_name": "AMD Ryzen 7 5800X 8-Core Processor",
+  "ram_total_gb": 32,
+  "gpus": [
+    {
+      "name": "NVIDIA GeForce RTX 4060",
+      "vendor": "nvidia",
+      "vram_total_gb": 8,
+      "compute_capability": "8.9",
+      "driver_version": "575.64.03"
+    },
+    {
+      "name": "AMD Radeon RX 6800",
+      "vendor": "amd",
+      "vram_total_gb": 16
+    }
+  ]
+}

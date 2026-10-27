@@ -5,6 +5,7 @@ from collections import defaultdict
 
 from aibobr.calculator.memory import memory_need
 from aibobr.calculator.quants import QuantTable
+from aibobr.calculator.runtime_support import gpu_warnings
 from aibobr.domain.enums import FitLevel
 from aibobr.domain.models import (
     Capacity,
@@ -54,6 +55,8 @@ def capacity(hw: HardwareProfile, settings: RunSettings) -> tuple[Capacity, tupl
         used = max(groups.values(), key=lambda gs: sum(_usable(g, settings) for g in gs))
         if len(groups) > 1:
             warnings.append("warn.mixed_gpu_vendors")
+    for g in used:
+        warnings += [w for w in gpu_warnings(g) if w not in warnings]
 
     cap = Capacity(
         vram_usable=sum(_usable(g, settings) for g in used),

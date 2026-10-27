@@ -29,6 +29,8 @@ class GpuInfo:
     integrated: bool = False                 # grafika zintegrowana: pamięć = RAM, nie liczymy
     selected: bool = True                    # odznaczenie w trybie Zaawansowanym
     compute_capability: Optional[tuple[int, int]] = None  # tylko NVIDIA
+    driver_version: Optional[str] = None     # tylko NVIDIA, np. "570.86.16"
+    pci_bus: Optional[str] = None            # np. "0000:01:00.0" – do łączenia wyników
 
 
 @dataclass(frozen=True)
