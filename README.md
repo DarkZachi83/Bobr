@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/img/icon.png" width="96" alt="AI Bóbr"></p>
+[![AI Bóbr – bóbr i robot w warsztacie / a beaver and a robot in a workshop](assets/banner.jpg)](assets/banner.jpg)
 
 # AI Bóbr (AI BEAVER)
 

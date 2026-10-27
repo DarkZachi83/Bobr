@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import sys
 import tkinter as tk
-import webbrowser
 from tkinter import messagebox, simpledialog, ttk
 from typing import Optional
 
@@ -28,9 +27,6 @@ from aibobr.i18n import LANGUAGES, current_language, fmt_context, fmt_params, se
 from aibobr.knowledge.advisor import render
 from aibobr.sources.base import LoadedModel, SourceError
 from aibobr.sources.factory import is_local
-
-REPO_URL = "https://github.com/DarkZachi83/Bobr"
-
 
 class MainWindow:
     def __init__(self, root: tk.Tk, controller: AppController,
@@ -264,9 +260,8 @@ class MainWindow:
         self.worker.run("catalog", self.c.update_catalog, done, failed)
 
     def about(self) -> None:
-        if messagebox.askyesno(t("gui.menu.about"),
-                               t("gui.about", version=__version__, url=REPO_URL), parent=self.root):
-            webbrowser.open(REPO_URL)
+        from aibobr.gui.dialogs.about import AboutDialog
+        AboutDialog(self.root)
 
 
 def run_gui(controller: AppController, model: Optional[str] = None,
