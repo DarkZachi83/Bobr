@@ -24,9 +24,11 @@ def loaded(spec, sizes_gib: dict) -> LoadedModel:
 
 
 # Rozmiary jak w repozytorium bartowski (zmierzone u autora w etapie 2).
-LLAMA = loaded(LLAMA_31_8B, {"F32": 29.92, "Q8_0": 7.95, "Q6_K": 6.14, "Q5_K_M": 5.34,
-                             "Q4_K_M": 4.58, "IQ4_XS": 4.14, "Q3_K_M": 3.74, "IQ3_M": 3.52,
-                             "IQ3_XS": 3.28, "Q2_K": 2.96, "IQ2_M": 2.75})
+LLAMA = loaded(LLAMA_31_8B, {
+    "F32": 29.92, "Q8_0": 7.95, "Q6_K_L": 6.38, "Q6_K": 6.14, "Q5_K_L": 5.64, "Q5_K_M": 5.34,
+    "Q5_K_S": 5.21, "Q4_K_L": 4.95, "Q4_K_M": 4.58, "Q3_K_XL": 4.45, "Q4_K_S": 4.37,
+    "IQ4_NL": 4.36, "IQ4_XS": 4.14, "Q3_K_L": 4.03, "Q3_K_M": 3.74, "IQ3_M": 3.52,
+    "Q2_K_L": 3.44, "Q3_K_S": 3.41, "IQ3_XS": 3.28, "Q2_K": 2.96, "IQ2_M": 2.75})
 QWEN32 = loaded(QWEN_25_32B, {"Q8_0": 32.4, "Q6_K": 25.0, "Q5_K_M": 21.7, "Q4_K_M": 18.49,
                               "Q3_K_M": 14.8, "Q2_K": 11.5})
 LLAMA70 = loaded(LLAMA_33_70B, {"Q8_0": 69.8, "Q4_K_M": 39.6, "Q3_K_M": 31.9, "Q2_K": 24.6})
@@ -66,7 +68,9 @@ class YellowTest(unittest.TestCase):
         self.assertEqual(e.summary.key, "verdict.yellow_mostly")
         self.assertIn("expl.pc.slow_little", keys(e.computer))
         self.assertEqual(keys(e.actions), ["expl.act.quant", "expl.act.context", "expl.act.kv"])
-        self.assertEqual(e.actions[0].fields["quant"], "IQ4_XS")
+        # Q3_K_XL ma większy plik niż Q4_K_S, ale to klasa Q3 – podpowiadamy Q4_K_S
+        # (błąd wyłapany na laptopie autora).
+        self.assertEqual(e.actions[0].fields["quant"], "Q4_K_S")
         self.assertEqual(e.actions[1].fields["ctx"], 8192)
 
     def test_32b_on_12gb_card_needs_smaller_model(self):
@@ -84,9 +88,12 @@ class YellowTest(unittest.TestCase):
         self.assertEqual(e.actions[-1], Line("expl.act.model", {"name": "Qwen 2.5 14B", "quant": "Q4_K_M"}))
 
     def test_lowest_acceptable_quant_not_q2(self):
+        # Karta 6 GB: mieszczą się Q3_K_S (3,5 bita), IQ3_XS (3,3) i warianty Q2 –
+        # podpowiadamy najlepszą jakość nie gorszą niż ok. 3,4 bita.
         _, e = explain(LLAMA, pc(gpus=[gpu(vram_gb=6)]))
-        self.assertEqual(e.actions[0].key, "expl.act.quant")
-        self.assertEqual(e.actions[0].fields["quant"], "IQ3_XS")         # ≥ 3,4 bita, nie Q2_K
+        self.assertEqual(keys(e.actions), ["expl.act.quant"])
+        self.assertEqual(e.actions[0].fields["quant"], "Q3_K_S")
+        self.assertNotIn("Q2", str(e.actions))
 
     def test_combo_when_no_single_change_helps(self):
         _, e = explain(LLAMA, pc(gpus=[gpu(vram_gb=5.5)]), replace(AUTO, context_tokens=16384))
@@ -96,6 +103,17 @@ class YellowTest(unittest.TestCase):
         v, e = explain(MOE, DESKTOP_3060)
         self.assertEqual(e.summary.key, "verdict.yellow_moe")
         self.assertIn("expl.pc.slow_moe", keys(e.computer))
+        # „Używalnie” + „potrzebny mniejszy model” sobie przeczyły (laptop autora).
+        self.assertEqual(keys(e.actions), ["expl.act.moe_offload"])
+
+    def test_quality_class_comes_from_name_not_file_size(self):
+        from aibobr.knowledge.advisor import _bits_per_weight
+        bits = {q: _bits_per_weight(LLAMA.spec(q), QUANTS) for q in
+                ("Q3_K_XL", "Q4_K_S", "Q4_K_L", "Q4_K_M", "Q6_K_L", "Q2_K_L")}
+        self.assertLess(bits["Q3_K_XL"], bits["Q4_K_S"])
+        self.assertEqual(bits["Q4_K_L"], bits["Q4_K_M"])
+        self.assertEqual(bits["Q6_K_L"], QUANTS.bits("Q6_K"))
+        self.assertLess(bits["Q2_K_L"], 3.4)
 
     def test_cpu_only(self):
         hw = pc(ram_gb=16, gpus=[gpu("Intel UHD", vram_gb=0.1, integrated=True)])

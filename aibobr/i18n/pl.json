@@ -33,6 +33,7 @@
   "expl.act.cpu_only": "bez karty graficznej każdy model liczy procesor – mniejszy model albo niższa kwantyzacja odpowie szybciej,",
   "expl.act.kv": "cache KV w q8_0 (opcja runtime'u) zmieści się {where},",
   "expl.act.model": "model {name} w {quant} zmieści się w całości.",
+  "expl.act.moe_offload": "w LM Studio włącz „Force Model Expert Weights onto CPU”, a w llama.cpp użyj --cpu-moe albo --n-cpu-moe – eksperci zostaną w RAM, reszta modelu w karcie, co zwykle wyraźnie przyspiesza odpowiedzi,",
   "expl.act.nothing": "nawet kwantyzacja {quant} i kontekst {ctx} nie zmieszczą się w karcie – potrzebny jest mniejszy model,",
   "expl.act.nothing_cpu": "nawet kwantyzacja {quant} i kontekst {ctx} nie zmieszczą się w RAM – potrzebny jest mniejszy model,",
   "expl.act.nothing_red": "nawet kwantyzacja {quant} i kontekst {ctx} nie zmieszczą się w pamięci komputera – potrzebny jest mniejszy model albo więcej RAM,",

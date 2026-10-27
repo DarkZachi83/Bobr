@@ -9,6 +9,7 @@ kontekstu, cache KV w q8_0 i modeli z katalogu i pokazuje tylko to, co zmienia w
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field, replace
 from typing import Iterable, Optional, Sequence
 
@@ -95,9 +96,21 @@ def render_list(lines: Sequence[Line], lang: Optional[str] = None) -> list[str]:
 # --------------------------------------------------------------------------- pomocnicze
 
 def _bits_per_weight(spec: ModelSpec, quants: QuantTable) -> Optional[float]:
-    if spec.weights_bytes and spec.params_total:
-        return spec.weights_bytes * 8 / spec.params_total
-    return quants.bits(spec.quant)
+    """Klasa jakości wariantu w bitach na wagę – z NAZWY kwantyzacji, nie z rozmiaru pliku.
+
+    Warianty _L / _XL (np. Q3_K_XL od bartowskiego, UD-Q4_K_XL od unsloth) to ta sama
+    kwantyzacja z dokładniejszymi warstwami wejścia/wyjścia: plik większy, ale klasa
+    jakości bazowej (Q3_K_XL ≈ Q3_K_M, a nie lepsze od Q4_K_S). Rozmiar pliku jest
+    ostatnią deską ratunku dla nazw spoza tabeli."""
+    name = spec.quant.upper()
+    bits = quants.bits(name)
+    if bits is None:
+        m = re.fullmatch(r"(Q\d_K)(?:_(?:XL|L|M|S))?", name)
+        if m:
+            bits = quants.bits(m.group(1)) or quants.bits(m.group(1) + "_M")
+    if bits is None and spec.weights_bytes and spec.params_total:
+        bits = spec.weights_bytes * 8 / spec.params_total
+    return bits
 
 
 def _where(level: FitLevel, cpu_only: bool = False) -> Text:
@@ -123,8 +136,8 @@ class Advisor:
             spec = model.spec(v.quant)
             bits = _bits_per_weight(spec, self.quants)
             if bits is not None:
-                specs.append((bits, spec))
-        return [s for _, s in sorted(specs, key=lambda p: p[0], reverse=True)]
+                specs.append((bits, spec.weights_bytes or 0, spec))
+        return [s for *_, s in sorted(specs, key=lambda p: (p[0], p[1]), reverse=True)]
 
     # ------------------------------------------------------------------ werdykt
     @staticmethod
@@ -223,6 +236,10 @@ class Advisor:
             if settings.kv_cache_type == KvCacheType.F16 else None
 
         cpu = v.capacity.cpu_only
+        # MoE w strefie żółtej jest używalny (SPEC §7) – zamiast „potrzebny mniejszy model”
+        # podpowiadamy opcję runtime'u, która trzyma ekspertów w RAM, a resztę na karcie.
+        moe_tip = [Line("expl.act.moe_offload")] \
+            if spec.is_moe and v.level == FitLevel.YELLOW and not cpu else []
         if cpu and v.level == FitLevel.YELLOW:
             # Bez karty zielony jest niemożliwy; mniejszy model = szybsze odpowiedzi.
             return [Line("expl.act.cpu_only")] + self._catalog(spec, hw, settings)
@@ -250,7 +267,9 @@ class Advisor:
                 if r and LEVEL_RANK[r.level] >= LEVEL_RANK[target]:
                     lines.append(Line("expl.act.kv", {"where": _where(target, cpu)}))
             if lines:
-                return lines + self._catalog(spec, hw, settings)
+                return moe_tip + lines + self._catalog(spec, hw, settings)
+        if moe_tip:
+            return moe_tip + self._catalog(spec, hw, settings)
 
         # Żadna pojedyncza zmiana nie wystarcza – sprawdzamy wszystkie naraz.
         lowest = smaller[-1] if smaller else spec
