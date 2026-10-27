@@ -1,0 +1,32 @@
+{
+  "_comment": "Bity na wagę dla kwantyzacji GGUF. Używane TYLKO gdy nie znamy rozmiaru pliku (wpis ręczny). Wartości orientacyjne według opisów formatów w llama.cpp; prawdziwe pliki bywają nieco większe, bo warstwy embedding/output zostają w wyższej precyzji. Do kalibracji w etapie 8.",
+  "_source": "llama.cpp, opisy typów kwantyzacji (ggml/llama-quant); stan 2026-10",
+  "bits_per_weight": {
+    "F32": 32.0,
+    "F16": 16.0,
+    "BF16": 16.0,
+    "Q8_0": 8.5,
+    "Q6_K": 6.56,
+    "Q5_K_M": 5.69,
+    "Q5_K_S": 5.54,
+    "Q5_1": 6.0,
+    "Q5_0": 5.5,
+    "Q4_K_M": 4.85,
+    "Q4_K_S": 4.58,
+    "Q4_1": 5.0,
+    "Q4_0": 4.5,
+    "IQ4_NL": 4.5,
+    "IQ4_XS": 4.25,
+    "Q3_K_L": 4.27,
+    "Q3_K_M": 3.91,
+    "Q3_K_S": 3.5,
+    "IQ3_M": 3.66,
+    "IQ3_S": 3.44,
+    "IQ3_XXS": 3.06,
+    "Q2_K": 2.96,
+    "IQ2_M": 2.7,
+    "IQ2_XS": 2.31,
+    "IQ2_XXS": 2.06,
+    "IQ1_S": 1.56
+  }
+}

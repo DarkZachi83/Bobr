@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# build / PyInstaller
+build/
+dist/
+*.spec
+
+# dane lokalne / local data
+*.log
+
+# system
+.DS_Store
+Thumbs.db

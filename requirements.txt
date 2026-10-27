@@ -1,0 +1,2 @@
+psutil>=5.9            # CPU i RAM – jedyna wymagana zależność
+# nvidia-ml-py         # opcjonalnie: dokładny odczyt kart NVIDIA (bez niego: nvidia-smi)
