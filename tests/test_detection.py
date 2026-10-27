@@ -261,6 +261,7 @@ class ProfilesTest(unittest.TestCase):
         "old_nvidia_pascal": FitLevel.GREEN,
         "mixed_vendors": FitLevel.GREEN,
         "detection_failed": None,
+        "real_laptop_rtx5050_linux": FitLevel.GREEN,
     }
 
     def test_every_profile_file_is_covered(self):
@@ -283,6 +284,15 @@ class ProfilesTest(unittest.TestCase):
         self.assertIn("warn.mixed_gpu_vendors", warnings("mixed_vendors"))
         self.assertTrue(evaluate(LLAMA_31_8B, load_profile(PROFILES / "laptop_no_gpu.json"),
                                  RunSettings(), QUANTS).capacity.cpu_only)
+
+    def test_real_laptop_8b_fits_with_low_margin_and_16k_does_not(self):
+        hw = load_profile(PROFILES / "real_laptop_rtx5050_linux.json")
+        v = evaluate(LLAMA_31_8B, hw, RunSettings(), QUANTS)
+        self.assertEqual(v.warnings, ())                  # Blackwell, nowy sterownik
+        self.assertTrue(v.low_margin)                     # ~6,1 GB z 7 GB użytkowych
+        self.assertEqual(len(v.capacity.gpus_used), 1)    # Intel UHD pominięty
+        v16 = evaluate(LLAMA_31_8B, hw, RunSettings(context_tokens=16384), QUANTS)
+        self.assertEqual(v16.level, FitLevel.YELLOW)
 
     def test_round_trip(self):
         for path in PROFILES.glob("*.json"):
