@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 from aibobr.domain.enums import ModelSource
 from aibobr.sources.base import (
-    SPLIT_RE, ArchInfo, LoadedModel, SourceError, Variant, quant_from_filename,
+    OBSOLETE_QUANT_RE, SPLIT_RE, ArchInfo, LoadedModel, SourceError, Variant, quant_from_filename,
 )
 from aibobr.sources.gguf_reader import arch_from_headers, display_name, read_header
 from aibobr.sources.http import HttpClient
@@ -101,7 +101,8 @@ class HuggingFaceSource:
         ]
         try:
             gguf = [f for f in files if f.path.lower().endswith(".gguf")
-                    and "mmproj" not in PurePosixPath(f.path).name.lower()]
+                    and "mmproj" not in PurePosixPath(f.path).name.lower()
+                    and not OBSOLETE_QUANT_RE.search(PurePosixPath(f.path).name)]
             if gguf:
                 return self._load_gguf_repo(ref, gguf)
             if any(f.path == "config.json" for f in files):

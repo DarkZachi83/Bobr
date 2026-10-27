@@ -4,7 +4,9 @@ Dwie rzeczy, które robimy inaczej niż domyślny urllib:
   * Token HF wysyłamy tylko do huggingface.co. Pliki są przekierowywane na serwery CDN
     innego hosta i tam nagłówek Authorization jest usuwany.
   * RemoteFile czyta plik zdalny kawałkami (HTTP Range), więc z wielogigabajtowego GGUF
-    pobieramy tylko nagłówek – zwykle kilka MB.
+    pobieramy tylko nagłówek – zwykle kilka MB. Po pierwszym przekierowaniu zapamiętuje
+    adres serwera z plikiem, a kawałki rosną (1 → 2 → 4 … 16 MB), żeby nagłówek ze sporym
+    słownikiem tokenizera przyszedł w kilku zapytaniach, a nie kilkunastu.
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ from aibobr.sources.base import SourceError
 
 USER_AGENT = f"AI-Bobr/{__version__} (+https://github.com/DarkZachi83/Bobr)"
 CHUNK = 1024 * 1024
+MAX_CHUNK = 16 * 1024 * 1024
 
 
 class _StripAuthOnHostChange(urllib.request.HTTPRedirectHandler):
@@ -56,14 +59,16 @@ class HttpClient:
             except ValueError as e:
                 raise SourceError("source.http_error", f"bad JSON from {url}") from e
 
-    def get_range(self, url: str, start: int, length: int) -> bytes:
-        """Bajty [start, start+length) – mniej, jeśli plik się wcześniej kończy."""
+    def get_range(self, url: str, start: int, length: int) -> tuple[bytes, str]:
+        """Bajty [start, start+length) – mniej, jeśli plik się wcześniej kończy –
+        oraz adres, pod którym je ostatecznie podano (po przekierowaniach)."""
         with self._request(url, {"Range": f"bytes={start}-{start + length - 1}"}) as resp:
+            final = resp.geturl() or url
             if resp.status == 206:
-                return resp.read()
+                return resp.read(), final
             if resp.status == 200 and start == 0:
                 # Serwer zignorował Range: czytamy tylko tyle, ile trzeba, i zamykamy połączenie.
-                return resp.read(length)
+                return resp.read(length), final
             raise SourceError("source.range_unsupported", url)
 
     def open_remote(self, url: str) -> "RemoteFile":
@@ -71,10 +76,11 @@ class HttpClient:
 
 
 class RemoteFile:
-    """Plik zdalny czytany po kolei, kawałkami po CHUNK (implementuje ByteSource)."""
+    """Plik zdalny czytany po kolei, rosnącymi kawałkami (implementuje ByteSource)."""
 
-    def __init__(self, client: HttpClient, url: str, chunk: int = CHUNK):
-        self._client, self._url, self._chunk = client, url, chunk
+    def __init__(self, client: HttpClient, url: str, chunk: int = CHUNK, max_chunk: int = MAX_CHUNK):
+        self._client, self._url = client, url
+        self._chunk, self._max_chunk = chunk, max_chunk
         self._pos = 0
         self._buf_start = 0
         self._buf = b""
@@ -91,7 +97,9 @@ class RemoteFile:
                 piece = self._buf[offset: offset + n - len(out)]
             else:
                 self._buf_start = self._pos
-                self._buf = self._client.get_range(self._url, self._pos, max(self._chunk, n - len(out)))
+                self._buf, self._url = self._client.get_range(
+                    self._url, self._pos, max(self._chunk, n - len(out)))
+                self._chunk = min(self._chunk * 2, self._max_chunk)
                 self.requests += 1
                 if not self._buf:
                     raise SourceError("source.bad_file", "unexpected end of remote file")

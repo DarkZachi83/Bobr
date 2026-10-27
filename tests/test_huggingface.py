@@ -25,6 +25,7 @@ GGUF_TREE = [
     lfs("Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", 4_920_000_000),
     lfs("Meta-Llama-3.1-8B-Instruct-IQ4_XS.gguf", 4_450_000_000),
     lfs("mmproj-model-f16.gguf", 600_000_000),
+    lfs("Meta-Llama-3.1-8B-Instruct-Q4_0_4_8.gguf", 4_660_000_000),   # przestarzały format ARM
     {"type": "directory", "path": "F16"},
     lfs("F16/Meta-Llama-3.1-8B-Instruct-F16-00001-of-00002.gguf", 9_000_000_000),
     lfs("F16/Meta-Llama-3.1-8B-Instruct-F16-00002-of-00002.gguf", 7_070_000_000),
@@ -75,12 +76,23 @@ class GgufRepoTest(unittest.TestCase):
         http = gguf_fake()
         HuggingFaceSource(http).load(HfRef(REPO))
         ranges = [u for u in http.calls if "/resolve/" in u]
-        self.assertLessEqual(len(ranges), 3)        # ~2,3 MB nagłówka / kawałki 1 MB
+        self.assertEqual(len(ranges), 2)            # ~2,3 MB nagłówka: kawałki 1 MB + 2 MB
         self.assertTrue(all(u.endswith("Q4_K_M.gguf") for u in ranges))
 
-    def test_mmproj_is_not_a_variant(self):
+    def test_mmproj_and_obsolete_arm_formats_are_not_variants(self):
         m = HuggingFaceSource(gguf_fake()).load(HfRef(REPO))
-        self.assertFalse(any("mmproj" in f for v in m.variants for f in v.files))
+        files = [f for v in m.variants for f in v.files]
+        self.assertFalse(any("mmproj" in f or "Q4_0_4_8" in f for f in files))
+
+    def test_cdn_address_is_reused_after_first_redirect(self):
+        q4 = resolve("Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf")
+        cdn = "https://cas-bridge.xethub.hf.co/signed/q4"
+        http = gguf_fake(redirects={q4: cdn})
+        http.files[cdn] = http.files[q4]
+        HuggingFaceSource(http).load(HfRef(REPO))
+        ranges = [u for u in http.calls if u in (q4, cdn)]
+        self.assertEqual(ranges[0], q4)
+        self.assertTrue(all(u == cdn for u in ranges[1:]))
 
     def test_quant_from_link(self):
         src = HuggingFaceSource(gguf_fake())
@@ -156,6 +168,13 @@ class HttpPiecesTest(unittest.TestCase):
         with self.assertRaises(SourceError):
             f.skip(100_000)
             f.read(1)
+
+    def test_chunks_grow_up_to_the_limit(self):
+        http = FakeHttp(files={"u": b"x" * 100_000})
+        f = RemoteFile(http, "u", chunk=1000, max_chunk=4000)
+        for _ in range(22):                # parser czyta małymi porcjami: 22 × 500 B
+            f.read(500)
+        self.assertEqual(f.requests, 4)
 
     def test_token_is_not_sent_to_cdn(self):
         handler = _StripAuthOnHostChange()

@@ -13,6 +13,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from aibobr.calculator.memory import weights_bytes  # noqa: E402
+from aibobr.calculator.quants import QuantTable  # noqa: E402
 from aibobr.domain.units import to_gib  # noqa: E402
 from aibobr.sources.base import SourceError  # noqa: E402
 from aibobr.sources.factory import load_model  # noqa: E402
@@ -39,12 +41,20 @@ def main() -> int:
     if a.n_experts:
         act = f"{a.params_active / 1e9:.2f}B" if a.params_active else "?"
         print(f"  MoE: {a.n_experts} ekspertów, {a.n_experts_used} aktywnych, aktywne parametry {act}")
-    print("  warianty:")
+    quants = QuantTable.load(Path(__file__).resolve().parent.parent / "data" / "quants.json")
+    print("  warianty (GB = 1024³ B, jak w programie):")
     default = m.default_variant().quant
     for v in m.variants:
-        size = f"{to_gib(v.size):6.2f} GB" if v.size else "  szacunek"
+        if v.size:
+            size = f"{to_gib(v.size):6.2f} GB"
+        else:
+            try:
+                size = f"~{to_gib(weights_bytes(m.spec(v.quant), quants)[0]):5.2f} GB (szacunek)"
+            except Exception:
+                size = "     ? GB"
+        parts = f"  [{len(v.files)} części]" if len(v.files) > 1 else ""
         mark = "  ← domyślny" if v.quant == default else ""
-        print(f"    {v.quant:10} {size}  {len(v.files) or ''}{mark}")
+        print(f"    {v.quant:10} {size}{parts}{mark}")
     return 0
 
 

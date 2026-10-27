@@ -96,6 +96,9 @@ _QUANT_RE = re.compile(
     r")(?![A-Za-z0-9])",
     re.IGNORECASE,
 )
+# Przestarzałe formaty ARM usunięte z llama.cpp – obecne runtime'y ich nie wczytają,
+# więc nie pokazujemy ich jako wariantów do wyboru.
+OBSOLETE_QUANT_RE = re.compile(r"(?<![A-Za-z0-9])Q4_0_(?:4_4|4_8|8_8)(?![A-Za-z0-9])", re.I)
 SPLIT_RE = re.compile(r"^(?P<base>.+)-(?P<no>\d{5})-of-(?P<count>\d{5})\.gguf$", re.IGNORECASE)
 
 
