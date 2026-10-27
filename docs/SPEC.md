@@ -240,9 +240,18 @@ Zewnętrzne polecenia (`nvidia-smi`, PowerShell) mają limit czasu.
 
 ## 11. Interfejs
 
-- **GUI (tkinter)**: wersja główna. Ten sam kod na Linuksie i Windowsie; autor
-  testuje GUI na Linuksie. Na Windowsie włączona obsługa skalowania ekranu (DPI),
-  żeby okno nie było rozmazane.
+- **GUI (tkinter)**: wersja główna, `python main.py` (bez `--cli`). Ten sam kod na Linuksie
+  i Windowsie; autor testuje GUI na Linuksie. Na Windowsie włączona obsługa skalowania
+  ekranu (DPI), żeby okno nie było rozmazane. Gdy okna nie da się otworzyć (brak tkintera
+  albo ekranu, np. przez SSH), program sam przechodzi w tryb tekstowy.
+  Układ okna: **Model** (pole na link/ścieżkę, „Plik…”, „Sprawdź”, lista kwantyzacji
+  z rozmiarami, „Wpisz dane modelu ręcznie…”) → **Twój komputer** (Automatyczny /
+  Zaawansowany) → **Wynik** (pasek, werdykt, uwagi, przycisk „Wyjaśnienie”).
+  Pobieranie z HF i skan idą w tle, okno nie zamarza. Menu: Plik, Ustawienia (token HF,
+  język – zmiana bez restartu, stan zostaje), Pomoc (O programie).
+  W trybie Zaawansowanym niezmienione pola liczą się z dokładną wartością ze skanu,
+  a nie z zaokrąglonego napisu – samo przełączenie trybu nie może zmienić wyniku.
+  „Zapisz jako domyślne” zapisuje parametry do ustawień użytkownika (tryb Automatyczny).
 - **Tryb tekstowy**: `python main.py --cli <model>` (do czasu GUI także bez `--cli`).
   Pasek ze znaków; przydatny w testach i przy zgłaszaniu błędów. Opcje: `--quant`,
   `--context 16k`, `--kv-cache q8_0`, `--explain` (wyjaśnienie, w GUI przycisk),
@@ -301,7 +310,8 @@ aibobr/
   app/         config.py, controller.py
   i18n/        __init__.py, pl.json, en.json
   cli/         cli.py                         pasek tekstowy
-  gui/         main_window.py, theme.py, widgets/ (memory_bar, explanation, hardware_panel, model_picker)
+  gui/         main_window.py, theme.py, worker.py, bar_layout.py,
+               widgets/ (memory_bar, explanation, hardware_panel, model_picker), dialogs/ (manual_model)
 tools/
   build_catalog.py
   try_source.py             narzędzie deweloperskie: co program odczytał z linku / pliku
