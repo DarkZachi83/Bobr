@@ -145,7 +145,7 @@ class Verdict:
     margin: Optional[int]                    # zapas do granicy strefy (None dla RED)
     low_margin: bool
     context_exceeds_model: bool              # kontekst większy niż model obsługuje
-    warnings: tuple[str, ...] = field(default=())  # klucze i18n, np. "warn.cuda_too_old"
+    warnings: tuple[str, ...] = field(default=())  # klucze i18n, np. "warn.nvidia_legacy"
 
     @property
     def vram_fraction(self) -> float:

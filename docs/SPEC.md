@@ -172,6 +172,17 @@ Co możesz zrobić:
 
 Ta sekcja zastępuje osobny moduł rekomendacji.
 
+Reguły dopracowane przy implementacji (etap 4, `knowledge/advisor.py`):
+- Gdy w karcie mieści się co najmniej 90% modelu, werdykt brzmi łagodniej („pójdzie, ale
+  nieco wolniej”) – do RAM trafia wtedy kilka warstw, a nie większość modelu.
+- Nie polecamy kwantyzacji poniżej ok. 3,4 bita na wagę (np. Q2_K), bo jakość wyraźnie spada.
+- „Masz jeszcze zapas” nie podpowiada wariantu, przy którym program sam ostrzegłby o małym zapasie.
+- Gdy żadna pojedyncza zmiana nie wystarcza, program sprawdza je wszystkie naraz
+  (najniższa sensowna kwantyzacja + kontekst 4k + cache KV q8_0) i mówi, czy to pomoże.
+- Bez karty graficznej zielony jest niemożliwy, więc podpowiedź brzmi: mniejszy model
+  albo niższa kwantyzacja odpowie szybciej.
+- Ostatni punkt każdej listy kończy się kropką, pozostałe przecinkiem.
+
 ## 9. Katalog modeli
 
 - `data/models/catalog.json` dołączony do programu. Wpis: repozytorium HF,
@@ -232,12 +243,21 @@ Zewnętrzne polecenia (`nvidia-smi`, PowerShell) mają limit czasu.
 - **GUI (tkinter)**: wersja główna. Ten sam kod na Linuksie i Windowsie; autor
   testuje GUI na Linuksie. Na Windowsie włączona obsługa skalowania ekranu (DPI),
   żeby okno nie było rozmazane.
-- **Tryb tekstowy**: `python main.py --cli`. Pasek ze znaków; przydatny w testach
-  i przy zgłaszaniu błędów.
+- **Tryb tekstowy**: `python main.py --cli <model>` (do czasu GUI także bez `--cli`).
+  Pasek ze znaków; przydatny w testach i przy zgłaszaniu błędów. Opcje: `--quant`,
+  `--context 16k`, `--kv-cache q8_0`, `--explain` (wyjaśnienie, w GUI przycisk),
+  `--ram GB` i `--vram GB[,GB]` (tryb Zaawansowany: poprawka skanu albo „co jeśli kupię
+  kartę 16 GB”), `--no-color`. Bez podanego modelu program o niego pyta.
 - **`--fake-hw <plik.json>`**: wczytuje fałszywy profil sprzętu zamiast skanu.
   Pozwala przeklikać na Linuksie scenariusze Windows/AMD, laptop bez karty,
   dwie karty, nieudane wykrycie. Te same profile służą testom automatycznym.
 - **`--lang pl|en`**: język; domyślnie język systemu (jak w NIUCHACZU).
+
+**Ustawienia i pamięć podręczna:** wartości domyślne leżą w `config/settings.json`
+w repozytorium; zmiany użytkownika (w tym token HF) program zapisuje poza repozytorium
+(`~/.config/ai-bobr/`, na Windowsie `%APPDATA%\AI-Bobr\`). Opis modelu z Hugging Face
+jest zapamiętywany na 7 dni (`~/.cache/ai-bobr/models/`), więc ponowne sprawdzenie
+tego samego modelu z inną kwantyzacją lub kontekstem jest natychmiastowe.
 
 ## 12. Dystrybucja
 
