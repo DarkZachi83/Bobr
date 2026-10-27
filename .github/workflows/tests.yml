@@ -1,0 +1,42 @@
+# Testy przy każdym wypchnięciu i pull requeście: Linux (także GUI na wirtualnym ekranie)
+# i prawdziwy Windows – tam przy okazji widać wykrywanie sprzętu z rejestru.
+name: Testy
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PYTHONUTF8: "1"          # polskie znaki w logach konsoli Windows
+
+jobs:
+  test:
+    name: ${{ matrix.os }} · Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  python: "3.10" }   # najniższa wspierana wersja
+          - { os: ubuntu-latest,  python: "3.13" }
+          - { os: windows-latest, python: "3.12" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Zależności
+        run: python -m pip install -r requirements.txt
+      - name: Testy (Linux, z wirtualnym ekranem dla GUI)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y -q xvfb > /dev/null
+          xvfb-run -a python -m unittest discover -s tests -t . -v
+      - name: Testy (Windows)
+        if: runner.os == 'Windows'
+        run: python -m unittest discover -s tests -t . -v
+      - name: Wykrywanie sprzętu na tym serwerze
+        run: |
+          python tools/try_detection.py
+          python tools/try_detection.py --json

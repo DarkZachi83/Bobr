@@ -288,6 +288,19 @@ tego samego modelu z inną kwantyzacją lub kontekstem jest natychmiastowe.
   wyjaśnia, jak je przejść.
 - **Linux:** uruchamianie ze źródeł (`pip install psutil`, `python main.py`).
 
+Szczegóły (etap 7):
+- `tools/build_exe.py` (PyInstaller, jeden plik): `AI-Bobr.exe` – okno, bez konsoli;
+  `AI-Bobr-cli.exe` – tryb tekstowy (program okienkowy na Windowsie nie ma konsoli).
+  W paczce: teksty i18n, `data/quants.json`, katalog modeli, `config/settings.json`, ikona.
+  Ścieżki zasobów: `aibobr/resources.py` (repozytorium albo `sys._MEIPASS`).
+- `.github/workflows/tests.yml`: testy przy każdym wypchnięciu i PR – Ubuntu (Python 3.10
+  i 3.13, GUI na Xvfb) oraz Windows (3.12) z wykrywaniem sprzętu na prawdziwym rejestrze.
+- `.github/workflows/release.yml`: tag `v*` → testy, budowa, sprawdzenie spakowanej wersji
+  i oba pliki `.exe` w wydaniu na GitHubie.
+- Testy nie tworzą wielogigabajtowych plików (na NTFS plik „rzadki” zajmuje miejsce) –
+  rozmiar pliku modelu jest podmieniany (`tests/sizes.py`).
+- Ikona: `tools/make_icon.py` → `assets/aibobr.png` (okno) i `assets/aibobr.ico` (.exe).
+
 ## 13. Zależności
 
 | Pakiet | Status | Po co |
@@ -333,8 +346,10 @@ tests/
   test_memory.py, test_verdict.py, test_gguf_reader.py, test_huggingface.py,
   test_detection_*.py, test_advisor.py, test_i18n.py
 docs/
-  SPEC.md
-.github/workflows/build-windows.yml
+  SPEC.md, img/
+assets/                     aibobr.png, aibobr.ico
+packaging/cli_entry.py      punkt startowy AI-Bobr-cli.exe
+.github/workflows/          tests.yml, release.yml
 ```
 
 Z NIUCHACZA **nie przenosimy** `transport/`, `protocol/`, `reader_thread` ani

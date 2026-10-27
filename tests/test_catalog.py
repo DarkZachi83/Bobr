@@ -49,10 +49,12 @@ class CatalogFileTest(unittest.TestCase):
         path.write_text(json.dumps(data), encoding="utf-8")
         return path
 
-    def test_bundled_empty_catalog_is_valid(self):
+    def test_bundled_catalog_is_valid(self):
         cat = catalog.load(ROOT / "data" / "models" / "catalog.json", None)
-        self.assertEqual(len(cat), 0)
-        self.assertEqual(cat.suggestion_specs(), [])
+        self.assertGreaterEqual(len(cat), 10)
+        self.assertEqual(len(cat.suggestion_specs()), len(cat))       # każdy ma Q4_K_M lub bliski
+        for m in cat.models:
+            self.assertTrue(m.arch.params_total and m.arch.n_layers, m.name)
 
     def test_parse_and_suggestions_use_q4_k_m(self):
         cat = catalog.load(self.write("c.json", catalog_data()), None)
@@ -127,16 +129,17 @@ class CatalogInAppTest(unittest.TestCase):
 
     def test_cli_update_then_suggestion(self):
         from tests.gguf_writer import llama_like
+        from tests.sizes import stop_all, write_model
         user = self.dir / "cfg"
         c = main.build_app(ROOT / "tests" / "fake_hardware" / "real_laptop_rtx5050_linux.json",
                            user_dir=user, cache_dir=self.dir / "cache")
-        http = FakeHttp(json={catalog.CATALOG_URL: catalog_data()})
+        http = FakeHttp(json={catalog.CATALOG_URL: catalog_data("2099-01-01")})
         c.update_catalog = (lambda orig: lambda client=None: orig(http))(c.update_catalog)
 
         big = self.dir / "Big-70B-Q4_K_M.gguf"
-        with open(big, "wb") as f:
-            f.write(llama_like(name="Llama 3.3 70B", layers=80, heads=64, embed=8192))
-            f.truncate(42_520_000_000)
+        write_model(big, llama_like(name="Llama 3.3 70B", layers=80, heads=64, embed=8192),
+                    42_520_000_000)
+        self.addCleanup(stop_all)
         out = io.StringIO()
         args = main.build_parser().parse_args(["--update-catalog", str(big), "--explain"])
         Cli(c, out=out, palette=PLAIN).run(args)

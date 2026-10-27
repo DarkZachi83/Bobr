@@ -12,7 +12,7 @@ import webbrowser
 from tkinter import messagebox, simpledialog, ttk
 from typing import Optional
 
-from aibobr import __version__
+from aibobr import __version__, resources
 from aibobr.app.controller import AppController
 from aibobr.calculator.memory import MissingModelData
 from aibobr.calculator.verdict import IncompleteProfileError
@@ -274,6 +274,9 @@ def run_gui(controller: AppController, model: Optional[str] = None,
     from aibobr.gui.theme import enable_dpi_awareness
     enable_dpi_awareness()
     root = tk.Tk()           # bez stałej wysokości: okno rośnie po rozwinięciu wyjaśnienia
+    icon = resources.path("assets", "aibobr.png")
+    if icon.exists():
+        root.iconphoto(True, tk.PhotoImage(file=str(icon)))
     MainWindow(root, controller, model, quant)
     root.mainloop()
     return 0

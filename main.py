@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from aibobr import resources
 from aibobr.app.config import ConfigStore, user_cache_dir, user_config_dir
 from aibobr.app.controller import AppController
 from aibobr.calculator.quants import QuantTable
@@ -20,11 +21,11 @@ from aibobr.i18n import LANGUAGES, set_language, t
 from aibobr.knowledge import catalog
 from aibobr.sources.cache import ModelCache
 
-ROOT = Path(__file__).resolve().parent
+ROOT = resources.root()
 PATHS = {
-    "config": ROOT / "config",
-    "quants": ROOT / "data" / "quants.json",
-    "catalog": ROOT / "data" / "models" / "catalog.json",
+    "config": resources.path("config"),
+    "quants": resources.path("data", "quants.json"),
+    "catalog": resources.path("data", "models", "catalog.json"),
 }
 
 
