@@ -367,7 +367,42 @@ Z NIUCHACZA **nie przenosimy** `transport/`, `protocol/`, `reader_thread` ani
 8. **Kalibracja:** porównanie werdyktów z rzeczywistym zużyciem pamięci na
    modelach autora (w tym MoE).
 
+Stan: etapy 1–7 zakończone, **v0.1.0 wydane 27.10.2026** (`AI-Bobr.exe`, `AI-Bobr-cli.exe`).
+
+### Plan po v0.1 (zaakceptowany 27.10.2026)
+
+Program ma sprawdzać nie tylko modele językowe, ale też modele dźwięku, muzyki i obrazów.
+Kolejność wynika z tego, jak te modele zużywają pamięć:
+
+8. **Kalibracja modeli językowych** (lista w sekcji 16).
+9. **Dźwięk i muzyka typu LLM** – modele generujące tokeny dźwięku jak LLM tokeny tekstu:
+   syntezatory mowy na bazie LLM (np. Orpheus na Llamie 3B, OuteTTS, Dia, CSM), MusicGen,
+   modele rozmowy głosem. Obecny model pamięci pasuje; dochodzi: rozpoznanie typu z HF
+   (`pipeline_tag`, architektura), znacznik „model mowy / muzyki”, dekoder dźwięku
+   (np. SNAC) w narzucie, kilka takich modeli w katalogu.
+10. **Obrazy** – drugi model pamięci: kilka części (główny model, enkodery tekstu, VAE)
+    + pamięć obliczeń zależna od rozdzielczości, bez cache KV. Inne znaczenie świateł:
+    ComfyUI / Forge / diffusers ładują części po kolei i przenoszą do RAM, więc model
+    większy od VRAM zwykle **zadziała wolniej**; czerwony dopiero, gdy największa część
+    nie mieści się w VRAM + RAM. W trybie Zaawansowanym rozdzielczość zamiast kontekstu.
+    Źródła: diffusers (`model_index.json` + rozmiary folderów), GGUF (np. FLUX od city96),
+    pojedyncze `.safetensors` z ComfyUI (tylko łączny rozmiar → szacunek).
+11. **Dyfuzyjne audio** (Stable Audio Open, ACE-Step…) na mechanizmie z etapu 10;
+    długość utworu zamiast rozdzielczości.
+
+Każdy etap zaczyna się od omówienia uwag i dopisania szczegółów do tej specyfikacji.
+
 ## 16. Otwarte kwestie i rzeczy do sprawdzenia
+
+Zebrane do kalibracji (etap 8):
+- **Okno przesuwne** (Gemma 3, gpt-oss): większość warstw trzyma tylko ostatnie tokeny
+  (klucz `*.attention.sliding_window` w GGUF) – cache KV jest dla nich zawyżony,
+  dla Gemmy 3 12B przy 8k nawet kilkukrotnie.
+- **gpt-oss-20b:** liczymy 4,2B aktywnych parametrów, oficjalnie 3,6B.
+- **Szybkość nagłówka z HF:** 5–12 s na repozytorium (głównie słownik tokenizera).
+- **Skan na Windowsie:** 3,6 s na serwerze GitHuba, prawie w całości start PowerShella.
+- **Repozytoria spoza zakresu** (np. FLUX dla ComfyUI): zamiast „brak plików modelu”
+  wprost „to model obrazów” – do czasu etapu 10.
 
 - **Narzut runtime'u:** 0,5 GB to wartość startowa; do skalibrowania (etap 8).
 - **Szacunek KV bez danych architektury** (ręczny poziom podstawowy): reguła
