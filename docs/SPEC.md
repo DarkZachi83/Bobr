@@ -64,6 +64,12 @@ Analizowany jest **zawsze konkretny model**, nie klasa rozmiaru („7B”).
 | **Lokalny plik .gguf** | metadane z nagłówka pliku: architektura, rozmiar, kwantyzacja | Działa bez internetu. Najdokładniejsze, bo to dokładnie ten plik, który zostanie uruchomiony. |
 | **Wpisanie ręczne** | poziom podstawowy: parametry, kwantyzacja, kontekst. Poziom zaawansowany (rozwijany): warstwy, głowice KV, wymiar głowicy, aktywne parametry (MoE) | Na poziomie podstawowym cache KV jest szacowany ostrożnie, a wynik oznaczony jako „szacunek”. |
 
+Pole „Wskaż model” przyjmuje: ścieżkę do pliku `.gguf` (także jedną z części pliku
+dzielonego `…-00001-of-00003.gguf`), link do Hugging Face (także do konkretnego pliku),
+skrót `hf.co/<repo>:Q4_K_M` oraz wklejone całe polecenie `ollama run hf.co/…`.
+Z repozytorium GGUF program pobiera tylko nagłówek jednego pliku (zapytania HTTP Range,
+kilka MB). Token HF trafia wyłącznie do huggingface.co, nigdy do serwerów CDN.
+
 Wszystkie trzy źródła tworzą ten sam obiekt `ModelSpec`. Kalkulator nie wie,
 skąd przyszły dane.
 
@@ -260,7 +266,7 @@ data/
 aibobr/
   domain/      models.py, enums.py, units.py  HardwareProfile, GpuInfo, ModelSpec, Verdict; bajty ↔ GB
   detection/   base.py, factory.py, linux.py, windows.py, nvidia.py, fake.py
-  sources/     base.py, factory.py, huggingface.py, gguf_reader.py, manual.py
+  sources/     base.py, factory.py, http.py, huggingface.py, gguf_reader.py, manual.py
   calculator/  quants.py, memory.py, verdict.py  tabela kwantyzacji; wagi + KV + narzut → strefy, zapas
   knowledge/   catalog.py, advisor.py         warianty „co możesz zrobić”, aktualizacja katalogu
   app/         config.py, controller.py
@@ -269,6 +275,7 @@ aibobr/
   gui/         main_window.py, theme.py, widgets/ (memory_bar, explanation, hardware_panel, model_picker)
 tools/
   build_catalog.py
+  try_source.py             narzędzie deweloperskie: co program odczytał z linku / pliku
 tests/
   fake_hardware/*.json      profile sprzętu (także dla --fake-hw)
   test_memory.py, test_verdict.py, test_gguf_reader.py, test_huggingface.py,
@@ -300,8 +307,6 @@ Z NIUCHACZA **nie przenosimy** `transport/`, `protocol/`, `reader_thread` ani
   ostrożna, do skalibrowania na katalogu.
 - **Progi compute capability NVIDIA** dla Ollama / llama.cpp: sprawdzić
   w dokumentacji przy pisaniu `nvidia.py`.
-- **Endpointy API Hugging Face** (lista plików z rozmiarami, modele gated):
-  zweryfikować przy pisaniu `huggingface.py`.
 - **macOS (opcja B):** po wersji 1.
 - **Nazwa repozytorium na GitHubie.**
 
