@@ -22,6 +22,7 @@ DATA = [
     ("data/models/catalog.json", "data/models"),
     ("config/settings.json", "config"),
     ("assets/aibobr.png", "assets"),
+    ("assets/about.png", "assets"),
 ]
 
 

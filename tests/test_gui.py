@@ -121,6 +121,13 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertIn("Nie ma takiego pliku", w.picker.status.cget("text"))
         self.assertIsNone(w.model)
 
+    def test_about_dialog_shows_picture(self):
+        from aibobr.gui.dialogs.about import AboutDialog
+        d = AboutDialog(self.root)
+        self.pump(seconds=0.2)
+        self.assertEqual(d.image.width(), 520)
+        d.destroy()
+
     def test_manual_dialog(self):
         from aibobr.gui.dialogs.manual_model import ManualModelDialog
         c = self.build("two_nvidia.json")

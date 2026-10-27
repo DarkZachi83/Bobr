@@ -51,7 +51,7 @@ class DictionariesTest(unittest.TestCase):
             self.assertIn(f"lang.{lang}", self.base)
 
     def test_english_has_no_polish_letters(self):
-        names = {"gui.about"}                   # imię i nazwisko autora zostają z polskimi literami
+        names = {"gui.about_text"}                   # imię i nazwisko autora zostają z polskimi literami
         bad = [k for k, v in self.base.items() if POLISH.search(v) and k not in names]
         self.assertEqual([], bad)
 
