@@ -1,6 +1,6 @@
 {
  "format": 1,
- "updated": "2026-10-27",
+ "updated": "2026-10-28",
  "source": "tools/build_catalog.py ← data/models/catalog_sources.txt",
  "models": [
   {
@@ -41,7 +41,9 @@
     "n_kv_heads": 4,
     "head_dim": 256,
     "max_context": 131072,
-    "architecture": "gemma3"
+    "architecture": "gemma3",
+    "sliding_window": 1024,
+    "swa_layers": 29
    },
    "variants": {
     "BF16": 7767474336,
@@ -225,7 +227,9 @@
     "n_kv_heads": 8,
     "head_dim": 256,
     "max_context": 131072,
-    "architecture": "gemma3"
+    "architecture": "gemma3",
+    "sliding_window": 1024,
+    "swa_layers": 40
    },
    "variants": {
     "BF16": 23539658496,
@@ -341,8 +345,10 @@
     "max_context": 131072,
     "n_experts": 32,
     "n_experts_used": 4,
-    "params_active": 4187440704,
-    "architecture": "gpt-oss"
+    "params_active": 3608307264,
+    "architecture": "gpt-oss",
+    "sliding_window": 128,
+    "swa_layers": 12
    },
    "variants": {
     "BF16": 13792637760,
@@ -426,7 +432,9 @@
     "n_kv_heads": 16,
     "head_dim": 128,
     "max_context": 131072,
-    "architecture": "gemma3"
+    "architecture": "gemma3",
+    "sliding_window": 1024,
+    "swa_layers": 52
    },
    "variants": {
     "BF16": 54027274816,
@@ -468,7 +476,7 @@
     "max_context": 32768,
     "n_experts": 128,
     "n_experts_used": 8,
-    "params_active": 3353032704,
+    "params_active": 3041867776,
     "architecture": "qwen3moe"
    },
    "variants": {
