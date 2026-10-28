@@ -22,6 +22,15 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - name: Wersja programu zgodna z tagiem
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version=$(python -c "import aibobr; print(aibobr.__version__)")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME, a aibobr/__init__.py mówi $version – popraw __version__ przed tagiem."
+            exit 1
+          fi
       - name: Zależności
         run: python -m pip install -r requirements.txt nvidia-ml-py pyinstaller
       - name: Testy
