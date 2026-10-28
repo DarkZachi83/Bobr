@@ -66,6 +66,8 @@ class ModelSpec:
     n_experts: Optional[int] = None          # MoE: wszystkich ekspertów
     n_experts_used: Optional[int] = None     # MoE: aktywnych na token
     params_active: Optional[int] = None      # MoE: aktywnych parametrów na token
+    sliding_window: Optional[int] = None     # okno przesuwne (tokeny), np. Gemma 3: 1024
+    swa_layers: Optional[int] = None         # ile warstw używa okna (reszta: pełny kontekst)
     origin: Optional[str] = None             # link HF albo ścieżka pliku – do raportu
 
     @property
@@ -103,6 +105,7 @@ class MemoryNeed:
     overhead: int
     weights_estimated: bool                  # z bitów na wagę, nie z rozmiaru pliku
     kv_estimated: bool                       # bez danych architektury
+    kv_sliding: bool = False                 # część warstw pamięta tylko okno przesuwne
 
     @property
     def total(self) -> int:

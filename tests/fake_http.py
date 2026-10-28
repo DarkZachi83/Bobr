@@ -13,6 +13,7 @@ class FakeHttp:
         self.denied = set(denied)          # url → 401
         self.chunk = chunk
         self.calls: list[str] = []
+        self.posts: list[tuple] = []
 
     def _check(self, url):
         self.calls.append(url)
@@ -23,7 +24,16 @@ class FakeHttp:
         self._check(url)
         if url not in self.json:
             raise SourceError("source.not_found", url)
-        return self.json[url]
+        value = self.json[url]
+        return value() if callable(value) else value
+
+    def post_json(self, url, payload, timeout=None):
+        self._check(url)
+        self.posts.append((url, payload))
+        handler = self.json.get(url)
+        if handler is None:
+            raise SourceError("source.not_found", url)
+        return handler(payload) if callable(handler) else handler
 
     def get_range(self, url, start, length):
         self._check(url)

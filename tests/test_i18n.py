@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 I18N_DIR = ROOT / "aibobr" / "i18n"
 POLISH = re.compile(r"[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]")
 KEY_IN_CODE = re.compile(
-    r"""["']((?:app|args|cli|detection|source|manual|warn|verdict|expl|note|catalog|gui)\.[a-z0-9_.]+)["']""")
+    r"""["']((?:app|args|cli|detection|source|manual|warn|verdict|expl|note|catalog|gui|ollama)\.[a-z0-9_.]+)["']""")
 
 
 def _dict(lang):

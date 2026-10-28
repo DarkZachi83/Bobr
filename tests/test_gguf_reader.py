@@ -64,6 +64,16 @@ class HeaderTest(unittest.TestCase):
         self.assertEqual(a.params_active, 1000 + 400)
         self.assertEqual((a.n_experts, a.n_experts_used), (8, 2))
 
+    def test_moe_active_parameters_exclude_untied_embedding(self):
+        # Jak gpt-oss: osobne output.weight → tablica embedding nie jest „aktywna”.
+        md = [("general.architecture", "m", "str"), ("m.block_count", 1, "u32"),
+              ("m.expert_count", 8, "u32"), ("m.expert_used_count", 2, "u32")]
+        tensors = [("token_embd.weight", (100, 10)), ("output.weight", (100, 10)),
+                   ("blk.0.ffn_up_exps.weight", (10, 20, 8))]
+        a = arch_from_headers([header(gguf_bytes(md, tensors))])
+        self.assertEqual(a.params_total, 1000 + 1000 + 1600)
+        self.assertEqual(a.params_active, 1000 + 400)
+
     def test_quant_falls_back_to_filename(self):
         h = header(gguf_bytes([("general.architecture", "x", "str")]))
         self.assertEqual(quant_from_header(h, "model-IQ4_XS.gguf"), "IQ4_XS")

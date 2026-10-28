@@ -39,12 +39,14 @@ class HttpClient:
         self.timeout = timeout
         self._opener = urllib.request.build_opener(_StripAuthOnHostChange())
 
-    def _request(self, url: str, headers: Optional[dict] = None):
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
+    def _request(self, url: str, headers: Optional[dict] = None, data: Optional[bytes] = None,
+                 timeout: Optional[float] = None):
+        req = urllib.request.Request(url, data=data,
+                                     headers={"User-Agent": USER_AGENT, **(headers or {})})
         if self.token and urlparse(url).hostname in ("huggingface.co", "hf.co"):
             req.add_header("Authorization", f"Bearer {self.token}")
         try:
-            return self._opener.open(req, timeout=self.timeout)
+            return self._opener.open(req, timeout=timeout or self.timeout)
         except urllib.error.HTTPError as e:
             code = {401: "source.access_denied", 403: "source.access_denied",
                     404: "source.not_found", 416: "source.bad_file"}.get(e.code, "source.http_error")
@@ -56,6 +58,14 @@ class HttpClient:
         with self._request(url) as resp:
             try:
                 return json.loads(resp.read().decode("utf-8"))
+            except ValueError as e:
+                raise SourceError("source.http_error", f"bad JSON from {url}") from e
+
+    def post_json(self, url: str, payload: dict, timeout: Optional[float] = None) -> Any:
+        body = json.dumps(payload).encode("utf-8")
+        with self._request(url, {"Content-Type": "application/json"}, body, timeout) as resp:
+            try:
+                return json.loads(resp.read().decode("utf-8") or "{}")
             except ValueError as e:
                 raise SourceError("source.http_error", f"bad JSON from {url}") from e
 

@@ -33,6 +33,8 @@ class ArchInfo:
     n_experts_used: Optional[int] = None
     params_active: Optional[int] = None
     architecture: Optional[str] = None       # np. "llama", "qwen3moe"
+    sliding_window: Optional[int] = None
+    swa_layers: Optional[int] = None
 
     def to_spec(self, *, name: str, source: ModelSource, quant: str,
                 weights_bytes: Optional[int], origin: Optional[str]) -> ModelSpec:
@@ -42,6 +44,7 @@ class ArchInfo:
             n_kv_heads=self.n_kv_heads, head_dim=self.head_dim,
             max_context=self.max_context, n_experts=self.n_experts,
             n_experts_used=self.n_experts_used, params_active=self.params_active,
+            sliding_window=self.sliding_window, swa_layers=self.swa_layers,
             origin=origin,
         )
 
@@ -86,6 +89,17 @@ class LoadedModel:
         v = self.variant(quant) if quant else self.default_variant()
         return self.arch.to_spec(name=self.name, source=self.source, quant=v.quant,
                                  weights_bytes=v.size, origin=self.origin)
+
+
+def count_swa_layers(n_layers: int, pattern) -> int:
+    """Ile warstw używa okna przesuwnego – reguła z llama.cpp (llama_hparams::set_swa_pattern).
+
+    pattern: tablica (prawda = warstwa z oknem) albo liczba n: w każdej grupie n warstw
+    pierwsze n-1 mają okno, ostatnia pełny kontekst (0 = wszystkie z oknem)."""
+    if isinstance(pattern, (list, tuple)):
+        return sum(1 for x in list(pattern)[:n_layers] if x)
+    n = int(pattern)
+    return sum(1 for il in range(n_layers) if n == 0 or il % n < n - 1)
 
 
 # Nazwy kwantyzacji w nazwach plików GGUF, od najdłuższych (IQ4_XS przed Q4…).
