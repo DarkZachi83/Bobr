@@ -202,6 +202,8 @@ def arch_from_headers(headers: list[GgufHeader]) -> ArchInfo:
 
     tensors = [t for h in headers for t in h.tensors]
     total = sum(t.n_elements for t in tensors) or None
+    embd = sum(t.n_elements for t in tensors if t.name.startswith("token_embd.")) or None
+    tied = (not any(t.name == "output.weight" for t in tensors)) if embd else None
     active = None
     if total and experts and experts > 1 and used:
         # Tensory ekspertów są złożone w jeden ("…_exps"); aktywna jest ich część used/experts.
@@ -210,7 +212,7 @@ def arch_from_headers(headers: list[GgufHeader]) -> ArchInfo:
         # Tablicy embedding nie liczymy (na token czytany jest jeden jej wiersz) – chyba że
         # jest też wyjściem modelu (brak output.weight = wagi wspólne). Tak liczy OpenAI
         # dla gpt-oss (3,6B aktywnych z 20,9B).
-        if any(t.name == "output.weight" for t in tensors):
+        if tied is False:
             active -= sum(t.n_elements for t in tensors if t.name.startswith("token_embd."))
         active = int(active)
 
@@ -231,7 +233,7 @@ def arch_from_headers(headers: list[GgufHeader]) -> ArchInfo:
         max_context=_int_or_max(g("context_length")),
         n_experts=experts if experts and experts > 1 else None,
         n_experts_used=used if experts and experts > 1 else None,
-        params_active=active, architecture=arch,
+        params_active=active, architecture=arch, embd_params=embd, tied_embeddings=tied,
     )
 
 

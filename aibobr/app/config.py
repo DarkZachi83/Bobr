@@ -29,7 +29,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "ram_reserve_gb": {"windows": 4.0, "linux": 2.0, "other": 2.0},
     "margin_ratio": 0.10,           # ostrzeżenie o małym zapasie
     "margin_min_gb": 1.0,
-    "overhead_gb": 0.3,             # zmierzone w etapie 8 (SPEC §5)
+    "overhead_gb": 0.5,             # zmierzone w etapie 8 (SPEC §5)
     "hf_token": "",
     "ollama_host": "http://127.0.0.1:11434",   # tryb Zaawansowany: modele z Ollamy
 }

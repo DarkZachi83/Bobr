@@ -30,12 +30,15 @@ class MeasuredHardwareTest(unittest.TestCase):
                 spec = ModelSpec(name=r["model"], source=ModelSource.GGUF_FILE, quant="Q4_K_M",
                                  weights_bytes=gib(a["weights_gib"]), n_layers=a["n_layers"],
                                  n_kv_heads=a["n_kv_heads"], head_dim=a["head_dim"],
-                                 sliding_window=a["sliding_window"], swa_layers=a["swa_layers"])
+                                 sliding_window=a["sliding_window"], swa_layers=a["swa_layers"],
+                                 embd_params=a.get("embd_params"),
+                                 tied_embeddings=a.get("tied_embeddings"))
                 v = evaluate(spec, hw, RunSettings(context_tokens=r["context"]), QUANTS)
                 with self.subTest(model=r["model"], ctx=r["context"]):
                     self.assertEqual(v.level == FitLevel.GREEN, r["fits"])
                     if r["fits"]:
-                        self.assertGreaterEqual(v.need.total / GIB + 0.005, r["nvidia_gib"])
+                        # nvidia-smi widzi tylko kartę – porównujemy z częścią dla karty
+                        self.assertGreaterEqual(v.need.vram_part / GIB + 0.005, r["nvidia_gib"])
 
 
 if __name__ == "__main__":

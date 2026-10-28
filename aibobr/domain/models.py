@@ -68,6 +68,8 @@ class ModelSpec:
     params_active: Optional[int] = None      # MoE: aktywnych parametrów na token
     sliding_window: Optional[int] = None     # okno przesuwne (tokeny), np. Gemma 3: 1024
     swa_layers: Optional[int] = None         # ile warstw używa okna (reszta: pełny kontekst)
+    embd_params: Optional[int] = None        # tablica słownika (token_embd): słowa × wymiar
+    tied_embeddings: Optional[bool] = None   # True = ta sama tablica jest też wyjściem modelu
     origin: Optional[str] = None             # link HF albo ścieżka pliku – do raportu
 
     @property
@@ -91,7 +93,7 @@ class RunSettings:
     ram_reserve: int = gib(2.0)              # dla systemu; Windows: 4 GB (ustawia config)
     margin_ratio: float = 0.10               # próg ostrzeżenia o małym zapasie
     margin_min: int = gib(1.0)               # …ale nie mniej niż tyle
-    overhead: int = gib(0.3)                 # bufor obliczeń + kontekst CUDA; kalibracja: SPEC §5
+    overhead: int = gib(0.5)                 # bufor obliczeń + kontekst CUDA; kalibracja: SPEC §5
 
 
 # --------------------------------------------------------------------------- wynik
@@ -106,10 +108,25 @@ class MemoryNeed:
     weights_estimated: bool                  # z bitów na wagę, nie z rozmiaru pliku
     kv_estimated: bool                       # bez danych architektury
     kv_sliding: bool = False                 # część warstw pamięta tylko okno przesuwne
+    # Tablica słownika (token_embd) – llama.cpp/Ollama trzyma ją w RAM, nie w karcie.
+    # Gdy model ma wspólne wejście i wyjście, w karcie zostaje druga kopia (embd_copy).
+    embd_in_ram: int = 0
+    embd_copy: int = 0
 
     @property
     def total(self) -> int:
-        return self.weights + self.kv_cache + self.overhead
+        """Cała pamięć modelu (karta + RAM)."""
+        return self.weights + self.embd_copy + self.kv_cache + self.overhead
+
+    @property
+    def weights_total(self) -> int:
+        """Wagi razem z kopią tablicy słownika – to pokazuje pasek i wyjaśnienie."""
+        return self.weights + self.embd_copy
+
+    @property
+    def vram_part(self) -> int:
+        """Ile z tego może trafić do karty – wszystko poza tablicą słownika w RAM."""
+        return self.total - self.embd_in_ram
 
     @property
     def is_estimate(self) -> bool:
@@ -151,6 +168,13 @@ class Verdict:
     warnings: tuple[str, ...] = field(default=())  # klucze i18n, np. "warn.nvidia_legacy"
 
     @property
+    def spill(self) -> int:
+        """Ile modelu wypchnął brak miejsca w karcie (bez tablicy słownika, która i tak jest w RAM)."""
+        return max(0, self.in_ram - self.need.embd_in_ram)
+
+    @property
     def vram_fraction(self) -> float:
-        """Jaka część modelu jest w VRAM (0–1). Dla RED liczona względem całej potrzeby."""
-        return self.in_vram / self.need.total if self.need.total else 0.0
+        """Jaka część modelu jest w VRAM (0–1), nie licząc tablicy słownika, która i tak
+        zostaje w RAM (nie spowalnia). Dla RED liczona względem całej potrzeby."""
+        part = self.need.vram_part
+        return self.in_vram / part if part else 0.0

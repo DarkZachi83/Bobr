@@ -253,6 +253,12 @@ def arch_from_config(config: Any, files: list[_File] = ()) -> ArchInfo:
                     active -= vocab * hidden
                 active = int(active)
 
+    # Tablica słownika. Bez pola tie_word_embeddings przyjmujemy wspólne wejście i wyjście
+    # (domyślna wartość transformers) – wtedy nic nie odejmujemy od karty, czyli ostrożnie.
+    vocab = _first(c, "vocab_size")
+    embd = vocab * hidden if vocab and hidden else None
+    tied = (c.get("tie_word_embeddings") is not False) if embd else None
+
     # Okno przesuwne tylko z jednoznacznych pól: layer_types (np. gpt-oss, Gemma 3)
     # albo sliding_window_pattern. Samo "sliding_window" bywa wyłączone (Qwen:
     # use_sliding_window = false) – wtedy liczymy pełny kontekst.
@@ -272,4 +278,5 @@ def arch_from_config(config: Any, files: list[_File] = ()) -> ArchInfo:
         max_context=_first(c, "max_position_embeddings", "max_sequence_length", "n_positions"),
         n_experts=experts if is_moe else None, n_experts_used=used if is_moe else None,
         params_active=active, architecture=(config.get("architectures") or [None])[0],
+        embd_params=embd, tied_embeddings=tied,
     )

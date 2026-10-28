@@ -49,7 +49,7 @@ def bar_layout(v: Verdict, x0: float, width: float, headroom: float = 1.04) -> B
         system.append(Segment("missing", x(total), x(need.total), need.total - total))
 
     model, start = [], 0
-    for kind, value in (("weights", need.weights), ("kv", need.kv_cache),
+    for kind, value in (("weights", need.weights_total), ("kv", need.kv_cache),
                         ("overhead", need.overhead)):
         if value:
             model.append(Segment(kind, x(start), x(start + value), value))

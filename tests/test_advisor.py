@@ -17,7 +17,8 @@ def loaded(spec, sizes_gib: dict) -> LoadedModel:
     arch = ArchInfo(params_total=spec.params_total, n_layers=spec.n_layers,
                     n_kv_heads=spec.n_kv_heads, head_dim=spec.head_dim,
                     max_context=spec.max_context, n_experts=spec.n_experts,
-                    n_experts_used=spec.n_experts_used, params_active=spec.params_active)
+                    n_experts_used=spec.n_experts_used, params_active=spec.params_active,
+                    embd_params=spec.embd_params, tied_embeddings=spec.tied_embeddings)
     return LoadedModel(spec.name, ModelSource.HUGGINGFACE, arch,
                        tuple(Variant(q, gib(s)) for q, s in sizes_gib.items()),
                        preferred_quant="Q4_K_M")

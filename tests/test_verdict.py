@@ -22,7 +22,9 @@ class MockupCasesTest(unittest.TestCase):
     def test_8b_fits_entirely_in_vram(self):
         v = run(LLAMA_31_8B, DESKTOP_3060)
         self.assertEqual(v.level, FitLevel.GREEN)
-        self.assertEqual(v.in_ram, 0)
+        self.assertEqual(v.spill, 0)
+        self.assertEqual(v.in_ram, v.need.embd_in_ram)     # tylko tablica słownika
+        self.assertGreater(v.in_ram, 0)
         self.assertEqual(v.vram_fraction, 1.0)
         self.assertFalse(v.low_margin)
 
@@ -37,7 +39,7 @@ class MockupCasesTest(unittest.TestCase):
         v = run(LLAMA_33_70B, DESKTOP_3060)
         self.assertEqual(v.level, FitLevel.RED)
         self.assertIsNone(v.margin)
-        self.assertAlmostEqual(to_gib(v.shortfall), 1.4, places=1)
+        self.assertAlmostEqual(to_gib(v.shortfall), 1.6, places=1)
 
     def test_70b_fits_slowly_with_more_ram(self):
         self.assertEqual(run(LLAMA_33_70B, pc(ram_gb=64, gpus=[gpu()])).level, FitLevel.YELLOW)

@@ -59,7 +59,8 @@ class CliTest(CliRun):
 
     def test_explain_sections_with_full_stop(self):
         code, out = self.run_cli(str(self.gguf), "--context", "20k", "--explain")
-        self.assertIn("Model potrzebuje 7,4 GB:", out)
+        self.assertIn("Model potrzebuje 7,6 GB:", out)
+        self.assertIn("Tablica słownika (0,3 GB) zostaje w RAM", out)
         self.assertIn("Twój komputer:", out)
         self.assertIn("Co możesz zrobić:", out)
         self.assertIn("  → cache KV w q8_0 (opcja runtime'u) zmieści się w całości w karcie", out)

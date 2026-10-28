@@ -45,6 +45,7 @@
   "expl.act.nothing_red": "even quantization {quant} with context {ctx} doesn't fit in the computer's memory – you need a smaller model or more RAM,",
   "expl.act.quant": "quantization {quant} ({size}) fits {where},",
   "expl.act.title": "What you can do:",
+  "expl.need.embd_ram": "The vocabulary table ({size}) stays in RAM, not on the card – that is how llama.cpp, Ollama and LM Studio work.",
   "expl.need.kv": "{size} chat memory (context {ctx}),",
   "expl.need.kv_est": "{size} chat memory (context {ctx}, estimate),",
   "expl.need.kv_swa": "{size} chat memory (context {ctx}; most layers keep only the latest tokens),",

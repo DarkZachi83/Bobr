@@ -81,18 +81,20 @@ def evaluate(
     if not cap.complete:
         raise IncompleteProfileError(cap.missing)
 
-    need = memory_need(model, settings, quants)
+    need = memory_need(model, settings, quants, gpu=not cap.cpu_only)
     total = need.total
     vram, ram = cap.vram_usable, cap.ram_usable
 
-    in_vram = min(total, vram)
-    in_ram = min(total - in_vram, ram)
-    shortfall = max(0, total - vram - ram)
+    # Tablica słownika (need.embd_in_ram) zawsze zostaje w RAM; reszta wypełnia najpierw VRAM.
+    in_vram = min(need.vram_part, vram)
+    rest = total - in_vram
+    in_ram = min(rest, ram)
+    shortfall = max(0, rest - ram)
 
-    if vram > 0 and total <= vram:
-        level, margin, zone_size = FitLevel.GREEN, vram - total, vram
-    elif total <= vram + ram:
-        level, margin, zone_size = FitLevel.YELLOW, vram + ram - total, ram
+    if vram > 0 and need.vram_part <= vram and rest <= ram:
+        level, margin, zone_size = FitLevel.GREEN, vram - need.vram_part, vram
+    elif rest <= ram:
+        level, margin, zone_size = FitLevel.YELLOW, ram - rest, ram
     else:
         level, margin, zone_size = FitLevel.RED, None, 0
 

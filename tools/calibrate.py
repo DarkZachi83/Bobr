@@ -6,8 +6,9 @@
 
 Dla każdego modelu i kontekstu: zwalnia pamięć, ładuje model do Ollamy (pusty prompt –
 nic nie jest generowane), odczytuje z Ollamy zajętą pamięć (łącznie i w VRAM) oraz z
-nvidia-smi faktyczny przyrost VRAM, i porównuje z tym, co przewiduje program (wagi +
-pamięć rozmowy, bez narzutu). Różnica to właśnie narzut, który kalibrujemy.
+nvidia-smi faktyczny przyrost VRAM, i porównuje z tym, co przewiduje program dla karty
+(wagi bez tablicy słownika, która zostaje w RAM, + pamięć rozmowy, bez narzutu).
+Różnica to właśnie narzut, który kalibrujemy.
 
 Wynik: tabela na ekranie i plik calibration-RRRRMMDD-GGMM.json – wyślij go autorom.
 Nic nie jest pobierane z internetu; modele muszą być już w Ollamie.
@@ -64,6 +65,7 @@ class Measurement:
     predicted_kv: int
     kv_sliding: bool
     is_moe: bool
+    embd_in_ram: int = 0                      # tablica słownika – zostaje w RAM, nie w karcie
     ollama_size: Optional[int] = None         # /api/ps: cała pamięć modelu
     ollama_vram: Optional[int] = None         # /api/ps: część w VRAM
     ollama_context: Optional[int] = None      # /api/ps: kontekst, który Ollama naprawdę dała
@@ -72,7 +74,8 @@ class Measurement:
 
     @property
     def predicted(self) -> int:
-        return self.predicted_weights + self.predicted_kv
+        """Przewidywanie dla karty (to widzi nvidia-smi)."""
+        return self.predicted_weights + self.predicted_kv - self.embd_in_ram
 
     @property
     def fully_in_vram(self) -> bool:
@@ -103,8 +106,9 @@ class Calibrator:
         need = memory_need(spec, RunSettings(context_tokens=ctx, overhead=0), self.quants)
         m = Measurement(model=name, quant=spec.quant, architecture=model.arch.architecture,
                         context=ctx, file_bytes=spec.weights_bytes,
-                        predicted_weights=need.weights, predicted_kv=need.kv_cache,
-                        kv_sliding=need.kv_sliding, is_moe=spec.is_moe)
+                        predicted_weights=need.weights_total, predicted_kv=need.kv_cache,
+                        kv_sliding=need.kv_sliding, is_moe=spec.is_moe,
+                        embd_in_ram=need.embd_in_ram)
         try:
             self.ollama.unload_all()
             self.sleep(3)                                     # sterownik oddaje pamięć z opóźnieniem

@@ -19,22 +19,26 @@ LLAMA_31_8B = ModelSpec(
     name="Llama 3.1 8B Instruct", source=ModelSource.HUGGINGFACE, quant="Q4_K_M",
     params_total=8_030_000_000, weights_bytes=4_920_000_000,
     n_layers=32, n_kv_heads=8, head_dim=128, max_context=131_072,
+    embd_params=128_256 * 4096, tied_embeddings=False,
 )
 QWEN_25_32B = ModelSpec(
     name="Qwen 2.5 32B Instruct", source=ModelSource.HUGGINGFACE, quant="Q4_K_M",
     params_total=32_760_000_000, weights_bytes=19_850_000_000,
     n_layers=64, n_kv_heads=8, head_dim=128, max_context=32_768,
+    embd_params=152_064 * 5120, tied_embeddings=False,
 )
 LLAMA_33_70B = ModelSpec(
     name="Llama 3.3 70B Instruct", source=ModelSource.HUGGINGFACE, quant="Q4_K_M",
     params_total=70_550_000_000, weights_bytes=42_520_000_000,
     n_layers=80, n_kv_heads=8, head_dim=128, max_context=131_072,
+    embd_params=128_256 * 8192, tied_embeddings=False,
 )
 QWEN3_30B_A3B = ModelSpec(
     name="Qwen3 30B A3B", source=ModelSource.HUGGINGFACE, quant="Q4_K_M",
     params_total=30_530_000_000, weights_bytes=18_560_000_000,
     n_layers=48, n_kv_heads=4, head_dim=128, max_context=40_960,
     n_experts=128, n_experts_used=8, params_active=3_300_000_000,
+    embd_params=151_936 * 2048, tied_embeddings=False,
 )
 
 

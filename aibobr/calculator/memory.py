@@ -56,10 +56,38 @@ def kv_bytes(model: ModelSpec, settings: RunSettings) -> tuple[int, bool, bool]:
     return int(per_token_f16 * element / 2.0 * ctx), True, False
 
 
-def memory_need(model: ModelSpec, settings: RunSettings, quants: QuantTable) -> MemoryNeed:
+# Tablica słownika (token_embd). llama.cpp (a więc i Ollama, LM Studio) trzyma ją w RAM,
+# bo z wejścia czyta tylko jeden wiersz na token (pomiar autora: Gemma 3 4B –
+# „CPU_Mapped model buffer size = 525 MiB”). Dwa przypadki:
+#  * osobna warstwa wyjściowa (Llama 3.1, Qwen 3): tablica w ogóle nie trafia do karty;
+#    jej rozmiar liczymy z dolnym szacunkiem bitów (≤ 4,5), żeby nie odjąć od karty za dużo,
+#  * wspólne wejście i wyjście (Gemma, Llama 3.2): karta trzyma kopię jako wyjście,
+#    a w RAM jest druga – tę liczymy z bitami Q6_K (tak llama.cpp kwantyzuje wyjście).
+# Bez karty (sam procesor) kopii nie ma, więc nic nie zmieniamy.
+EMBD_UNTIED_MAX_BITS = 4.5
+EMBD_TIED_MIN_BITS = 6.56
+
+
+def embd_bytes(model: ModelSpec, quants: QuantTable) -> tuple[int, int]:
+    """(bajty tablicy słownika w RAM, dodatkowa kopia) – (0, 0), gdy nie znamy tablicy."""
+    bits = quants.bits(model.quant)
+    if not model.embd_params or model.tied_embeddings is None or bits is None:
+        return 0, 0
+    if model.tied_embeddings:
+        size = int(model.embd_params * max(bits, EMBD_TIED_MIN_BITS) / 8)
+        return size, size
+    return int(model.embd_params * min(bits, EMBD_UNTIED_MAX_BITS) / 8), 0
+
+
+def memory_need(model: ModelSpec, settings: RunSettings, quants: QuantTable,
+                gpu: bool = True) -> MemoryNeed:
+    """gpu=False: liczy dla samego procesora (bez podziału tablicy słownika)."""
     weights, weights_estimated = weights_bytes(model, quants)
     kv, kv_estimated, sliding = kv_bytes(model, settings)
+    in_ram, copy = embd_bytes(model, quants) if gpu else (0, 0)
     return MemoryNeed(
+        embd_in_ram=in_ram,
+        embd_copy=copy,
         weights=weights,
         kv_cache=kv,
         overhead=settings.overhead,

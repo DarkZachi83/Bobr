@@ -116,23 +116,49 @@ Przykład: Gemma 3 12B przy 8k – 0,97 GB zamiast 3 GB.
 wyjściową (na token czytany jest jeden wiersz tablicy) – jak OpenAI dla gpt-oss (3,6B).
 Inni producenci podają liczbę z tablicą (Mistral: Mixtral 12,9B, u nas ~12,6B).
 
-**Narzut**: bufor obliczeń i kontekst CUDA – **0,3 GB**, zmierzone w etapie 8
-(28.10.2026, Ollama 0.40.11, laptop RTX 5050 8 GB, 5 modeli × konteksty 2k/8k/16k,
-`tools/calibrate.py`):
+**Tablica słownika w RAM** (etap 8): llama.cpp – a więc Ollama i LM Studio – trzyma
+tablicę wejściową słownika (`token_embd`, słowa × wymiar) w RAM, nie w karcie (z wejścia
+czytany jest jeden wiersz na token). Potwierdzone logiem Ollamy u autora:
+`CPU_Mapped model buffer size = 525.00 MiB` dla gemma3:4b (262 144 × 2560 w Q6_K).
+- Model z osobną warstwą wyjściową (Llama 3.1, Qwen 3, Qwen 2.5): tablica nie trafia do
+  karty. Od części dla karty odejmujemy ją z dolnym szacunkiem bitów (≤ 4,5), żeby nie
+  obiecać za dużo miejsca.
+- Model ze wspólnym wejściem i wyjściem (Gemma, Llama 3.2): karta trzyma tablicę jako
+  wyjście, a w RAM jest druga kopia (liczona w Q6_K – tak llama.cpp kwantyzuje wyjście).
+- Sam procesor: jedna kopia, bez podziału. Nieznana tablica (wpis ręczny): bez podziału.
 
-| | narzut 0,5 GB (wartość startowa) | **0,3 GB** | 0,25 GB |
+Źródła: tensor `token_embd` i obecność `output.weight` w GGUF (plik, HF, Ollama);
+`vocab_size × hidden_size` i `tie_word_embeddings` z config.json (brak pola = wspólne,
+jak domyślnie w transformers – wtedy nic nie odejmujemy od karty).
+
+```
+karta  = wagi − tablica (tylko gdy wyjście osobne) + KV + narzut
+RAM    = tablica + to, co nie zmieściło się w karcie
+zielone, gdy karta ≤ VRAM_użyt i RAM ≤ RAM_użyt
+```
+
+**Narzut**: bufor obliczeń i kontekst CUDA – **0,5 GB**, zmierzone w etapie 8
+(28.10.2026, Ollama 0.40.11, laptop RTX 5050 8 GB, 6 modeli × konteksty 2k/8k/16k,
+`tools/calibrate.py`). Prawdziwy narzut (pomiar nvidia-smi − przewidywanie dla karty)
+wyszedł 0,17–0,46 GB; 0,5 GB to najmniejsza okrągła wartość, która go zawsze pokrywa:
+
+| | narzut 0,3 GB bez tablicy w RAM | 0,5 GB bez tablicy w RAM | **0,5 GB z tablicą w RAM** |
 |---|---|---|---|
-| trafione werdykty „całość w karcie” | 13/14 | **14/14** | 14/14 |
-| najgorsze niedoszacowanie względem nvidia-smi | 0 | **0** | +0,02 GB |
+| trafione werdykty „całość w karcie” | 17/17 | 16/17 | **17/17** |
+| pomiary poniżej nvidia-smi | 2 (Gemma 3 przy 8k, 16k) | 0 | **0** |
 
-Przy 0,5 GB jedyny błąd: Llama 3.1 8B przy 16k – program mówił „częściowo w RAM”, a model
-zmieścił się w karcie (6,5 GB). Pomiary są testem regresyjnym
+Bez tablicy w RAM żadna stała wartość narzutu nie przechodziła wszystkich pomiarów:
+Gemma 3 4B (wspólna tablica) potrzebowała ≥ 0,45 GB, a Llama 3.1 8B przy 16k (osobna)
+mieściła się w karcie tylko przy narzucie < 0,4 GB – bo jej 0,3 GB tablicy i tak było w RAM.
+Pomiary są testem regresyjnym
 (`tests/test_calibration_data.py`, dane w `tests/calibration/`): każda zmiana obliczeń musi
 dalej trafiać werdykty i nigdy nie przewidywać mniej, niż zmierzył nvidia-smi.
 Obserwacje z pomiarów:
 - Ollama w `/api/ps` podaje o ~0,1 GB mniej niż nvidia-smi (kontekst CUDA) – narzut to obejmuje.
 - Gdy model częściowo trafia do RAM, „size” z `/api/ps` jest zaniżony (qwen2.5-coder 14B:
   7,1 GB przy pliku 8,4 GB) – kalibracja używa tylko pomiarów z całością w VRAM.
+- Narzut lekko rośnie z kontekstem (Gemma 3 4B: 0,29 → 0,46 GB od 2k do 16k) – 0,5 GB
+  to pokrywa do 16k; przy dłuższych kontekstach do sprawdzenia.
 - Zmierzone na modelach 3–14B; dla dużo większych narzut może rosnąć (bufor obliczeń
   zależy od rozmiaru warstw) – do sprawdzenia, gdy będą pomiary.
 
@@ -444,7 +470,7 @@ Etap 8 – kalibracja:
 - ✅ **gpt-oss-20b:** 3,6B aktywnych zamiast 4,2B – SPEC §5.
 - ✅ **Repozytoria spoza zakresu:** `model_index.json` albo `pipeline_tag` z HF →
   „to model obrazów / dźwięku” zamiast „brak plików modelu”.
-- ✅ **Narzut runtime'u:** 0,3 GB zamiast 0,5 GB (SPEC §5). Pomiar – `tools/calibrate.py`
+- ✅ **Narzut runtime'u:** 0,5 GB i tablica słownika w RAM (SPEC §5). Pomiar – `tools/calibrate.py`
   ładuje modele z Ollamy z kilkoma kontekstami (pusty prompt, nic nie jest generowane),
   porównuje przewidywanie z `/api/ps` (łącznie i w VRAM) i przyrostem VRAM z `nvidia-smi`,
   zapisuje raport JSON. Źródło `sources/ollama.py` czyta modele z API Ollamy (metadane GGUF

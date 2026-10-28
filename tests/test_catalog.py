@@ -32,7 +32,8 @@ def entry(name, params_b, q4_gib, layers=32, kv=8, extra=None):
 def catalog_data(updated="2026-10-27", models=None):
     return {"format": 1, "updated": updated, "source": "test",
             "models": models if models is not None else [
-                entry("Small 3B", 3.2, 1.9, layers=28), entry("Mid 8B", 8.0, 4.6),
+                entry("Small 3B", 3.2, 1.9, layers=28), entry("Mid 8B", 8.0, 4.6, extra={"embd_params": 128_256 * 4096,
+                                                          "tied_embeddings": False}),
                 entry("Big 14B", 14.8, 8.4, layers=48)]}
 
 
@@ -145,7 +146,7 @@ class CatalogInAppTest(unittest.TestCase):
         Cli(c, out=out, palette=PLAIN).run(args)
         text = out.getvalue()
         self.assertIn("Lista modeli zaktualizowana: 3 modeli", text)
-        # Laptop 8 GB: Mid 8B (5,9 GB) mieści się z zapasem ~1,1 GB (pomiar autora: tak) –
+        # Laptop 8 GB: Mid 8B (5,8 GB w karcie) mieści się z zapasem ~1,2 GB (pomiar autora: tak) –
         # to największy model, który wejdzie w całości.
         self.assertIn("model Mid 8B w Q4_K_M zmieści się w całości.", text)
         self.assertTrue((user / "catalog.json").exists())
