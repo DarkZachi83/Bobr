@@ -92,8 +92,8 @@ KV cache = 2 × layers × KV heads × head size × context × bytes per element
 
 - It's a **calculation, not a measurement**. The runtime overhead (0.5 GB) is a starting value
   to be calibrated on real runs.
-- **Sliding-window models** (Gemma 3, gpt-oss) keep only recent tokens in most layers – the
-  KV cache shown for them is too high. The verdict is on the safe side, but stricter than reality.
+- **Sliding-window models** (Gemma 3, gpt-oss) keep only recent tokens in most layers – this is
+  counted for known architectures (llama.cpp rules); unknown ones get the full, safer estimate.
 - A card with a lot of VRAM isn't always usable: very old NVIDIA cards, older drivers, and AMD/Intel
   cards that depend on the runtime get a warning next to the bar.
 - Windows: the current VRAM usage of AMD/Intel cards isn't shown (it doesn't affect the verdict).
@@ -111,6 +111,7 @@ never connects to the internet on its own. The model you check always comes from
 python -m unittest discover -s tests -t .     # GUI tests run when a display exists
 python tools/try_source.py <link or .gguf>    # what the program reads from a model
 python tools/try_detection.py [--json]        # what it detects on this PC (JSON = test profile)
+python tools/calibrate.py                     # predictions vs. real memory use in Ollama
 python main.py --fake-hw tests/fake_hardware/windows_amd_rx7900xtx.json   # pretend hardware
 python tools/build_catalog.py                 # rebuild the model list from catalog_sources.txt
 python tools/build_exe.py                     # PyInstaller build (CI does this for v* tags)
@@ -205,7 +206,8 @@ cache KV = 2 × warstwy × głowice KV × wymiar głowicy × kontekst × bajty n
 - To **obliczenie, a nie pomiar**. Narzut runtime'u (0,5 GB) jest wartością startową do
   skalibrowania na prawdziwych uruchomieniach.
 - **Modele z oknem przesuwnym** (Gemma 3, gpt-oss) trzymają w większości warstw tylko ostatnie
-  tokeny – pokazany dla nich cache KV jest za duży. Werdykt jest bezpieczny, ale surowszy niż w praktyce.
+  tokeny – dla znanych architektur liczymy to według reguł llama.cpp, dla nieznanych pełny,
+  bezpieczniejszy szacunek.
 - Duży VRAM nie zawsze znaczy, że runtime go użyje: bardzo stare karty NVIDIA, starsze sterowniki
   i karty AMD/Intel zależne od runtime'u dostają ostrzeżenie obok paska.
 - Windows: bieżące zajęcie VRAM kart AMD/Intel nie jest pokazywane (nie wpływa na werdykt).

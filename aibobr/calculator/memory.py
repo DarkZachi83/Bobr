@@ -30,25 +30,40 @@ def weights_bytes(model: ModelSpec, quants: QuantTable) -> tuple[int, bool]:
     return int(model.params_total * bits / 8), True
 
 
-def kv_bytes_per_token(model: ModelSpec, settings: RunSettings) -> tuple[float, bool]:
-    """Cache KV na jeden token i informacja, czy to szacunek."""
+# llama.cpp trzyma dla warstw z oknem przesuwnym min(kontekst, okno + n_ubatch) komórek,
+# zaokrąglone w górę do 256 (llama-kv-cache-iswa.cpp; n_ubatch domyślnie 512).
+SWA_UBATCH = 512
+
+
+def swa_cells(window: int, context: int) -> int:
+    return min(context, -(-(window + SWA_UBATCH) // 256) * 256)
+
+
+def kv_bytes(model: ModelSpec, settings: RunSettings) -> tuple[int, bool, bool]:
+    """Cache KV dla całego kontekstu: (bajty, czy szacunek, czy z oknem przesuwnym)."""
     element = settings.kv_cache_type.bytes_per_element
+    ctx = settings.context_tokens
     if model.has_architecture:
-        # K i V (stąd 2) × warstwy × głowice KV × wymiar głowicy × bajty na element
-        return 2 * model.n_layers * model.n_kv_heads * model.head_dim * element, False
+        # K i V (stąd 2) × głowice KV × wymiar głowicy × bajty na element – na warstwę i token
+        per_layer_token = 2 * model.n_kv_heads * model.head_dim * element
+        swa = min(model.swa_layers or 0, model.n_layers) if model.sliding_window else 0
+        cells = swa_cells(model.sliding_window, ctx) if swa else ctx
+        total = per_layer_token * ((model.n_layers - swa) * ctx + swa * cells)
+        return int(total), False, bool(swa) and cells < ctx
     if model.params_total is None:
         raise MissingModelData("params_total")
     per_token_f16 = KV_ESTIMATE_PER_BILLION_F16 * model.params_total / 1e9
-    return per_token_f16 * element / 2.0, True
+    return int(per_token_f16 * element / 2.0 * ctx), True, False
 
 
 def memory_need(model: ModelSpec, settings: RunSettings, quants: QuantTable) -> MemoryNeed:
     weights, weights_estimated = weights_bytes(model, quants)
-    per_token, kv_estimated = kv_bytes_per_token(model, settings)
+    kv, kv_estimated, sliding = kv_bytes(model, settings)
     return MemoryNeed(
         weights=weights,
-        kv_cache=int(per_token * settings.context_tokens),
+        kv_cache=kv,
         overhead=settings.overhead,
         weights_estimated=weights_estimated,
         kv_estimated=kv_estimated,
+        kv_sliding=sliding,
     )

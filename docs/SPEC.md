@@ -91,6 +91,24 @@ KV = 2 × warstwy × głowice_KV × wymiar_głowicy × kontekst × bajty_na_elem
 bajty_na_element: f16 = 2 · q8_0 ≈ 1,06 · q4_0 ≈ 0,56.
 Przykład: Llama 3.1 8B ≈ 128 KB na token → ok. 1 GB przy 8k, ok. 4 GB przy 32k.
 
+**Okno przesuwne** (etap 8): w modelach takich jak Gemma 3 i gpt-oss część warstw pamięta
+tylko ostatnie tokeny. Jak w llama.cpp (`llama-kv-cache-iswa.cpp`) warstwy z oknem trzymają
+`min(kontekst, okno + 512)` komórek, zaokrąglone w górę do 256:
+```
+KV = per_warstwę_token × (warstwy_pełne × kontekst + warstwy_z_oknem × komórki_okna)
+```
+Które warstwy mają okno: tablica albo liczba `{arch}.attention.sliding_window_pattern`
+z pliku, a gdy jej brak – domyślny wzór architektury z llama.cpp (gemma2: 2, gemma3: 6,
+gpt-oss: 2, cohere2: 4, exaone4: 4; w grupie n warstw pierwsze n−1 mają okno). Z config.json
+tylko z jednoznacznych pól (`layer_types`, `sliding_window_pattern`); `use_sliding_window:
+false` (Qwen) i samo `sliding_window` bez informacji o warstwach są ignorowane. Nieznana
+architektura = pełny kontekst we wszystkich warstwach (wynik zawyżony, czyli bezpieczny).
+Przykład: Gemma 3 12B przy 8k – 0,97 GB zamiast 3 GB.
+
+**Aktywne parametry MoE** liczymy bez tablicy embedding, gdy model ma osobną warstwę
+wyjściową (na token czytany jest jeden wiersz tablicy) – jak OpenAI dla gpt-oss (3,6B).
+Inni producenci podają liczbę z tablicą (Mistral: Mixtral 12,9B, u nas ~12,6B).
+
 **Narzut**: bufor obliczeń i kontekst runtime'u. Wartość startowa 0,5 GB,
 do skalibrowania na prawdziwych pomiarach (zob. sekcja 15).
 
@@ -329,7 +347,8 @@ data/
 aibobr/
   domain/      models.py, enums.py, units.py  HardwareProfile, GpuInfo, ModelSpec, Verdict; bajty ↔ GB
   detection/   base.py, factory.py, common.py, linux.py, windows.py, nvidia.py, profiles.py
-  sources/     base.py, factory.py, http.py, huggingface.py, gguf_reader.py, manual.py
+  sources/     base.py, factory.py, http.py, huggingface.py, gguf_reader.py, manual.py,
+               cache.py, ollama.py
   calculator/  quants.py, memory.py, verdict.py  tabela kwantyzacji; wagi + KV + narzut → strefy, zapas
   knowledge/   catalog.py, advisor.py         warianty „co możesz zrobić”, aktualizacja katalogu
   app/         config.py, controller.py
@@ -341,6 +360,7 @@ tools/
   build_catalog.py
   try_source.py             narzędzie deweloperskie: co program odczytał z linku / pliku
   try_detection.py          narzędzie deweloperskie: co program wykrył; --json zapisuje profil
+  calibrate.py              kalibracja: przewidywania kontra pomiar w Ollamie (etap 8)
 tests/
   fake_hardware/*.json      profile sprzętu (także dla --fake-hw)
   test_memory.py, test_verdict.py, test_gguf_reader.py, test_huggingface.py,
@@ -394,15 +414,18 @@ Każdy etap zaczyna się od omówienia uwag i dopisania szczegółów do tej spe
 
 ## 16. Otwarte kwestie i rzeczy do sprawdzenia
 
-Zebrane do kalibracji (etap 8):
-- **Okno przesuwne** (Gemma 3, gpt-oss): większość warstw trzyma tylko ostatnie tokeny
-  (klucz `*.attention.sliding_window` w GGUF) – cache KV jest dla nich zawyżony,
-  dla Gemmy 3 12B przy 8k nawet kilkukrotnie.
-- **gpt-oss-20b:** liczymy 4,2B aktywnych parametrów, oficjalnie 3,6B.
-- **Szybkość nagłówka z HF:** 5–12 s na repozytorium (głównie słownik tokenizera).
-- **Skan na Windowsie:** 3,6 s na serwerze GitHuba, prawie w całości start PowerShella.
-- **Repozytoria spoza zakresu** (np. FLUX dla ComfyUI): zamiast „brak plików modelu”
-  wprost „to model obrazów” – do czasu etapu 10.
+Etap 8 – kalibracja:
+- ✅ **Okno przesuwne** (Gemma 3, gpt-oss) – SPEC §5.
+- ✅ **gpt-oss-20b:** 3,6B aktywnych zamiast 4,2B – SPEC §5.
+- ✅ **Repozytoria spoza zakresu:** `model_index.json` albo `pipeline_tag` z HF →
+  „to model obrazów / dźwięku” zamiast „brak plików modelu”.
+- ⏳ **Narzut runtime'u** (0,5 GB): pomiar na sprzęcie autora – `tools/calibrate.py`
+  ładuje modele z Ollamy z kilkoma kontekstami (pusty prompt, nic nie jest generowane),
+  porównuje przewidywanie z `/api/ps` (łącznie i w VRAM) i przyrostem VRAM z `nvidia-smi`,
+  zapisuje raport JSON. Źródło `sources/ollama.py` czyta modele z API Ollamy (metadane GGUF
+  i tensory z `/api/show`), na razie tylko dla narzędzia – pole „Wskaż model” go nie zna.
+- ⏳ **Szybkość nagłówka z HF:** 5–12 s na repozytorium (głównie słownik tokenizera).
+- ⏳ **Skan na Windowsie:** 3,6 s na serwerze GitHuba, prawie w całości start PowerShella.
 
 - **Narzut runtime'u:** 0,5 GB to wartość startowa; do skalibrowania (etap 8).
 - **Szacunek KV bez danych architektury** (ręczny poziom podstawowy): reguła

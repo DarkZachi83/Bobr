@@ -19,7 +19,7 @@ from aibobr.sources.base import ArchInfo, LoadedModel, Variant
 
 log = logging.getLogger(__name__)
 MAX_AGE = 7 * 24 * 3600
-FORMAT = 1
+FORMAT = 2              # 2: okno przesuwne w ArchInfo – starsze wpisy pobieramy od nowa
 
 
 def model_to_dict(m: LoadedModel) -> dict:

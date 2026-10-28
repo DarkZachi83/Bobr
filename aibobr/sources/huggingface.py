@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 from aibobr.domain.enums import ModelSource
 from aibobr.sources.base import (
-    OBSOLETE_QUANT_RE, SPLIT_RE, ArchInfo, LoadedModel, SourceError, Variant, quant_from_filename,
+    OBSOLETE_QUANT_RE, SPLIT_RE, ArchInfo, count_swa_layers, LoadedModel, SourceError, Variant, quant_from_filename,
 )
 from aibobr.sources.gguf_reader import arch_from_headers, display_name, read_header
 from aibobr.sources.http import HttpClient
@@ -30,6 +30,11 @@ HF = "https://huggingface.co"
 _NOT_MODELS = {"datasets", "spaces", "docs", "models", "collections", "blog", "papers", "settings"}
 _ID = r"[A-Za-z0-9][\w.-]*"
 _QUANT_TAG = re.compile(r":([A-Za-z0-9_]+)$")
+
+# Typy zadań HF spoza obecnego zakresu (pipeline_tag) – osobny komunikat zamiast „brak plików”.
+IMAGE_TAGS = {"text-to-image", "image-to-image", "unconditional-image-generation",
+              "text-to-video", "image-to-video", "image-text-to-image", "text-to-3d", "image-to-3d"}
+AUDIO_TAGS = {"text-to-audio", "text-to-speech", "audio-to-audio", "text-to-music"}
 
 # Warianty pokazywane dla repozytoriów bez plików GGUF (rozmiary z tabeli kwantyzacji).
 ESTIMATED_QUANTS = ("F16", "Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M", "Q3_K_M", "Q2_K")
@@ -126,12 +131,27 @@ class HuggingFaceSource:
                 return self._load_gguf_repo(ref, gguf)
             if any(f.path == "config.json" for f in files):
                 return self._load_transformers_repo(ref, files)
+            raise SourceError(self._out_of_scope(ref, files), ref.repo_id)
         except SourceError as e:
             # Lista plików jest dostępna, a plik nie: repozytorium wymaga akceptacji licencji.
             if e.code == "source.access_denied":
                 raise SourceError("source.gated", ref.repo_id) from e
             raise
         raise SourceError("source.no_model_files", ref.repo_id)
+
+    def _out_of_scope(self, ref: HfRef, files: list[_File]) -> str:
+        """Brak modelu językowego: obrazy / dźwięk (etapy 9–11) mówimy wprost (SPEC §15)."""
+        tag = ""
+        try:
+            info = self.client.get_json(f"{HF}/api/models/{ref.repo_id}")
+            tag = str((info or {}).get("pipeline_tag") or "") if isinstance(info, dict) else ""
+        except SourceError:
+            pass                                       # bez typu też coś powiemy
+        if tag in IMAGE_TAGS or (not tag and any(f.path == "model_index.json" for f in files)):
+            return "source.image_model"
+        if tag in AUDIO_TAGS:
+            return "source.audio_model"
+        return "source.no_model_files"
 
     # ------------------------------------------------------------------ repo GGUF
     def _load_gguf_repo(self, ref: HfRef, files: list[_File]) -> LoadedModel:
@@ -227,9 +247,27 @@ def arch_from_config(config: Any, files: list[_File] = ()) -> ArchInfo:
         if inter:
             expert_params = layers * experts * 3 * hidden * inter
             if expert_params < total:
-                active = int(total - expert_params * (1 - used / experts))
+                active = total - expert_params * (1 - used / experts)
+                vocab = _first(c, "vocab_size")
+                if vocab and c.get("tie_word_embeddings") is False:   # jak w gguf_reader
+                    active -= vocab * hidden
+                active = int(active)
+
+    # Okno przesuwne tylko z jednoznacznych pól: layer_types (np. gpt-oss, Gemma 3)
+    # albo sliding_window_pattern. Samo "sliding_window" bywa wyłączone (Qwen:
+    # use_sliding_window = false) – wtedy liczymy pełny kontekst.
+    window, swa_layers = _first(c, "sliding_window"), None
+    if window and layers and c.get("use_sliding_window") is not False:
+        types = c.get("layer_types")
+        if isinstance(types, list) and types:
+            swa_layers = count_swa_layers(layers, [t == "sliding_attention" for t in types])
+        elif isinstance(c.get("sliding_window_pattern"), int):
+            swa_layers = count_swa_layers(layers, c["sliding_window_pattern"])
+    if not swa_layers:
+        window = None
 
     return ArchInfo(
+        sliding_window=window, swa_layers=swa_layers,
         params_total=total, n_layers=layers, n_kv_heads=kv_heads, head_dim=head_dim,
         max_context=_first(c, "max_position_embeddings", "max_sequence_length", "n_positions"),
         n_experts=experts if is_moe else None, n_experts_used=used if is_moe else None,

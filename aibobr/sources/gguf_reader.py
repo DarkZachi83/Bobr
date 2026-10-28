@@ -23,7 +23,7 @@ from typing import Any, Optional, Protocol
 
 from aibobr.domain.enums import ModelSource
 from aibobr.sources.base import (
-    SPLIT_RE, ArchInfo, LoadedModel, SourceError, Variant, quant_from_filename,
+    SPLIT_RE, ArchInfo, LoadedModel, SourceError, Variant, count_swa_layers, quant_from_filename,
 )
 
 GGUF_MAGIC = 0x46554747  # b"GGUF" czytane jako little-endian uint32
@@ -158,6 +158,12 @@ def read_header(src: ByteSource) -> GgufHeader:
 
 # --------------------------------------------------------------------------- interpretacja
 
+# Domyślny wzór warstw z oknem przesuwnym, gdy plik go nie podaje – jak w llama.cpp
+# (src/models/*.cpp: load_swa_pattern). Tylko architektury, które naprawdę używają okna,
+# i tylko gdy plik ma klucz {arch}.attention.sliding_window > 0. Dla reszty liczymy pełny
+# kontekst we wszystkich warstwach (wynik zawyżony, czyli bezpieczny).
+SWA_DEFAULT_PATTERN = {"gemma2": 2, "gemma3": 6, "gpt-oss": 2, "cohere2": 4, "exaone4": 4}
+
 def _int_or_max(value: Any) -> Optional[int]:
     """Wartość per warstwa bywa tablicą – bierzemy maksimum (ostrożnie)."""
     if isinstance(value, list):
@@ -200,9 +206,27 @@ def arch_from_headers(headers: list[GgufHeader]) -> ArchInfo:
     if total and experts and experts > 1 and used:
         # Tensory ekspertów są złożone w jeden ("…_exps"); aktywna jest ich część used/experts.
         expert_params = sum(t.n_elements for t in tensors if "_exps" in t.name)
-        active = int(total - expert_params * (1 - used / experts))
+        active = total - expert_params * (1 - used / experts)
+        # Tablicy embedding nie liczymy (na token czytany jest jeden jej wiersz) – chyba że
+        # jest też wyjściem modelu (brak output.weight = wagi wspólne). Tak liczy OpenAI
+        # dla gpt-oss (3,6B aktywnych z 20,9B).
+        if any(t.name == "output.weight" for t in tensors):
+            active -= sum(t.n_elements for t in tensors if t.name.startswith("token_embd."))
+        active = int(active)
+
+    window = _int_or_max(g("attention.sliding_window"))
+    swa_layers = None
+    if window and layers:
+        pattern = g("attention.sliding_window_pattern")
+        if pattern is None:
+            pattern = SWA_DEFAULT_PATTERN.get(arch)
+        if pattern is not None:
+            swa_layers = count_swa_layers(layers, pattern)
+    if not swa_layers:
+        window = None
 
     return ArchInfo(
+        sliding_window=window, swa_layers=swa_layers,
         params_total=total, n_layers=layers, n_kv_heads=kv_heads, head_dim=head_dim,
         max_context=_int_or_max(g("context_length")),
         n_experts=experts if experts and experts > 1 else None,

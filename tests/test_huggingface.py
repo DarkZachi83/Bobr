@@ -119,12 +119,38 @@ class GgufRepoTest(unittest.TestCase):
         self.assertNotIn("F16", [v.quant for v in m.variants])
 
 
+class OutOfScopeRepoTest(unittest.TestCase):
+    def load(self, tree, info=None):
+        repo = "black-forest-labs/flux-3-image-klein-comfy"
+        http = FakeHttp(json={f"{HF}/api/models/{repo}/tree/main?recursive=true": tree,
+                              **({f"{HF}/api/models/{repo}": info} if info is not None else {})})
+        with self.assertRaises(SourceError) as ctx:
+            HuggingFaceSource(http).load(HfRef(repo))
+        return ctx.exception.code
+
+    def test_image_model_by_pipeline_tag(self):
+        tree = [lfs("flux-3-klein.safetensors", 8_000_000_000)]         # jak u autora
+        self.assertEqual(self.load(tree, {"pipeline_tag": "text-to-image"}), "source.image_model")
+
+    def test_diffusers_layout_without_tag(self):
+        tree = [{"type": "file", "path": "model_index.json", "size": 500},
+                lfs("unet/diffusion_pytorch_model.safetensors", 5_000_000_000)]
+        self.assertEqual(self.load(tree), "source.image_model")
+
+    def test_audio_and_unknown(self):
+        tree = [lfs("model.safetensors", 1_000_000_000)]
+        self.assertEqual(self.load(tree, {"pipeline_tag": "text-to-audio"}), "source.audio_model")
+        self.assertEqual(self.load(tree, {"pipeline_tag": "image-classification"}),
+                         "source.no_model_files")
+
+
 class TransformersRepoTest(unittest.TestCase):
     MIXTRAL = {
         "architectures": ["MixtralForCausalLM"], "torch_dtype": "bfloat16",
         "num_hidden_layers": 32, "num_attention_heads": 32, "num_key_value_heads": 8,
         "hidden_size": 4096, "intermediate_size": 14336, "max_position_embeddings": 32768,
         "num_local_experts": 8, "num_experts_per_tok": 2,
+        "vocab_size": 32000, "tie_word_embeddings": False,
     }
 
     def test_config_and_safetensors(self):
@@ -140,7 +166,9 @@ class TransformersRepoTest(unittest.TestCase):
         self.assertEqual(a.params_total, 19 * 4_900_000_000 // 2)          # bf16 = 2 B
         self.assertEqual((a.n_layers, a.n_kv_heads, a.head_dim), (32, 8, 128))
         self.assertEqual((a.n_experts, a.n_experts_used), (8, 2))
-        self.assertAlmostEqual(a.params_active / 1e9, 12.9, delta=0.3)   # Mixtral: ~12,9B aktywnych
+        # Mistral podaje 12,9B razem z tablicą embedding; liczymy bez niej (jak OpenAI
+        # dla gpt-oss), bo na token czytany jest tylko jeden jej wiersz: ~12,6B.
+        self.assertAlmostEqual(a.params_active / 1e9, 12.6, delta=0.2)
         spec = m.spec()
         self.assertEqual(spec.quant, "Q4_K_M")
         self.assertIsNone(spec.weights_bytes)                               # rozmiar z tabeli

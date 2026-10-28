@@ -162,7 +162,8 @@ class Advisor:
             Line("expl.need.title", {"total": Size(n.total)}),
             Line("expl.need.weights_est" if n.weights_estimated else "expl.need.weights",
                  {"size": Size(n.weights)}),
-            Line("expl.need.kv_est" if n.kv_estimated else "expl.need.kv",
+            Line("expl.need.kv_est" if n.kv_estimated else
+                 "expl.need.kv_swa" if n.kv_sliding else "expl.need.kv",
                  {"size": Size(n.kv_cache), "ctx": Context(settings.context_tokens)}),
             Line("expl.need.overhead", {"size": Size(n.overhead)}),
         ]
