@@ -439,6 +439,7 @@ Z NIUCHACZA **nie przenosimy** `transport/`, `protocol/`, `reader_thread` ani
    modelach autora (w tym MoE).
 
 Stan: etapy 1–7 zakończone, **v0.1.0 wydane 27.10.2026** (`AI-Bobr.exe`, `AI-Bobr-cli.exe`).
+Etap 8 (kalibracja) zakończony – **v0.2.0 wydane 28.10.2026**.
 
 ### Plan po v0.1 (zaakceptowany 27.10.2026)
 
