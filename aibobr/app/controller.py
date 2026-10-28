@@ -62,7 +62,16 @@ class AppController:
         return HttpClient(token=self.settings.get("hf_token") or None)
 
     def load_model(self, text: str) -> LoadedModel:
-        return load_model(text, self.http(), self.cache)
+        return load_model(text, self.http(), self.cache, self.ollama_host())
+
+    def ollama_host(self) -> str:
+        return str(self.settings.get("ollama_host") or "http://127.0.0.1:11434")
+
+    def ollama_models(self) -> list[dict]:
+        """Modele zainstalowane w Ollamie (tryb Zaawansowany) – SourceError, gdy nie działa."""
+        from aibobr.sources.ollama import OllamaSource
+        models = OllamaSource(HttpClient(timeout=10), self.ollama_host()).installed()
+        return [m for m in models if "embed" not in str(m.get("name", "")).lower()]
 
     # ------------------------------------------------------------------ sprzęt
     def scan(self) -> HardwareProfile:

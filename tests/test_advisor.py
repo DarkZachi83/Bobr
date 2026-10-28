@@ -55,8 +55,8 @@ class GreenTest(unittest.TestCase):
         self.assertEqual(quant.fields["quant"], "Q8_0")                    # F32 się nie mieści
 
     def test_no_spare_suggestion_that_would_itself_be_tight(self):
-        # Karta 8 GB autora: Q5_K_M zmieściłoby się z 0,16 GB zapasu – tego nie podpowiadamy.
-        v, e = explain(LLAMA, pc(gpus=[gpu(vram_gb=8)]))
+        # Karta 8 GB autora przy 16k: zapas ~0,1 GB, większa kwantyzacja się nie zmieści.
+        v, e = explain(LLAMA, pc(gpus=[gpu(vram_gb=8)]), replace(AUTO, context_tokens=16384))
         self.assertTrue(v.low_margin)
         self.assertEqual(keys(e.actions), ["expl.spare.none"])
         self.assertEqual(keys(e.notes), ["note.low_margin"])
@@ -64,14 +64,14 @@ class GreenTest(unittest.TestCase):
 
 class YellowTest(unittest.TestCase):
     def test_mostly_in_vram_has_gentle_wording(self):
-        _, e = explain(LLAMA, pc(gpus=[gpu(vram_gb=8)]), replace(AUTO, context_tokens=16384))
+        _, e = explain(LLAMA, pc(gpus=[gpu(vram_gb=8)]), replace(AUTO, context_tokens=20480))
         self.assertEqual(e.summary.key, "verdict.yellow_mostly")
         self.assertIn("expl.pc.slow_little", keys(e.computer))
         self.assertEqual(keys(e.actions), ["expl.act.quant", "expl.act.context", "expl.act.kv"])
-        # Q3_K_XL ma większy plik niż Q4_K_S, ale to klasa Q3 – podpowiadamy Q4_K_S
+        # Q3_K_XL ma większy plik niż IQ4_XS, ale to klasa Q3 – nie jest „lepszą” podpowiedzią
         # (błąd wyłapany na laptopie autora).
-        self.assertEqual(e.actions[0].fields["quant"], "Q4_K_S")
-        self.assertEqual(e.actions[1].fields["ctx"], 8192)
+        self.assertEqual(e.actions[0].fields["quant"], "IQ4_XS")
+        self.assertEqual(e.actions[1].fields["ctx"], 16384)
 
     def test_32b_on_12gb_card_needs_smaller_model(self):
         _, e = explain(QWEN32, DESKTOP_3060)
@@ -96,11 +96,11 @@ class YellowTest(unittest.TestCase):
         self.assertEqual(e.actions[-1].fields["name"], "Llama 3.1 8B")
 
     def test_lowest_acceptable_quant_not_q2(self):
-        # Karta 6 GB: mieszczą się Q3_K_S (3,5 bita), IQ3_XS (3,3) i warianty Q2 –
+        # Karta 6 GB: mieszczą się IQ3_M (3,7 bita), Q3_K_S, IQ3_XS (3,3) i warianty Q2 –
         # podpowiadamy najlepszą jakość nie gorszą niż ok. 3,4 bita.
         _, e = explain(LLAMA, pc(gpus=[gpu(vram_gb=6)]))
         self.assertEqual(keys(e.actions), ["expl.act.quant"])
-        self.assertEqual(e.actions[0].fields["quant"], "Q3_K_S")
+        self.assertEqual(e.actions[0].fields["quant"], "IQ3_M")
         self.assertNotIn("Q2", str(e.actions))
 
     def test_combo_when_no_single_change_helps(self):
@@ -119,6 +119,11 @@ class YellowTest(unittest.TestCase):
         bits = {q: _bits_per_weight(LLAMA.spec(q), QUANTS) for q in
                 ("Q3_K_XL", "Q4_K_S", "Q4_K_L", "Q4_K_M", "Q6_K_L", "Q2_K_L")}
         self.assertLess(bits["Q3_K_XL"], bits["Q4_K_S"])
+        from aibobr.knowledge.advisor import _quality
+        q = {n: _quality(LLAMA.spec(n), QUANTS) for n in ("Q3_K_L", "IQ4_XS", "Q4_K_M", "Q8_0", "F32")}
+        self.assertLess(q["Q3_K_L"], q["IQ4_XS"])               # klasa 3 < klasa 4 mimo 4,27 > 4,25 b
+        self.assertLess(q["IQ4_XS"], q["Q4_K_M"])
+        self.assertLess(q["Q8_0"], q["F32"])
         self.assertEqual(bits["Q4_K_L"], bits["Q4_K_M"])
         self.assertEqual(bits["Q6_K_L"], QUANTS.bits("Q6_K"))
         self.assertLess(bits["Q2_K_L"], 3.4)
@@ -161,7 +166,7 @@ class RenderingTest(unittest.TestCase):
         self.assertEqual(render(line, "en"), "The model needs 22.4 GB:")
 
     def test_last_item_ends_with_full_stop(self):
-        _, e = explain(LLAMA, pc(gpus=[gpu(vram_gb=8)]), replace(AUTO, context_tokens=16384))
+        _, e = explain(LLAMA, pc(gpus=[gpu(vram_gb=8)]), replace(AUTO, context_tokens=20480))
         texts = render_list(e.actions, "pl")
         self.assertTrue(texts[0].endswith(","))
         self.assertTrue(texts[-1].endswith("."))

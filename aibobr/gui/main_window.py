@@ -26,7 +26,7 @@ from aibobr.gui.worker import Worker
 from aibobr.i18n import LANGUAGES, current_language, fmt_context, fmt_params, set_language, t
 from aibobr.knowledge.advisor import render
 from aibobr.sources.base import LoadedModel, SourceError
-from aibobr.sources.factory import is_local
+from aibobr.sources.factory import OLLAMA_PREFIX, source_kind
 
 class MainWindow:
     def __init__(self, root: tk.Tk, controller: AppController,
@@ -59,7 +59,7 @@ class MainWindow:
         ttk.Label(head, text=t("gui.app_name"), font=("TkDefaultFont", 16, "bold")).pack(side="left")
         ttk.Label(head, text="  AI Hardware Checker", foreground=COLORS["muted"]).pack(side="left", pady=(6, 0))
 
-        self.picker = ModelPicker(outer, self.check, self.manual, self.select_quant)
+        self.picker = ModelPicker(outer, self.check, self.manual, self.select_quant, self.from_ollama)
         self.picker.pack(fill="x", pady=(0, 8))
         self.picker.text.set(self.model_text)
 
@@ -143,7 +143,8 @@ class MainWindow:
     def check(self, text: str) -> None:
         self.model_text = text
         self.picker.set_busy(True)
-        self.picker.set_status(t("cli.loading_remote") if not is_local(text) else t("gui.reading_file"))
+        self.picker.set_status({"remote": t("cli.loading_remote"), "file": t("gui.reading_file"),
+                                "ollama": t("gui.reading_ollama")}[source_kind(text)])
 
         def done(model):
             self.picker.set_busy(False)
@@ -188,9 +189,19 @@ class MainWindow:
             child.destroy()
         self.explanation.set_explanation(None)
 
+    def from_ollama(self) -> None:
+        from aibobr.gui.dialogs.ollama_models import OllamaModelsDialog
+        dialog = OllamaModelsDialog(self.root, self.worker, self.c.ollama_models)
+        self.root.wait_window(dialog)
+        if dialog.result:
+            text = OLLAMA_PREFIX + dialog.result
+            self.picker.text.set(text)
+            self.check(text)
+
     def recompute(self) -> None:
         if not hasattr(self, "bar"):
             return
+        self.picker.set_advanced(self.hardware.mode.get() == "advanced")
         if self.model is None:
             self._clear_result()
             return

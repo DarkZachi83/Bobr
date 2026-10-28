@@ -70,7 +70,14 @@ skrót `hf.co/<repo>:Q4_K_M` oraz wklejone całe polecenie `ollama run hf.co/…
 Z repozytorium GGUF program pobiera tylko nagłówek jednego pliku (zapytania HTTP Range,
 kilka MB). Token HF trafia wyłącznie do huggingface.co, nigdy do serwerów CDN.
 
-Wszystkie trzy źródła tworzą ten sam obiekt `ModelSpec`. Kalkulator nie wie,
+**Tryb Zaawansowany – modele z Ollamy** (decyzja autora, etap 8): przycisk „Z Ollamy…”
+widoczny tylko w trybie Zaawansowanym otwiera listę modeli zainstalowanych w Ollamie
+(`/api/tags`); wybór wpisuje `ollama:NAZWA` w pole modelu. Dane z `/api/show` (metadane
+GGUF i tensory), bez szukania plików. W trybie tekstowym: `python main.py ollama:qwen3:8b`.
+Adres Ollamy: ustawienie `ollama_host` (domyślnie `http://127.0.0.1:11434`). Tryb
+Automatyczny zostaje prosty – bez tej opcji.
+
+Wszystkie źródła tworzą ten sam obiekt `ModelSpec`. Kalkulator nie wie,
 skąd przyszły dane.
 
 ## 5. Model pamięci
@@ -109,8 +116,25 @@ Przykład: Gemma 3 12B przy 8k – 0,97 GB zamiast 3 GB.
 wyjściową (na token czytany jest jeden wiersz tablicy) – jak OpenAI dla gpt-oss (3,6B).
 Inni producenci podają liczbę z tablicą (Mistral: Mixtral 12,9B, u nas ~12,6B).
 
-**Narzut**: bufor obliczeń i kontekst runtime'u. Wartość startowa 0,5 GB,
-do skalibrowania na prawdziwych pomiarach (zob. sekcja 15).
+**Narzut**: bufor obliczeń i kontekst CUDA – **0,3 GB**, zmierzone w etapie 8
+(28.10.2026, Ollama 0.40.11, laptop RTX 5050 8 GB, 5 modeli × konteksty 2k/8k/16k,
+`tools/calibrate.py`):
+
+| | narzut 0,5 GB (wartość startowa) | **0,3 GB** | 0,25 GB |
+|---|---|---|---|
+| trafione werdykty „całość w karcie” | 13/14 | **14/14** | 14/14 |
+| najgorsze niedoszacowanie względem nvidia-smi | 0 | **0** | +0,02 GB |
+
+Przy 0,5 GB jedyny błąd: Llama 3.1 8B przy 16k – program mówił „częściowo w RAM”, a model
+zmieścił się w karcie (6,5 GB). Pomiary są testem regresyjnym
+(`tests/test_calibration_data.py`, dane w `tests/calibration/`): każda zmiana obliczeń musi
+dalej trafiać werdykty i nigdy nie przewidywać mniej, niż zmierzył nvidia-smi.
+Obserwacje z pomiarów:
+- Ollama w `/api/ps` podaje o ~0,1 GB mniej niż nvidia-smi (kontekst CUDA) – narzut to obejmuje.
+- Gdy model częściowo trafia do RAM, „size” z `/api/ps` jest zaniżony (qwen2.5-coder 14B:
+  7,1 GB przy pliku 8,4 GB) – kalibracja używa tylko pomiarów z całością w VRAM.
+- Zmierzone na modelach 3–14B; dla dużo większych narzut może rosnąć (bufor obliczeń
+  zależy od rozmiaru warstw) – do sprawdzenia, gdy będą pomiary.
 
 ## 6. Werdykt: pasek pamięci
 
@@ -355,7 +379,8 @@ aibobr/
   i18n/        __init__.py, pl.json, en.json
   cli/         cli.py                         pasek tekstowy
   gui/         main_window.py, theme.py, worker.py, bar_layout.py,
-               widgets/ (memory_bar, explanation, hardware_panel, model_picker), dialogs/ (manual_model)
+               widgets/ (memory_bar, explanation, hardware_panel, model_picker),
+               dialogs/ (manual_model, about, ollama_models)
 tools/
   build_catalog.py
   try_source.py             narzędzie deweloperskie: co program odczytał z linku / pliku
@@ -419,11 +444,13 @@ Etap 8 – kalibracja:
 - ✅ **gpt-oss-20b:** 3,6B aktywnych zamiast 4,2B – SPEC §5.
 - ✅ **Repozytoria spoza zakresu:** `model_index.json` albo `pipeline_tag` z HF →
   „to model obrazów / dźwięku” zamiast „brak plików modelu”.
-- ⏳ **Narzut runtime'u** (0,5 GB): pomiar na sprzęcie autora – `tools/calibrate.py`
+- ✅ **Narzut runtime'u:** 0,3 GB zamiast 0,5 GB (SPEC §5). Pomiar – `tools/calibrate.py`
   ładuje modele z Ollamy z kilkoma kontekstami (pusty prompt, nic nie jest generowane),
   porównuje przewidywanie z `/api/ps` (łącznie i w VRAM) i przyrostem VRAM z `nvidia-smi`,
   zapisuje raport JSON. Źródło `sources/ollama.py` czyta modele z API Ollamy (metadane GGUF
-  i tensory z `/api/show`), na razie tylko dla narzędzia – pole „Wskaż model” go nie zna.
+  i tensory z `/api/show`).
+- ✅ **Ranking jakości kwantyzacji:** najpierw klasa bitowa z nazwy (Q3_K_L to klasa 3,
+  gorsza od IQ4_XS mimo 4,27 > 4,25 bita na wagę), potem bity na wagę.
 - ⏳ **Szybkość nagłówka z HF:** 5–12 s na repozytorium (głównie słownik tokenizera).
 - ⏳ **Skan na Windowsie:** 3,6 s na serwerze GitHuba, prawie w całości start PowerShella.
 

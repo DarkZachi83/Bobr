@@ -30,14 +30,14 @@ class MockupCasesTest(unittest.TestCase):
         v = run(QWEN_25_32B, DESKTOP_3060)
         self.assertEqual(v.level, FitLevel.YELLOW)
         self.assertEqual(v.in_vram, gib(11))
-        self.assertAlmostEqual(v.vram_fraction, 0.52, places=2)
+        self.assertAlmostEqual(v.vram_fraction, 0.53, places=2)
         self.assertEqual(v.shortfall, 0)
 
     def test_70b_does_not_fit(self):
         v = run(LLAMA_33_70B, DESKTOP_3060)
         self.assertEqual(v.level, FitLevel.RED)
         self.assertIsNone(v.margin)
-        self.assertAlmostEqual(to_gib(v.shortfall), 1.6, places=1)
+        self.assertAlmostEqual(to_gib(v.shortfall), 1.4, places=1)
 
     def test_70b_fits_slowly_with_more_ram(self):
         self.assertEqual(run(LLAMA_33_70B, pc(ram_gb=64, gpus=[gpu()])).level, FitLevel.YELLOW)
@@ -132,8 +132,8 @@ class IncompleteProfileTest(unittest.TestCase):
 
 class MarginTest(unittest.TestCase):
     def test_low_margin_in_green(self):
-        # 8B na karcie 8 GB: 7 GB użytkowe, model ~6,1 GB → zapas < 1 GB
-        v = run(LLAMA_31_8B, pc(gpus=[gpu(vram_gb=8)]))
+        # 8B na karcie 7,5 GB: 6,5 GB użytkowe, model ~5,9 GB → zapas < 1 GB
+        v = run(LLAMA_31_8B, pc(gpus=[gpu(vram_gb=7.5)]))
         self.assertEqual(v.level, FitLevel.GREEN)
         self.assertTrue(v.low_margin)
 

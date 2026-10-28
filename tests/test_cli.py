@@ -44,18 +44,22 @@ class CliRun(unittest.TestCase):
 
 
 class CliTest(CliRun):
-    def test_laptop_green_with_low_margin(self):
+    def test_laptop_green_at_8k_and_tight_at_16k(self):
+        # Pomiar autora (Ollama, RTX 5050 8 GB): 8k – 5,5 GB w karcie, 16k – 6,5 GB, mieści się.
         code, out = self.run_cli(str(self.gguf))
         self.assertEqual(code, EXIT_OK)
         self.assertIn("Pójdzie na Twoim komputerze", out)
-        self.assertIn("Mały zapas", out)
+        self.assertNotIn("Mały zapas", out)
+        _, out16 = self.run_cli(str(self.gguf), "--context", "16k")
+        self.assertIn("Pójdzie na Twoim komputerze", out16)
+        self.assertIn("Mały zapas", out16)
         self.assertIn("[=================", out)
         self.assertIn("--explain", out)                       # podpowiedź, bez wyjaśnienia
         self.assertNotIn("Model potrzebuje", out)
 
     def test_explain_sections_with_full_stop(self):
-        code, out = self.run_cli(str(self.gguf), "--context", "16k", "--explain")
-        self.assertIn("Model potrzebuje 7,1 GB:", out)
+        code, out = self.run_cli(str(self.gguf), "--context", "20k", "--explain")
+        self.assertIn("Model potrzebuje 7,4 GB:", out)
         self.assertIn("Twój komputer:", out)
         self.assertIn("Co możesz zrobić:", out)
         self.assertIn("  → cache KV w q8_0 (opcja runtime'u) zmieści się w całości w karcie", out)
@@ -74,7 +78,7 @@ class CliTest(CliRun):
         _, out = self.run_cli(str(self.gguf), "--bobr", profile=PROFILES / "two_nvidia.json",
                               palette=ANSI)
         self.assertIn("\033[1;33mBB", out)
-        _, out = self.run_cli(str(self.gguf), "--bobr", "--context", "16k")
+        _, out = self.run_cli(str(self.gguf), "--bobr", "--context", "24k")
         self.assertIn("[BBB", out)
         self.assertNotIn(BOBR_MESSAGE, out)
 
@@ -98,7 +102,7 @@ class CliTest(CliRun):
         self.assertEqual(code, EXIT_OK)
 
     def test_what_if_bigger_card(self):
-        _, out = self.run_cli(str(self.gguf), "--context", "16k", "--vram", "16")
+        _, out = self.run_cli(str(self.gguf), "--context", "24k", "--vram", "16")
         self.assertIn("Pójdzie na Twoim komputerze", out)
 
     def test_huggingface_unknown_quant_lists_available(self):

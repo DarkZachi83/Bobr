@@ -91,7 +91,7 @@ class RunSettings:
     ram_reserve: int = gib(2.0)              # dla systemu; Windows: 4 GB (ustawia config)
     margin_ratio: float = 0.10               # próg ostrzeżenia o małym zapasie
     margin_min: int = gib(1.0)               # …ale nie mniej niż tyle
-    overhead: int = gib(0.5)                 # bufor obliczeń + runtime, do kalibracji (etap 8)
+    overhead: int = gib(0.3)                 # bufor obliczeń + kontekst CUDA; kalibracja: SPEC §5
 
 
 # --------------------------------------------------------------------------- wynik

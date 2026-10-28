@@ -69,6 +69,16 @@ class FactoryTest(unittest.TestCase):
         self.assertEqual(m.source, ModelSource.HUGGINGFACE)
         self.assertEqual(m.spec().quant, "Q8_0")
 
+    def test_ollama_prefix(self):
+        from tests.test_ollama_calibrate import FakeOllama
+        from aibobr.sources.factory import source_kind
+        fake = FakeOllama()
+        m = load_model("ollama:llama3.1:8b", fake.http)
+        self.assertEqual((m.name, m.origin), ("llama3.1:8b", "ollama:llama3.1:8b"))
+        self.assertEqual(source_kind(" ollama:qwen3:8b "), "ollama")
+        self.assertEqual(source_kind("hf.co/a/b"), "remote")
+        self.assertEqual(self.code("ollama:"), "source.empty_input")
+
     def test_errors(self):
         self.assertEqual(self.code("   "), "source.empty_input")
         self.assertEqual(self.code("https://ollama.com/library/llama3.1"), "source.unsupported_site")

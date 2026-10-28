@@ -1,0 +1,159 @@
+{
+ "_opis": "Pomiary autora 28.10.2026: Ollama 0.40.11, Linux, laptop RTX 5050 Laptop 8 GB (tests/fake_hardware/real_laptop_rtx5050_linux.json), tools/calibrate.py. Wagi odtworzone z kolumny 'przewid.' przy 2048 tokenach. fits = cały model w VRAM wg /api/ps.",
+ "models": {
+  "qwen3:8b": {
+   "n_layers": 36,
+   "n_kv_heads": 8,
+   "head_dim": 128,
+   "sliding_window": null,
+   "swa_layers": null,
+   "weights_gib": 4.869
+  },
+  "llama3.1:8b": {
+   "n_layers": 32,
+   "n_kv_heads": 8,
+   "head_dim": 128,
+   "sliding_window": null,
+   "swa_layers": null,
+   "weights_gib": 4.58
+  },
+  "llama3.2:3b": {
+   "n_layers": 28,
+   "n_kv_heads": 8,
+   "head_dim": 128,
+   "sliding_window": null,
+   "swa_layers": null,
+   "weights_gib": 1.881
+  },
+  "qwen2.5-coder:14b": {
+   "n_layers": 48,
+   "n_kv_heads": 8,
+   "head_dim": 128,
+   "sliding_window": null,
+   "swa_layers": null,
+   "weights_gib": 8.375
+  },
+  "gemma2:9b": {
+   "n_layers": 42,
+   "n_kv_heads": 8,
+   "head_dim": 256,
+   "sliding_window": 4096,
+   "swa_layers": 21,
+   "weights_gib": 5.074
+  }
+ },
+ "results": [
+  {
+   "model": "qwen3:8b",
+   "context": 2048,
+   "ollama_gib": 4.92,
+   "ollama_vram_gib": 4.92,
+   "nvidia_gib": 5.02,
+   "fits": true
+  },
+  {
+   "model": "qwen3:8b",
+   "context": 8192,
+   "ollama_gib": 5.77,
+   "ollama_vram_gib": 5.77,
+   "nvidia_gib": 5.87,
+   "fits": true
+  },
+  {
+   "model": "qwen3:8b",
+   "context": 16384,
+   "ollama_gib": 7.3,
+   "ollama_vram_gib": 6.38,
+   "nvidia_gib": 6.49,
+   "fits": false
+  },
+  {
+   "model": "llama3.1:8b",
+   "context": 2048,
+   "ollama_gib": 4.67,
+   "ollama_vram_gib": 4.67,
+   "nvidia_gib": 4.77,
+   "fits": true
+  },
+  {
+   "model": "llama3.1:8b",
+   "context": 8192,
+   "ollama_gib": 5.42,
+   "ollama_vram_gib": 5.42,
+   "nvidia_gib": 5.53,
+   "fits": true
+  },
+  {
+   "model": "llama3.1:8b",
+   "context": 16384,
+   "ollama_gib": 6.43,
+   "ollama_vram_gib": 6.43,
+   "nvidia_gib": 6.53,
+   "fits": true
+  },
+  {
+   "model": "llama3.2:3b",
+   "context": 2048,
+   "ollama_gib": 2.16,
+   "ollama_vram_gib": 2.16,
+   "nvidia_gib": 2.27,
+   "fits": true
+  },
+  {
+   "model": "llama3.2:3b",
+   "context": 8192,
+   "ollama_gib": 2.9,
+   "ollama_vram_gib": 2.9,
+   "nvidia_gib": 3.01,
+   "fits": true
+  },
+  {
+   "model": "llama3.2:3b",
+   "context": 16384,
+   "ollama_gib": 3.8,
+   "ollama_vram_gib": 3.8,
+   "nvidia_gib": 3.9,
+   "fits": true
+  },
+  {
+   "model": "qwen2.5-coder:14b",
+   "context": 2048,
+   "ollama_gib": 7.07,
+   "ollama_vram_gib": 6.34,
+   "nvidia_gib": 6.45,
+   "fits": false
+  },
+  {
+   "model": "qwen2.5-coder:14b",
+   "context": 8192,
+   "ollama_gib": 10.07,
+   "ollama_vram_gib": 6.47,
+   "nvidia_gib": 6.57,
+   "fits": false
+  },
+  {
+   "model": "qwen2.5-coder:14b",
+   "context": 16384,
+   "ollama_gib": 11.58,
+   "ollama_vram_gib": 6.37,
+   "nvidia_gib": 6.47,
+   "fits": false
+  },
+  {
+   "model": "gemma2:9b",
+   "context": 2048,
+   "ollama_gib": 5.51,
+   "ollama_vram_gib": 5.51,
+   "nvidia_gib": 5.94,
+   "fits": true
+  },
+  {
+   "model": "gemma2:9b",
+   "context": 8192,
+   "ollama_gib": 5.99,
+   "ollama_vram_gib": 5.22,
+   "nvidia_gib": 6.45,
+   "fits": false
+  }
+ ]
+}
