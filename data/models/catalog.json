@@ -12,7 +12,9 @@
     "n_kv_heads": 8,
     "head_dim": 128,
     "max_context": 131072,
-    "architecture": "llama"
+    "architecture": "llama",
+    "embd_params": 394002432,
+    "tied_embeddings": true
    },
    "variants": {
     "F16": 6433687840,
@@ -43,7 +45,9 @@
     "max_context": 131072,
     "architecture": "gemma3",
     "sliding_window": 1024,
-    "swa_layers": 29
+    "swa_layers": 29,
+    "embd_params": 671088640,
+    "tied_embeddings": true
    },
    "variants": {
     "BF16": 7767474336,
@@ -81,7 +85,9 @@
     "n_kv_heads": 8,
     "head_dim": 128,
     "max_context": 32768,
-    "architecture": "qwen3"
+    "architecture": "qwen3",
+    "embd_params": 388956160,
+    "tied_embeddings": true
    },
    "variants": {
     "BF16": 8051285184,
@@ -119,7 +125,9 @@
     "n_kv_heads": 4,
     "head_dim": 128,
     "max_context": 32768,
-    "architecture": "qwen2"
+    "architecture": "qwen2",
+    "embd_params": 544997376,
+    "tied_embeddings": false
    },
    "variants": {
     "F16": 15237853600,
@@ -154,7 +162,9 @@
     "n_kv_heads": 8,
     "head_dim": 128,
     "max_context": 131072,
-    "architecture": "llama"
+    "architecture": "llama",
+    "embd_params": 525336576,
+    "tied_embeddings": false
    },
    "variants": {
     "F32": 32128885888,
@@ -189,7 +199,9 @@
     "n_kv_heads": 8,
     "head_dim": 128,
     "max_context": 32768,
-    "architecture": "qwen3"
+    "architecture": "qwen3",
+    "embd_params": 622329856,
+    "tied_embeddings": false
    },
    "variants": {
     "BF16": 16388044064,
@@ -229,7 +241,9 @@
     "max_context": 131072,
     "architecture": "gemma3",
     "sliding_window": 1024,
-    "swa_layers": 40
+    "swa_layers": 40,
+    "embd_params": 1006632960,
+    "tied_embeddings": true
    },
    "variants": {
     "BF16": 23539658496,
@@ -268,7 +282,9 @@
     "n_kv_heads": 8,
     "head_dim": 128,
     "max_context": 32768,
-    "architecture": "qwen3"
+    "architecture": "qwen3",
+    "embd_params": 777912320,
+    "tied_embeddings": false
    },
    "variants": {
     "BF16": 29543423776,
@@ -308,7 +324,9 @@
     "n_kv_heads": 8,
     "head_dim": 128,
     "max_context": 32768,
-    "architecture": "qwen2"
+    "architecture": "qwen2",
+    "embd_params": 778567680,
+    "tied_embeddings": false
    },
    "variants": {
     "F16": 29547716448,
@@ -348,7 +366,9 @@
     "params_active": 3608307264,
     "architecture": "gpt-oss",
     "sliding_window": 128,
-    "swa_layers": 12
+    "swa_layers": 12,
+    "embd_params": 579133440,
+    "tied_embeddings": false
    },
    "variants": {
     "BF16": 13792637760,
@@ -391,7 +411,9 @@
     "n_kv_heads": 8,
     "head_dim": 128,
     "max_context": 131072,
-    "architecture": "llama"
+    "architecture": "llama",
+    "embd_params": 671088640,
+    "tied_embeddings": false
    },
    "variants": {
     "BF16": 47153524544,
@@ -434,7 +456,9 @@
     "max_context": 131072,
     "architecture": "gemma3",
     "sliding_window": 1024,
-    "swa_layers": 52
+    "swa_layers": 52,
+    "embd_params": 1409286144,
+    "tied_embeddings": true
    },
    "variants": {
     "BF16": 54027274816,
@@ -477,7 +501,9 @@
     "n_experts": 128,
     "n_experts_used": 8,
     "params_active": 3041867776,
-    "architecture": "qwen3moe"
+    "architecture": "qwen3moe",
+    "embd_params": 311164928,
+    "tied_embeddings": false
    },
    "variants": {
     "BF16": 61095803488,
@@ -518,7 +544,9 @@
     "n_kv_heads": 8,
     "head_dim": 128,
     "max_context": 32768,
-    "architecture": "qwen3"
+    "architecture": "qwen3",
+    "embd_params": 777912320,
+    "tied_embeddings": false
    },
    "variants": {
     "BF16": 65531575584,
@@ -559,7 +587,9 @@
     "n_kv_heads": 8,
     "head_dim": 128,
     "max_context": 131072,
-    "architecture": "llama"
+    "architecture": "llama",
+    "embd_params": 1050673152,
+    "tied_embeddings": false
    },
    "variants": {
     "F16": 141117918624,
