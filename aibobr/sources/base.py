@@ -35,6 +35,8 @@ class ArchInfo:
     architecture: Optional[str] = None       # np. "llama", "qwen3moe"
     sliding_window: Optional[int] = None
     swa_layers: Optional[int] = None
+    embd_params: Optional[int] = None        # token_embd: słowa × wymiar
+    tied_embeddings: Optional[bool] = None   # brak osobnej warstwy wyjściowej
 
     def to_spec(self, *, name: str, source: ModelSource, quant: str,
                 weights_bytes: Optional[int], origin: Optional[str]) -> ModelSpec:
@@ -45,6 +47,7 @@ class ArchInfo:
             max_context=self.max_context, n_experts=self.n_experts,
             n_experts_used=self.n_experts_used, params_active=self.params_active,
             sliding_window=self.sliding_window, swa_layers=self.swa_layers,
+            embd_params=self.embd_params, tied_embeddings=self.tied_embeddings,
             origin=origin,
         )
 

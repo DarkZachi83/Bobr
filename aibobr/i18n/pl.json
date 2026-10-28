@@ -45,6 +45,7 @@
   "expl.act.nothing_red": "nawet kwantyzacja {quant} i kontekst {ctx} nie zmieszczą się w pamięci komputera – potrzebny jest mniejszy model albo więcej RAM,",
   "expl.act.quant": "kwantyzacja {quant} ({size}) zmieści się {where},",
   "expl.act.title": "Co możesz zrobić:",
+  "expl.need.embd_ram": "Tablica słownika ({size}) zostaje w RAM, nie w karcie – tak działają llama.cpp, Ollama i LM Studio.",
   "expl.need.kv": "{size} pamięć rozmowy (kontekst {ctx}),",
   "expl.need.kv_est": "{size} pamięć rozmowy (kontekst {ctx}, szacunek),",
   "expl.need.kv_swa": "{size} pamięć rozmowy (kontekst {ctx}; większość warstw pamięta tylko ostatnie tokeny),",

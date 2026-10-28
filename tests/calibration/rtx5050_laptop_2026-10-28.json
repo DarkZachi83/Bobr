@@ -1,5 +1,5 @@
 {
- "_opis": "Pomiary autora 28.10.2026: Ollama 0.40.11, Linux, laptop RTX 5050 Laptop 8 GB (tests/fake_hardware/real_laptop_rtx5050_linux.json), tools/calibrate.py. Wagi odtworzone z kolumny 'przewid.' przy 2048 tokenach. fits = cały model w VRAM wg /api/ps.",
+ "_opis": "Pomiary autora 28.10.2026: Ollama 0.40.11, Linux, laptop RTX 5050 Laptop 8 GB (tests/fake_hardware/real_laptop_rtx5050_linux.json), tools/calibrate.py. Wagi odtworzone z kolumny 'przewid.' przy 2048 tokenach. fits = cały model w VRAM wg /api/ps. Gemma 3 4B dopisana tego samego dnia (okno przesuwne). embd_params/tied_embeddings: słownik × wymiar z config.json modeli; Ollama trzyma tablicę słownika w RAM (log: CPU_Mapped 525 MiB dla gemma3:4b).",
  "models": {
   "qwen3:8b": {
    "n_layers": 36,
@@ -7,7 +7,9 @@
    "head_dim": 128,
    "sliding_window": null,
    "swa_layers": null,
-   "weights_gib": 4.869
+   "weights_gib": 4.869,
+   "embd_params": 622329856,
+   "tied_embeddings": false
   },
   "llama3.1:8b": {
    "n_layers": 32,
@@ -15,7 +17,9 @@
    "head_dim": 128,
    "sliding_window": null,
    "swa_layers": null,
-   "weights_gib": 4.58
+   "weights_gib": 4.58,
+   "embd_params": 525336576,
+   "tied_embeddings": false
   },
   "llama3.2:3b": {
    "n_layers": 28,
@@ -23,7 +27,9 @@
    "head_dim": 128,
    "sliding_window": null,
    "swa_layers": null,
-   "weights_gib": 1.881
+   "weights_gib": 1.881,
+   "embd_params": 394002432,
+   "tied_embeddings": true
   },
   "qwen2.5-coder:14b": {
    "n_layers": 48,
@@ -31,7 +37,9 @@
    "head_dim": 128,
    "sliding_window": null,
    "swa_layers": null,
-   "weights_gib": 8.375
+   "weights_gib": 8.375,
+   "embd_params": 778567680,
+   "tied_embeddings": false
   },
   "gemma2:9b": {
    "n_layers": 42,
@@ -39,7 +47,19 @@
    "head_dim": 256,
    "sliding_window": 4096,
    "swa_layers": 21,
-   "weights_gib": 5.074
+   "weights_gib": 5.074,
+   "embd_params": 917504000,
+   "tied_embeddings": true
+  },
+  "gemma3:4b": {
+   "n_layers": 34,
+   "n_kv_heads": 4,
+   "head_dim": 256,
+   "sliding_window": 1024,
+   "swa_layers": 29,
+   "weights_gib": 3.121,
+   "embd_params": 671088640,
+   "tied_embeddings": true
   }
  },
  "results": [
@@ -154,6 +174,30 @@
    "ollama_vram_gib": 5.22,
    "nvidia_gib": 6.45,
    "fits": false
+  },
+  {
+   "model": "gemma3:4b",
+   "context": 2048,
+   "ollama_gib": 2.68,
+   "ollama_vram_gib": 2.68,
+   "nvidia_gib": 3.62,
+   "fits": true
+  },
+  {
+   "model": "gemma3:4b",
+   "context": 8192,
+   "ollama_gib": 2.83,
+   "ollama_vram_gib": 2.83,
+   "nvidia_gib": 3.89,
+   "fits": true
+  },
+  {
+   "model": "gemma3:4b",
+   "context": 16384,
+   "ollama_gib": 2.85,
+   "ollama_vram_gib": 2.85,
+   "nvidia_gib": 4.06,
+   "fits": true
   }
  ]
 }

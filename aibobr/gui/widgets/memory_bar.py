@@ -86,7 +86,7 @@ class MemoryBar(tk.Canvas):
         items = [
             (COLORS["vram"], t("gui.bar.vram", size=fmt_gb(cap.vram_usable))),
             (COLORS["ram"], t("gui.bar.ram", size=fmt_gb(cap.ram_usable))),
-            (weights_c, t("gui.bar.weights", size=fmt_gb(need.weights))),
+            (weights_c, t("gui.bar.weights", size=fmt_gb(need.weights_total))),
             (kv_c, t("gui.bar.kv", size=fmt_gb(need.kv_cache))),
             (COLORS["overhead"], t("gui.bar.overhead", size=fmt_gb(need.overhead))),
         ]

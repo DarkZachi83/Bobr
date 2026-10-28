@@ -179,12 +179,12 @@ class Advisor:
         return [
             Line("expl.need.title", {"total": Size(n.total)}),
             Line("expl.need.weights_est" if n.weights_estimated else "expl.need.weights",
-                 {"size": Size(n.weights)}),
+                 {"size": Size(n.weights_total)}),
             Line("expl.need.kv_est" if n.kv_estimated else
                  "expl.need.kv_swa" if n.kv_sliding else "expl.need.kv",
                  {"size": Size(n.kv_cache), "ctx": Context(settings.context_tokens)}),
             Line("expl.need.overhead", {"size": Size(n.overhead)}),
-        ]
+        ] + ([Line("expl.need.embd_ram", {"size": Size(n.embd_in_ram)})] if n.embd_in_ram else [])
 
     @staticmethod
     def _computer(v: Verdict, spec: ModelSpec, hw: HardwareProfile,
@@ -201,7 +201,7 @@ class Advisor:
             if cap.cpu_only:
                 lines.append(Line("expl.pc.all_in_ram", {"size": Size(v.in_ram)}))
             else:
-                lines.append(Line("expl.pc.spill", {"size": Size(v.in_ram)}))
+                lines.append(Line("expl.pc.spill", {"size": Size(v.spill)}))
             if not cap.cpu_only and v.vram_fraction >= MOSTLY_IN_VRAM:
                 lines.append(Line("expl.pc.slow_little"))
             elif spec.is_moe and spec.params_active and spec.params_total:

@@ -78,8 +78,8 @@ def render_bar(v: Verdict, palette: Palette = PLAIN, width: int = 50,
               + palette.paint("x" * max(0, c_need - c_total), palette.red)
               + " " * (width - max(c_total, c_need)))
 
-    c_w = col(need.weights)
-    c_kv = col(need.weights + need.kv_cache) - c_w
+    c_w = col(need.weights_total)
+    c_kv = col(need.weights_total + need.kv_cache) - c_w
     c_ov = c_need - c_w - c_kv
     color = getattr(palette, LEVEL_COLOR[v.level])
     if bobr:
@@ -92,7 +92,7 @@ def render_bar(v: Verdict, palette: Palette = PLAIN, width: int = 50,
     label_sys, label_model = t("cli.row.system"), t("cli.row.model")
     pad = max(len(label_sys), len(label_model))
     legend = t("cli.legend", vram=fmt_gb(vram), ram=fmt_gb(cap.ram_usable),
-               weights=fmt_gb(need.weights), kv=fmt_gb(need.kv_cache),
+               weights=fmt_gb(need.weights_total), kv=fmt_gb(need.kv_cache),
                overhead=fmt_gb(need.overhead))
     return [
         f"  {label_sys:<{pad}} [{system}]",
