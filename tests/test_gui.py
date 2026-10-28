@@ -67,7 +67,10 @@ class GuiSmokeTest(unittest.TestCase):
         self.root = tk.Tk()
 
     def tearDown(self):
+        import gc
         self.root.destroy()
+        del self.root
+        gc.collect()                  # okno tego testu sprzątamy tutaj, w wątku okna
         self.tmp.cleanup()
         set_language("en")
 
@@ -161,6 +164,22 @@ class GuiSmokeTest(unittest.TestCase):
         self.pump(seconds=0.2)
         self.assertEqual(d.image.width(), 520)
         d.destroy()
+
+    def test_worker_pauses_gc_while_threads_run(self):
+        import gc
+        import threading
+        from aibobr.gui.worker import Worker
+        release, results = threading.Event(), []
+        w = Worker(self.root)
+        w.run("x", lambda: release.wait(5) and "old", results.append, results.append)
+        w.run("x", lambda: "new", results.append, results.append)        # unieważnia pierwsze
+        self.pump(lambda: results == ["new"], 3)
+        self.assertEqual(results, ["new"])
+        self.assertFalse(gc.isenabled())                # pierwszy wątek wciąż pracuje
+        release.set()
+        self.pump(lambda: w.running == 0, 3)
+        self.assertTrue(gc.isenabled())
+        self.assertEqual(results, ["new"])              # spóźniony wynik pominięty
 
     def test_manual_dialog(self):
         from aibobr.gui.dialogs.manual_model import ManualModelDialog
