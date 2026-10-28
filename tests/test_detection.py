@@ -285,14 +285,17 @@ class ProfilesTest(unittest.TestCase):
         self.assertTrue(evaluate(LLAMA_31_8B, load_profile(PROFILES / "laptop_no_gpu.json"),
                                  RunSettings(), QUANTS).capacity.cpu_only)
 
-    def test_real_laptop_8b_fits_with_low_margin_and_16k_does_not(self):
+    def test_real_laptop_matches_authors_measurements(self):
+        # Ollama na tym laptopie (etap 8): Llama 3.1 8B mieści się w karcie przy 8k i 16k.
         hw = load_profile(PROFILES / "real_laptop_rtx5050_linux.json")
         v = evaluate(LLAMA_31_8B, hw, RunSettings(), QUANTS)
         self.assertEqual(v.warnings, ())                  # Blackwell, nowy sterownik
-        self.assertTrue(v.low_margin)                     # ~6,1 GB z 7 GB użytkowych
+        self.assertEqual((v.level, v.low_margin), (FitLevel.GREEN, False))
         self.assertEqual(len(v.capacity.gpus_used), 1)    # Intel UHD pominięty
         v16 = evaluate(LLAMA_31_8B, hw, RunSettings(context_tokens=16384), QUANTS)
-        self.assertEqual(v16.level, FitLevel.YELLOW)
+        self.assertEqual((v16.level, v16.low_margin), (FitLevel.GREEN, True))
+        v24 = evaluate(LLAMA_31_8B, hw, RunSettings(context_tokens=24576), QUANTS)
+        self.assertEqual(v24.level, FitLevel.YELLOW)
 
     def test_round_trip(self):
         for path in PROFILES.glob("*.json"):

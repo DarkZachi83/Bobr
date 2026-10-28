@@ -32,6 +32,8 @@ PATHS = {
 def build_app(fake_hw: Optional[Path] = None, user_dir: Optional[Path] = None,
               cache_dir: Optional[Path] = None) -> AppController:
     """Złożenie warstw bez interfejsu – używane też w testach."""
+    user_dir = Path(user_dir) if user_dir else None
+    cache_dir = Path(cache_dir) if cache_dir else None
     config = ConfigStore(PATHS["config"], user_dir)
     downloaded = (user_dir or user_config_dir()) / "catalog.json"
     return AppController(

@@ -145,8 +145,9 @@ class CatalogInAppTest(unittest.TestCase):
         Cli(c, out=out, palette=PLAIN).run(args)
         text = out.getvalue()
         self.assertIn("Lista modeli zaktualizowana: 3 modeli", text)
-        # Laptop 8 GB: Mid 8B (6,1 GB) mieści się na styk → podpowiedź to Small 3B.
-        self.assertIn("model Small 3B w Q4_K_M zmieści się w całości.", text)
+        # Laptop 8 GB: Mid 8B (5,9 GB) mieści się z zapasem ~1,1 GB (pomiar autora: tak) –
+        # to największy model, który wejdzie w całości.
+        self.assertIn("model Mid 8B w Q4_K_M zmieści się w całości.", text)
         self.assertTrue((user / "catalog.json").exists())
         again = main.build_app(None, user_dir=user, cache_dir=self.dir / "cache")
         self.assertEqual(len(again.catalog), 3)                      # pobrana kopia po restarcie

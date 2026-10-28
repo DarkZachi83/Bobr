@@ -67,7 +67,10 @@ class GuiSmokeTest(unittest.TestCase):
         self.root = tk.Tk()
 
     def tearDown(self):
+        import gc
         self.root.destroy()
+        del self.root
+        gc.collect()                  # okno tego testu sprzątamy tutaj, w wątku okna
         self.tmp.cleanup()
         set_language("en")
 
@@ -92,7 +95,7 @@ class GuiSmokeTest(unittest.TestCase):
         w.hardware.show_advanced()
         self.pump(seconds=0.5)
         self.assertEqual(w.verdict.cget("text"), auto)          # samo przełączenie nic nie zmienia
-        w.hardware.context.set("16k")
+        w.hardware.context.set("20k")                       # 16k mieści się (pomiar autora)
         self.pump(lambda: "wolniej" in w.verdict.cget("text"), 3)
         self.assertIn("nieco wolniej", w.verdict.cget("text"))
         w.explanation.toggle()
@@ -100,9 +103,43 @@ class GuiSmokeTest(unittest.TestCase):
         w.change_language("en")
         self.pump(seconds=0.5)
         self.assertIn("AI BEAVER", self.root.title())
-        self.assertEqual(w.hardware.context.get(), "16k")         # stan zachowany
+        self.assertEqual(w.hardware.context.get(), "20k")         # stan zachowany
         self.assertIn("a bit slower", w.verdict.cget("text"))
         self.assertTrue(w.explanation.expanded)
+
+    def test_ollama_button_only_in_advanced_mode(self):
+        w = self.window()
+        self.assertFalse(w.picker.ollama_button.winfo_ismapped())
+        w.hardware.show_advanced()
+        self.pump(lambda: w.picker.ollama_button.winfo_ismapped(), 2)
+        self.assertTrue(w.picker.ollama_button.winfo_ismapped())
+        w.hardware.mode.set("auto")
+        w.hardware._mode_changed()
+        self.pump(seconds=0.3)
+        self.assertFalse(w.picker.ollama_button.winfo_ismapped())
+
+    def test_ollama_dialog_lists_models(self):
+        from aibobr.gui.dialogs.ollama_models import OllamaModelsDialog
+        from aibobr.gui.worker import Worker
+        models = [{"name": "qwen3:8b", "size": 5_225_000_000, "details": {"quantization_level": "Q4_K_M"}},
+                  {"name": "llama3.2:3b", "size": 2_019_000_000, "details": {"quantization_level": "Q4_K_M"}}]
+        d = OllamaModelsDialog(self.root, Worker(self.root), lambda: models)
+        self.pump(lambda: d.listbox.size() == 2, 3)
+        self.assertIn("llama3.2:3b", d.listbox.get(0))           # alfabetycznie
+        d._ok()
+        self.assertEqual(d.result, "llama3.2:3b")
+
+    def test_ollama_dialog_when_ollama_is_down(self):
+        from aibobr.gui.dialogs.ollama_models import OllamaModelsDialog
+        from aibobr.gui.worker import Worker
+        from aibobr.sources.base import SourceError
+
+        def down():
+            raise SourceError("ollama.not_running", "http://127.0.0.1:11434")
+        d = OllamaModelsDialog(self.root, Worker(self.root), down)
+        self.pump(lambda: "Ollama nie odpowiada" in d.status.cget("text"), 3)
+        self.assertIn("Ollama nie odpowiada", d.status.cget("text"))
+        d.destroy()
 
     def test_failed_detection_offers_manual_mode(self):
         w = self.window("detection_failed.json")
@@ -127,6 +164,22 @@ class GuiSmokeTest(unittest.TestCase):
         self.pump(seconds=0.2)
         self.assertEqual(d.image.width(), 520)
         d.destroy()
+
+    def test_worker_pauses_gc_while_threads_run(self):
+        import gc
+        import threading
+        from aibobr.gui.worker import Worker
+        release, results = threading.Event(), []
+        w = Worker(self.root)
+        w.run("x", lambda: release.wait(5) and "old", results.append, results.append)
+        w.run("x", lambda: "new", results.append, results.append)        # unieważnia pierwsze
+        self.pump(lambda: results == ["new"], 3)
+        self.assertEqual(results, ["new"])
+        self.assertFalse(gc.isenabled())                # pierwszy wątek wciąż pracuje
+        release.set()
+        self.pump(lambda: w.running == 0, 3)
+        self.assertTrue(gc.isenabled())
+        self.assertEqual(results, ["new"])              # spóźniony wynik pominięty
 
     def test_manual_dialog(self):
         from aibobr.gui.dialogs.manual_model import ManualModelDialog

@@ -11,7 +11,7 @@ from aibobr.sources.base import LoadedModel
 
 class ModelPicker(ttk.Frame):
     def __init__(self, master, on_check: Callable[[str], None], on_manual: Callable[[], None],
-                 on_quant: Callable[[str], None]):
+                 on_quant: Callable[[str], None], on_ollama: Optional[Callable[[], None]] = None):
         super().__init__(master, style="Panel.TFrame")
         self.on_check, self.on_quant = on_check, on_quant
         self.text = tk.StringVar()
@@ -38,6 +38,9 @@ class ModelPicker(ttk.Frame):
         self.combo.pack(side="left", padx=6)
         self.combo.bind("<<ComboboxSelected>>", lambda e: self.on_quant(self._quants[self.quant_label.get()]))
         ttk.Button(bottom, text=t("gui.manual"), command=on_manual).pack(side="right")
+        # Tylko w trybie Zaawansowanym (decyzja autora: tryb Automatyczny zostaje prosty).
+        self.ollama_button = ttk.Button(bottom, text=t("gui.ollama"), command=on_ollama or (lambda: None))
+        self.advanced = False
         self.status = ttk.Label(self, text="", style="Muted.TLabel", wraplength=760)
         self.status.grid(row=4, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 8))
         self.status.grid_remove()
@@ -53,6 +56,15 @@ class ModelPicker(ttk.Frame):
         if path:
             self.text.set(path)
             self.on_check(path)
+
+    def set_advanced(self, advanced: bool) -> None:
+        if advanced == self.advanced:
+            return
+        self.advanced = advanced
+        if advanced:
+            self.ollama_button.pack(side="right", padx=(0, 6))
+        else:
+            self.ollama_button.pack_forget()
 
     def set_busy(self, busy: bool) -> None:
         self.check_button.state(["disabled"] if busy else ["!disabled"])

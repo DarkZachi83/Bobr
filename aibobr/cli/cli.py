@@ -15,7 +15,7 @@ from aibobr.domain.enums import FitLevel
 from aibobr.i18n import fmt_context, fmt_gb, fmt_params, t
 from aibobr.knowledge.advisor import Explanation, render, render_list
 from aibobr.sources.base import SourceError
-from aibobr.sources.factory import is_local
+from aibobr.sources.factory import source_kind
 
 BOBR_MESSAGE = "Patrz, jaki bóbr!"      # zawsze po polsku – żart nie przetrwa tłumaczenia
 
@@ -76,7 +76,7 @@ class Cli:
         if not text:
             self.error("cli.no_model")
             return EXIT_USAGE
-        if not is_local(text):
+        if source_kind(text) == "remote":
             self.say(self.p.paint(t("cli.loading_remote"), self.p.dim))
         try:
             model = self.c.load_model(text)

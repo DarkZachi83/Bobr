@@ -135,7 +135,8 @@ class Calibrator:
             try:
                 limit = self.ollama.load(name).arch.max_context
             except SourceError as e:
-                self.log(f"  ✗ {name}: {e.code}")
+                hint = f" – pobierz: ollama pull {name}" if e.code == "ollama.not_found" else ""
+                self.log(f"  ✗ {name}: {'nie ma w Ollamie' if hint else e.code}{hint}")
                 continue
             for ctx in contexts:
                 if limit and ctx > limit:

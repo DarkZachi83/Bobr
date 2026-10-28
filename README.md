@@ -21,7 +21,8 @@ Q4_K_M, context, KV cache, MoE. AI Bóbr answers one question for **one specific
 does it fit, and where?
 
 - **Pick a model:** a Hugging Face link, `hf.co/<repo>:Q4_K_M` (the same form as `ollama run`),
-  a local `.gguf` file, or enter the numbers by hand.
+  a local `.gguf` file, or enter the numbers by hand. In Advanced mode also a model you already
+  have in Ollama (**From Ollama…**).
 - **It scans your PC:** CPU, RAM and graphics cards (NVIDIA, AMD, Intel; Linux and Windows).
 - **You get a memory bar:** your fast VRAM and slower RAM against what the model needs –
   weights, chat memory (KV cache) and overhead.
@@ -90,8 +91,8 @@ KV cache = 2 × layers × KV heads × head size × context × bytes per element
 
 ### Limits – read before you trust the number
 
-- It's a **calculation, not a measurement**. The runtime overhead (0.5 GB) is a starting value
-  to be calibrated on real runs.
+- It's a **calculation, not a measurement**. The runtime overhead (0.3 GB) was calibrated on real
+  runs (Ollama, RTX 5050 8 GB, models 3–14B: 14/14 verdicts right); much bigger models may need more.
 - **Sliding-window models** (Gemma 3, gpt-oss) keep only recent tokens in most layers – this is
   counted for known architectures (llama.cpp rules); unknown ones get the full, safer estimate.
 - A card with a lot of VRAM isn't always usable: very old NVIDIA cards, older drivers, and AMD/Intel
@@ -142,7 +143,8 @@ Q4_K_M, kontekst, cache KV, MoE. AI Bóbr odpowiada na jedno pytanie dla **konkr
 czy się zmieści i gdzie?
 
 - **Wskazujesz model:** link do Hugging Face, `hf.co/<repo>:Q4_K_M` (ta sama forma co w
-  `ollama run`), plik `.gguf` z dysku albo dane wpisane ręcznie.
+  `ollama run`), plik `.gguf` z dysku albo dane wpisane ręcznie. W trybie Zaawansowanym także
+  model, który masz już w Ollamie (**Z Ollamy…**).
 - **Program sprawdza komputer:** procesor, RAM i karty graficzne (NVIDIA, AMD, Intel; Linux i Windows).
 - **Dostajesz pasek pamięci:** szybki VRAM i wolniejszy RAM obok tego, czego potrzebuje model –
   wag, pamięci rozmowy (cache KV) i narzutu.
@@ -203,8 +205,9 @@ cache KV = 2 × warstwy × głowice KV × wymiar głowicy × kontekst × bajty n
 
 ### Ograniczenia – przeczytaj, zanim zaufasz liczbie
 
-- To **obliczenie, a nie pomiar**. Narzut runtime'u (0,5 GB) jest wartością startową do
-  skalibrowania na prawdziwych uruchomieniach.
+- To **obliczenie, a nie pomiar**. Narzut runtime'u (0,3 GB) skalibrowaliśmy na prawdziwych
+  uruchomieniach (Ollama, RTX 5050 8 GB, modele 3–14B: 14/14 trafionych werdyktów); dużo większe
+  modele mogą potrzebować więcej.
 - **Modele z oknem przesuwnym** (Gemma 3, gpt-oss) trzymają w większości warstw tylko ostatnie
   tokeny – dla znanych architektur liczymy to według reguł llama.cpp, dla nieznanych pełny,
   bezpieczniejszy szacunek.

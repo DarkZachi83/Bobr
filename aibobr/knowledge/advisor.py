@@ -113,6 +113,24 @@ def _bits_per_weight(spec: ModelSpec, quants: QuantTable) -> Optional[float]:
     return bits
 
 
+_NOMINAL = re.compile(r"^I?Q(\d)")
+
+
+def _quality(spec: ModelSpec, quants: QuantTable) -> Optional[tuple[int, float]]:
+    """Klucz jakości: (klasa bitowa z nazwy, bity na wagę).
+
+    Klasa z nazwy rozstrzyga pierwsza: Q3_K_L (4,27 bita na wagę, bo część warstw trzyma
+    wyżej) to wciąż klasa 3-bitowa i jest gorsza od IQ4_XS (4,25) – tak wychodzi w pomiarach
+    jakości llama.cpp. Bity na wagę porządkują warianty wewnątrz klasy."""
+    bits = _bits_per_weight(spec, quants)
+    if bits is None:
+        return None
+    name = spec.quant.upper()
+    m = _NOMINAL.match(name)
+    nominal = int(m.group(1)) if m else {"F32": 32, "F16": 16, "BF16": 16}.get(name, int(bits))
+    return nominal, bits
+
+
 def _where(level: FitLevel, cpu_only: bool = False) -> Text:
     if level == FitLevel.GREEN:
         return Text("expl.where.vram")
@@ -134,9 +152,9 @@ class Advisor:
         specs = []
         for v in model.variants:
             spec = model.spec(v.quant)
-            bits = _bits_per_weight(spec, self.quants)
-            if bits is not None:
-                specs.append((bits, spec.weights_bytes or 0, spec))
+            q = _quality(spec, self.quants)
+            if q is not None:
+                specs.append((q, spec.weights_bytes or 0, spec))
         return [s for *_, s in sorted(specs, key=lambda p: (p[0], p[1]), reverse=True)]
 
     # ------------------------------------------------------------------ werdykt
@@ -215,9 +233,9 @@ class Advisor:
         if best_ctx:
             lines.append(Line("expl.spare.context", {"ctx": Context(best_ctx)}))
 
-        current_bits = _bits_per_weight(spec, self.quants) or 0
+        current = _quality(spec, self.quants) or (0, 0.0)
         for other in self._variants(model):                 # od najdokładniejszej
-            if (_bits_per_weight(other, self.quants) or 0) <= current_bits:
+            if (_quality(other, self.quants) or (0, 0.0)) <= current:
                 break
             v = self._eval(other, hw, settings)
             # „Zapas” nie może prowadzić do wariantu, przy którym sami ostrzegamy o małym zapasie.
@@ -229,9 +247,10 @@ class Advisor:
 
     def _actions(self, model: LoadedModel, spec: ModelSpec, v: Verdict, hw: HardwareProfile,
                  settings: RunSettings) -> list[Line]:
-        current_bits = _bits_per_weight(spec, self.quants) or 99
+        current = _quality(spec, self.quants) or (99, 99.0)
         smaller = [s for s in self._variants(model)
-                   if QUALITY_MIN_BITS <= (_bits_per_weight(s, self.quants) or 0) < current_bits]
+                   if (_quality(s, self.quants) or (0, 0.0)) < current
+                   and (_bits_per_weight(s, self.quants) or 0) >= QUALITY_MIN_BITS]
         contexts = [c for c in (16384, 8192, 4096, 2048) if c < settings.context_tokens]
         kv = replace(settings, kv_cache_type=KvCacheType.Q8_0) \
             if settings.kv_cache_type == KvCacheType.F16 else None
