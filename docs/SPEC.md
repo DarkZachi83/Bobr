@@ -77,6 +77,33 @@ GGUF i tensory), bez szukania plików. W trybie tekstowym: `python main.py ollam
 Adres Ollamy: ustawienie `ollama_host` (domyślnie `http://127.0.0.1:11434`). Tryb
 Automatyczny zostaje prosty – bez tej opcji.
 
+**Modele na dysku** (etap 9a, decyzja autora 28.10.2026): przycisk „Modele na dysku…”
+w **obu trybach** („co ja w ogóle mam?” to pytanie początkującego), w trybie tekstowym
+`--scan [FOLDER]`.
+- **Zgoda:** przy pierwszym użyciu okno z informacją, co jest czytane (nazwy, rozmiary,
+  nagłówki plików; nic nie idzie do internetu) – „Szukaj” / „Nie teraz”. Zgoda zapisana
+  w ustawieniach (`scan_consent`). W trybie tekstowym zgodą jest sama flaga `--scan`.
+- **Poziom 1 – znane miejsca** (sekundy): Ollama (`OLLAMA_MODELS`, `~/.ollama/models`,
+  na Linuksie także foldery usługi w `/usr/share/ollama` i `/var/lib/ollama`), LM Studio
+  (`~/.lmstudio/models`, starsze `~/.cache/lm-studio/models`), pamięć podręczna Hugging Face
+  (`HF_HUB_CACHE`, `HF_HOME/hub`, `~/.cache/huggingface/hub`), llama.cpp (`LLAMA_CACHE`,
+  `~/.cache/llama.cpp`, Windows `%LOCALAPPDATA%\llama.cpp`), GPT4All. Tylko istniejące foldery.
+- **Poziom 2 – „Przeszukaj folder…”**: dowolny folder (np. z Stable Diffusion WebUI,
+  ComfyUI). Bez pełnego skanu całego dysku. Pomijane: foldery ukryte i systemowe, pliki
+  mniejsze niż 50 MB.
+- **Rozpoznanie po zawartości:** GGUF po nagłówku (projektor obrazu `mmproj` jako dodatek);
+  safetensors po nazwach tensorów (model obrazów, LoRA, VAE, model językowy); `.ckpt`,
+  `.pt`, `.pth`, `.bin` to pickle – **nigdy nie są otwierane**, typ tylko z nazwy folderu
+  (`Stable-diffusion`, `Lora`, `VAE`…). Całe magazyny jako jedna pozycja: Ollama (nazwy
+  z `manifests/`, wagi w `blobs/`), repozytorium w pamięci HF (`models--org--nazwa` →
+  `org/nazwa`), folder transformers (`config.json` + wagi), folder diffusers
+  (`model_index.json`). Plik widziany dwa razy (dowiązania) liczony raz.
+- **Wynik:** lista (nazwa, typ, rozmiar, skąd) i łączny rozmiar. Modele tekstowe można od
+  razu sprawdzić: Ollama → `ollama:NAZWA` (gdy Ollama jest wyłączona, program czyta jej
+  plik z dysku), folder transformers → szacunek z `config.json` jak dla repozytorium HF
+  bez GGUF. Modele obrazów i dodatki są tylko na liście – ocena od etapu 10. Modele dźwięku
+  w formacie transformers (Whisper, MusicGen…) na razie jako „inne” – etap 9.
+
 Wszystkie źródła tworzą ten sam obiekt `ModelSpec`. Kalkulator nie wie,
 skąd przyszły dane.
 
@@ -399,6 +426,7 @@ aibobr/
   detection/   base.py, factory.py, common.py, linux.py, windows.py, nvidia.py, profiles.py
   sources/     base.py, factory.py, http.py, huggingface.py, gguf_reader.py, manual.py,
                cache.py, ollama.py
+  scan/        model.py, locations.py, files.py, ollama_store.py, scanner.py  modele na dysku (etap 9a)
   calculator/  quants.py, memory.py, verdict.py  tabela kwantyzacji; wagi + KV + narzut → strefy, zapas
   knowledge/   catalog.py, advisor.py         warianty „co możesz zrobić”, aktualizacja katalogu
   app/         config.py, controller.py
@@ -406,7 +434,7 @@ aibobr/
   cli/         cli.py                         pasek tekstowy
   gui/         main_window.py, theme.py, worker.py, bar_layout.py,
                widgets/ (memory_bar, explanation, hardware_panel, model_picker),
-               dialogs/ (manual_model, about, ollama_models)
+               dialogs/ (manual_model, about, ollama_models, found_models)
 tools/
   build_catalog.py
   try_source.py             narzędzie deweloperskie: co program odczytał z linku / pliku
@@ -447,6 +475,8 @@ Program ma sprawdzać nie tylko modele językowe, ale też modele dźwięku, muz
 Kolejność wynika z tego, jak te modele zużywają pamięć:
 
 8. **Kalibracja modeli językowych** (lista w sekcji 16).
+9a. **Modele na dysku** (dopisane 28.10.2026) – szukanie zainstalowanych modeli za zgodą
+    użytkownika (SPEC §4); przyda się do pomiarów w etapach 9 i 10.
 9. **Dźwięk i muzyka typu LLM** – modele generujące tokeny dźwięku jak LLM tokeny tekstu:
    syntezatory mowy na bazie LLM (np. Orpheus na Llamie 3B, OuteTTS, Dia, CSM), MusicGen,
    modele rozmowy głosem. Obecny model pamięci pasuje; dochodzi: rozpoznanie typu z HF

@@ -141,6 +141,34 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertIn("Ollama nie odpowiada", d.status.cget("text"))
         d.destroy()
 
+    def test_found_models_dialog_asks_first(self):
+        from aibobr.gui.dialogs.found_models import FoundModelsDialog
+        from aibobr.gui.worker import Worker
+        from aibobr.scan.model import FoundModel, Kind, ScanReport
+        saved, calls = [], []
+
+        def find(folder, stop, progress):
+            calls.append(folder)
+            progress(42)
+            return ScanReport(models=[
+                FoundModel("sdxl", Kind.IMAGE, "safetensors", 6 * 1024**3, Path("/m/sdxl.safetensors"), "folder"),
+                FoundModel("llama3.1:8b", Kind.TEXT, "GGUF", 4 * 1024**3, Path("/m/blob"), "Ollama",
+                           quant="Q4_K_M", target="ollama:llama3.1:8b")])
+        d = FoundModelsDialog(self.root, Worker(self.root), find, False, saved.append)
+        self.pump(seconds=0.2)
+        self.assertEqual(calls, [])                              # bez zgody nic nie szukamy
+        d.consent_yes.invoke()
+        self.assertEqual(saved, [True])
+        self.pump(lambda: len(d.tree.get_children()) == 2, 3)
+        self.assertEqual(d.tree.item(d.tree.get_children()[0], "text"), "llama3.1:8b · Q4_K_M")
+        self.assertIn("Znaleziono 2 modeli", d.status.cget("text"))
+        d._ok()
+        self.assertEqual(d.result, "ollama:llama3.1:8b")
+
+    def test_found_button_in_both_modes(self):
+        w = self.window()
+        self.assertTrue(w.picker.found_button.winfo_ismapped())
+
     def test_failed_detection_offers_manual_mode(self):
         w = self.window("detection_failed.json")
         self.assertIn("Nie udało się odczytać", w.verdict.cget("text"))

@@ -100,6 +100,13 @@ KV cache = 2 × layers × KV heads × head size × context × bytes per element
   cards that depend on the runtime get a warning next to the bar.
 - Windows: the current VRAM usage of AMD/Intel cards isn't shown (it doesn't affect the verdict).
 
+### Models on your disk
+
+**Models on disk…** (or `--scan [FOLDER]`) lists the models you already have – from Ollama,
+LM Studio, the Hugging Face cache, llama.cpp and GPT4All, or from any folder you pick (e.g. Stable
+Diffusion or ComfyUI). It asks first, reads only file names, sizes and headers, never opens pickle
+files (`.ckpt`) and sends nothing anywhere. Text models can be checked with one double-click.
+
 ### Model list
 
 Suggestions like *"the model X in Q4_K_M fits entirely"* come from `data/models/catalog.json`
@@ -216,6 +223,13 @@ cache KV = 2 × warstwy × głowice KV × wymiar głowicy × kontekst × bajty n
 - Duży VRAM nie zawsze znaczy, że runtime go użyje: bardzo stare karty NVIDIA, starsze sterowniki
   i karty AMD/Intel zależne od runtime'u dostają ostrzeżenie obok paska.
 - Windows: bieżące zajęcie VRAM kart AMD/Intel nie jest pokazywane (nie wpływa na werdykt).
+
+### Modele na dysku
+
+**Modele na dysku…** (albo `--scan [FOLDER]`) pokazuje modele, które już masz – z Ollamy, LM Studio,
+pamięci podręcznej Hugging Face, llama.cpp i GPT4All albo ze wskazanego folderu (np. Stable Diffusion,
+ComfyUI). Najpierw pyta o zgodę, czyta tylko nazwy, rozmiary i nagłówki plików, nigdy nie otwiera plików
+pickle (`.ckpt`) i nic nie wysyła. Model tekstowy sprawdzisz dwuklikiem.
 
 ### Lista modeli
 

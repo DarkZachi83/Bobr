@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import re
+import sys
+from dataclasses import replace
 from pathlib import Path
 
 from aibobr.sources.base import LoadedModel, SourceError
 from aibobr.sources.gguf_reader import load_gguf_file
 from aibobr.sources.http import HttpClient
-from aibobr.sources.huggingface import HuggingFaceSource, parse_reference
+from aibobr.sources.huggingface import HuggingFaceSource, load_transformers_folder, parse_reference
 from aibobr.sources.ollama import DEFAULT_HOST, OllamaSource
 
 OLLAMA_PREFIX = "ollama:"
@@ -40,7 +42,18 @@ def load_model(text: str, client: HttpClient, cache=None,
         name = text[len(OLLAMA_PREFIX):].strip()
         if not name:
             raise SourceError("source.empty_input")
-        return OllamaSource(client, ollama_host).load(name)
+        try:
+            return OllamaSource(client, ollama_host).load(name)
+        except SourceError as e:
+            if e.code != "ollama.not_running":
+                raise
+            # Ollama wyłączona – model i tak jest na dysku (znaleziony przy szukaniu modeli).
+            from aibobr.scan.locations import known_locations
+            from aibobr.scan.ollama_store import find_blob
+            blob = find_blob(name, [p for app, p in known_locations(sys.platform) if app == "Ollama"])
+            if blob is None:
+                raise
+            return replace(load_gguf_file(blob), name=name, origin=f"{OLLAMA_PREFIX}{name}")
     # Wklejone całe polecenie: "ollama run hf.co/bartowski/…:Q4_K_M"
     text = re.sub(r"^ollama\s+(run|pull)\s+", "", text, flags=re.I)
     if not text:
@@ -49,6 +62,10 @@ def load_model(text: str, client: HttpClient, cache=None,
     path = Path(text).expanduser()
     if path.suffix.lower() == ".gguf" or path.exists():
         if path.is_dir():
+            if (path / "model_index.json").is_file():
+                raise SourceError("source.image_model", str(path))
+            if (path / "config.json").is_file():
+                return load_transformers_folder(path)
             raise SourceError("source.is_directory", str(path))
         return load_gguf_file(path)
 
