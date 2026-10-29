@@ -1,4 +1,6 @@
 {
+  "app.star": "Podoba się AI Bóbr? Zostaw gwiazdkę na GitHubie – to dla autora dużo znaczy i pomaga w dalszych pracach: {url}",
+  "app.star_short": "Podoba się program? Zostaw gwiazdkę na GitHubie – to dla autora dużo znaczy i pomaga w dalszych pracach.",
   "app.title": "AI Bóbr {version} – AI Hardware Checker",
   "args.batch": "modele obrazów: ile obrazów naraz (domyślnie 1)",
   "args.cli": "tryb tekstowy (bez okna)",
@@ -214,6 +216,7 @@
   "gui.scan_title": "Modele na tym komputerze",
   "gui.scanning": "Sprawdzam sprzęt…",
   "gui.set_manually": "Ustaw parametry ręcznie",
+  "gui.star_button": "Zostaw gwiazdkę na GitHubie",
   "gui.token_prompt": "Token Hugging Face (do modeli wymagających akceptacji licencji).\nZostanie zapisany tylko na tym komputerze. Puste pole usuwa token.",
   "gui.unavailable": "Nie można otworzyć okna (brak tkintera albo ekranu) – uruchamiam tryb tekstowy.",
   "gui.unexpected": "Nieoczekiwany błąd: {error}",

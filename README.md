@@ -7,6 +7,9 @@
 
 **[English](#english) · [Polski](#polski)**
 
+> ⭐ **Like it? Leave a star** – it means a lot to the author and helps further work.
+> ⭐ **Podoba się? Zostaw gwiazdkę** – to dla autora dużo znaczy i pomaga w dalszych pracach.
+
 <p align="center"><img src="docs/img/app.png" width="640" alt="AI Bóbr – Llama 3.1 8B on a laptop with RTX 5050 8 GB"></p>
 <p align="center"><sub>Llama 3.1 8B (Q4_K_M) on a laptop with an RTX 5050 8 GB: fits, but with a small margin. / Llama 3.1 8B na laptopie z RTX 5050 8 GB: mieści się, ale na styk.</sub></p>
 
@@ -146,6 +149,13 @@ AI Bóbr was designed by Rafał (idea, decisions, testing on real hardware) toge
 **Claude (Anthropic)** as an AI pair-engineer (code, tests, documentation) – the same team as
 [NIUCHACZ](https://github.com/DarkZachi83/NIUCHACZ-POST-Code-Sniffer-), whose architecture it follows.
 
+### Like it?
+
+If AI BEAVER saved you a download that would never have fit – **leave a ⭐ star** at the top of this
+page. It means a lot to the author and helps decide what comes next (speech, image and music models
+are on the way). Found a wrong verdict? [Open an issue](https://github.com/DarkZachi83/Bobr/issues)
+with the model link and what your program really used – real measurements make the tool better for everyone.
+
 ### License
 
 [MIT](LICENSE).
@@ -270,6 +280,13 @@ repozytorium (`~/.config/ai-bobr/`, `%APPDATA%\AI-Bobr\`).
 AI Bobra zaprojektował Rafał (pomysł, decyzje, testy na prawdziwym sprzęcie) razem z
 **Claude (Anthropic)** jako partnerem-inżynierem AI (kod, testy, dokumentacja) – ten sam zespół co
 [NIUCHACZ](https://github.com/DarkZachi83/NIUCHACZ-POST-Code-Sniffer-), którego architekturę przejmuje.
+
+### Podoba się?
+
+Jeśli AI Bóbr oszczędził Ci pobierania modelu, który i tak by się nie zmieścił – **zostaw ⭐ gwiazdkę**
+u góry tej strony. To dla autora dużo znaczy i pomaga zdecydować, co dalej (w drodze są modele mowy,
+obrazów i muzyki). Werdykt się nie sprawdził? [Zgłoś to](https://github.com/DarkZachi83/Bobr/issues)
+z linkiem do modelu i tym, ile pamięci naprawdę zajął – prawdziwe pomiary ulepszają program dla wszystkich.
 
 ### Licencja
 

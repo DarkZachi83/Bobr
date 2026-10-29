@@ -1,4 +1,6 @@
 {
+  "app.star": "Like AI BEAVER? Leave a star on GitHub – it means a lot to the author and helps further work: {url}",
+  "app.star_short": "Like the program? Leave a star on GitHub – it means a lot to the author and helps further work.",
   "app.title": "AI BEAVER {version} – AI Hardware Checker",
   "args.batch": "image models: how many images at once (default 1)",
   "args.cli": "text mode (no window)",
@@ -214,6 +216,7 @@
   "gui.scan_title": "Models on this computer",
   "gui.scanning": "Checking the hardware…",
   "gui.set_manually": "Set parameters manually",
+  "gui.star_button": "Leave a star on GitHub",
   "gui.token_prompt": "Hugging Face token (for models that require accepting a license).\nIt is stored only on this computer. An empty field removes the token.",
   "gui.unavailable": "Can't open a window (no tkinter or no display) – starting text mode.",
   "gui.unexpected": "Unexpected error: {error}",

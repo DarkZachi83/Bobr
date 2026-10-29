@@ -18,6 +18,7 @@ from aibobr.knowledge.advisor import Explanation, audio_label, image_label, rend
 from aibobr.sources.base import SourceError
 from aibobr.sources.factory import source_kind
 
+REPO_URL = "https://github.com/DarkZachi83/Bobr"
 BOBR_MESSAGE = "Patrz, jaki bóbr!"      # zawsze po polsku – żart nie przetrwa tłumaczenia
 
 EXIT_OK, EXIT_USAGE, EXIT_SOURCE, EXIT_HARDWARE = 0, 1, 2, 3
@@ -75,6 +76,24 @@ class Cli:
             return None
 
     def run(self, args: Namespace) -> int:
+        code = self._run(args)
+        if code == EXIT_OK:
+            self._star_hint()
+        return code
+
+    def _star_hint(self) -> None:
+        """Prośba o gwiazdkę – raz na instalację, po pierwszym udanym sprawdzeniu."""
+        if self.c.settings.get("star_hint_shown"):
+            return
+        self.say(self.p.paint("⭐ " + t("app.star", url=REPO_URL), self.p.bold_yellow))
+        self.say()
+        self.c.settings["star_hint_shown"] = True
+        try:
+            self.c.config.save_user({"star_hint_shown": True})
+        except OSError:
+            pass                                  # brak zapisu = pokażemy jeszcze raz, nic więcej
+
+    def _run(self, args: Namespace) -> int:
         self.say(self.p.paint(t("app.title", version=__version__), self.p.bold_yellow))
         self.say()
 

@@ -27,10 +27,11 @@ class AboutDialog(tk.Toplevel):
         ttk.Label(body, text=t("gui.app_name"), font=("TkDefaultFont", 16, "bold")).pack()
         ttk.Label(body, text=f"AI Hardware Checker · {__version__}").pack(pady=(0, 8))
         ttk.Label(body, text=t("gui.about_text"), justify="center", wraplength=500).pack()
+        ttk.Label(body, text="⭐ " + t("app.star_short"), justify="center", wraplength=500).pack(pady=(10, 0))
 
         buttons = ttk.Frame(body)
         buttons.pack(pady=(12, 0))
-        ttk.Button(buttons, text=t("gui.open_page"),
+        ttk.Button(buttons, text="⭐ " + t("gui.star_button"), style="Accent.TButton",
                    command=lambda: webbrowser.open(REPO_URL)).pack(side="left", padx=4)
         ttk.Button(buttons, text=t("gui.close"), command=self.destroy).pack(side="left", padx=4)
         self.bind("<Escape>", lambda e: self.destroy())
