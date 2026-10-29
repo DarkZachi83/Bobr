@@ -40,39 +40,48 @@ Pythona, a `torch` bez wskazania wersji CUDA.
 
 ## 3. Pomiar – przebieg A (dekoder na karcie)
 
-Trzy terminale:
+Trzy terminale, **w tej kolejności**:
 
-**Terminal 1 – pomiar** (z folderu AI Bóbra, uruchom jako pierwszy):
+**Terminal 2 – model językowy** (najpierw; `-np 1` = jedna rozmowa, jak u jednego użytkownika):
+```bash
+llama-server -m /mnt/dane/orpheus/orpheus-3b-0.1-ft-q4_k_m.gguf -ngl 99 -c 8192 -np 1 --port 1234
+```
+Poczekaj na `listening on http://127.0.0.1:1234` (ok. 30 s). Sprawdzenie z innego terminala:
+`curl -s http://127.0.0.1:1234/health` → `{"status":"ok"}`. Okno zostaw otwarte.
+
+**Terminal 1 – pomiar** (z folderu AI Bóbra):
 ```bash
 python tools/measure_vram.py --label "orpheus Q4_K_M, dekoder na GPU" \
     --model /mnt/dane/orpheus/orpheus-3b-0.1-ft-q4_k_m.gguf --context 8192
 ```
 
-**Terminal 2 – model językowy:**
+**Terminal 3 – mowa** (głosy są angielskie; `env/bin/python` działa bez `source`):
 ```bash
-llama-server -m /mnt/dane/orpheus/orpheus-3b-0.1-ft-q4_k_m.gguf -ngl 99 -c 8192 --port 1234
-```
-Poczekaj na `server is listening on http://127.0.0.1:1234`.
-
-**Terminal 3 – mowa** (głosy są angielskie, więc tekst po angielsku):
-```bash
-cd /mnt/dane/orpheus && source env/bin/activate
-time python orpheus-tts-local/gguf_orpheus.py --voice tara --output test-gpu.wav \
+cd /mnt/dane/orpheus
+time env/bin/python orpheus-tts-local/gguf_orpheus.py --voice tara --output test-gpu.wav \
     --text "Hello, this is the beaver. We are checking how much memory speech really needs."
 ```
-
-Gdy skrypt zapisze `test-gpu.wav`, naciśnij **Enter w terminalu 1**. Wydruk i plik
-`measure-….json` to wynik. llama-server zostaw włączony.
+Pierwsze uruchomienie pobiera dekoder (79 MB) i rozgrzewa serwer – czas mierz w drugim.
+Gdy pojawi się `Audio saved to test-gpu.wav`, naciśnij **Enter w terminalu 1** (wcześniej
+pomiar nie zobaczy dekodera).
 
 ## 4. Pomiar – przebieg B (dekoder na procesorze)
 
 Terminal 1 – nowy pomiar z `--label "orpheus Q4_K_M, dekoder na CPU"`. Terminal 3:
 ```bash
-time env CUDA_VISIBLE_DEVICES= python orpheus-tts-local/gguf_orpheus.py --voice tara --output test-cpu.wav \
-    --text "Hello, this is the beaver. We are checking how much memory speech really needs."
+time env CUDA_VISIBLE_DEVICES= env/bin/python orpheus-tts-local/gguf_orpheus.py --voice tara \
+    --output test-cpu.wav --text "Hello, this is the beaver. We are checking how much memory speech really needs."
 ```
 (Pusta zmienna ukrywa kartę przed PyTorchem – SNAC liczy procesor; llama-server dalej
 używa karty.) Enter w terminalu 1.
+
+## Wynik autora (29.10.2026, RTX 5050 Laptop 8 GB)
+
+| | pamięć karty | czas |
+|---|---|---|
+| llama-server (Orpheus 3B Q4_K_M, kontekst 8k) | 2,99 GB | – |
+| dekoder SNAC w karcie | 0,22 GB | 11,1 s |
+| dekoder SNAC na procesorze | 0 GB | 11,2 s |
 
 ## 5. Co odesłać
 
@@ -81,6 +90,8 @@ Dobrze też posłuchać `test-gpu.wav` – jeśli to szum albo cisza, napisz.
 
 ## Gdy coś nie działa
 
+- **`Connection refused` na porcie 1234** – llama-server nie działa (terminal 2).
+- **`No module named …`** – Python spoza środowiska; użyj `env/bin/python`.
 - **Skrypt kończy się bez dźwięku / „No tokens”** – llama-server mógł inaczej oddać tokeny
   `<custom_token_…>`. Wtedy uruchom model w LM Studio (Developer → Start Server, port 1234),
   zamiast llama-server – tak opisuje to autor skryptu.

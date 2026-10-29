@@ -94,8 +94,8 @@ KV cache = 2 × layers × KV heads × head size × context × bytes per element
 - It's a **calculation, not a measurement**. The runtime overhead (0.5 GB) was calibrated on real
   runs (Ollama, RTX 5050 8 GB, models 3–14B: 17/17 verdicts right, never below nvidia-smi); much
   bigger models may need more. Like llama.cpp, the vocabulary table is counted in RAM, not on the card.
-- **Speech models** (Orpheus, OuteTTS) are recognised by their audio tokens; the audio decoder
-  (0.5 GB) is still an estimate until it's measured.
+- **Speech models** (Orpheus, OuteTTS) are recognised by their audio tokens; Orpheus's audio decoder
+  (SNAC) was measured at 0.22 GB, OuteTTS's is still an estimate.
 - **Sliding-window models** (Gemma 3, gpt-oss) keep only recent tokens in most layers – this is
   counted for known architectures (llama.cpp rules); unknown ones get the full, safer estimate.
 - A card with a lot of VRAM isn't always usable: very old NVIDIA cards, older drivers, and AMD/Intel
@@ -219,8 +219,8 @@ cache KV = 2 × warstwy × głowice KV × wymiar głowicy × kontekst × bajty n
   uruchomieniach (Ollama, RTX 5050 8 GB, modele 3–14B: 17/17 trafionych werdyktów, ani razu poniżej
   nvidia-smi); dużo większe modele mogą potrzebować więcej. Tablicę słownika liczymy – jak
   llama.cpp – w RAM, nie w karcie.
-- **Modele mowy** (Orpheus, OuteTTS) program rozpoznaje po tokenach dźwięku; pamięć dekodera
-  dźwięku (0,5 GB) to na razie szacunek – do czasu pomiaru.
+- **Modele mowy** (Orpheus, OuteTTS) program rozpoznaje po tokenach dźwięku; dekoder Orpheusa
+  (SNAC) zmierzyliśmy – 0,22 GB, dla OuteTTS to na razie szacunek.
 - **Modele z oknem przesuwnym** (Gemma 3, gpt-oss) trzymają w większości warstw tylko ostatnie
   tokeny – dla znanych architektur liczymy to według reguł llama.cpp, dla nieznanych pełny,
   bezpieczniejszy szacunek.

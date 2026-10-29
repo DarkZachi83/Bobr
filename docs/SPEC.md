@@ -192,9 +192,20 @@ zielone, gdy karta ≤ VRAM_użyt i RAM ≤ RAM_użyt
 **Dekoder dźwięku** (modele mowy / muzyki, etap 9): czwarta część paska modelu. Zamienia
 tokeny na falę dźwięku i zwykle działa jako osobny program (Python + PyTorch), więc jego
 koszt to wagi (SNAC 24 kHz: 19,8 mln parametrów) **i** zapas drugiego programu na karcie.
-Do czasu pomiaru (`tools/measure_vram.py`, instrukcja: `docs/pomiary-mowy.md`) przyjmujemy
-**0,5 GB, oznaczone jako szacunek**. Domyślnie liczony w karcie (bezpieczniej); podpowiedź
-„dekoder na procesorze zwolni X GB” pojawia się, gdy to zmienia werdykt.
+**Pomiar autora** (29.10.2026, laptop RTX 5050 8 GB, `tools/measure_vram.py`, instrukcja:
+`docs/pomiary-mowy.md`; dane: `tests/calibration/orpheus_rtx5050_2026-10-29.json`):
+
+| Orpheus 3B Q4_K_M, kontekst 8k | zmierzone | AI Bóbr |
+|---|---|---|
+| llama-server (część językowa) | 2,99 GB | 2,82 GB + narzut 0,5 GB = 3,32 GB |
+| dekoder SNAC (Python, PyTorch cu128) | 0,22 GB | **0,25 GB** (tabela, z zapasem) |
+| czas: dekoder w karcie / na procesorze | 11,1 s / 11,2 s | – |
+
+Dekoder na procesorze **nie spowolnił** mowy: tempo wyznacza część językowa (ok. 44 tokeny/s
+na tym laptopie, czyli ok. 0,5 s nagrania na sekundę). 497 tokenów dało 5,46 s nagrania
+(ok. 91/s – część tokenów skrypt pomija; tabela: 83). Dekoder domyślnie liczony w karcie
+(bezpieczniej); podpowiedź „dekoder na procesorze zwolni X GB” pojawia się, gdy to zmienia
+werdykt. Dla OuteTTS pamięć dekodera (DAC) to nadal szacunek 0,5 GB – do zmierzenia.
 **Kontekst w sekundach nagrania:** przy werdykcie dopisek „≈ 1 min 39 s nagrania”
 (dla kontekstu z nagłówka, np. 8k) (tokeny na sekundę z tabeli: Orpheus 83 – 7 tokenów SNAC na ramkę, ~12 ramek/s;
 OuteTTS 1.0 150). Obliczenia zostają w tokenach; tekst i próbka głosu też zajmują kontekst.
@@ -515,7 +526,7 @@ Kolejność wynika z tego, jak te modele zużywają pamięć:
 9a. **Modele na dysku** (dopisane 28.10.2026) – szukanie zainstalowanych modeli za zgodą
     użytkownika (SPEC §4); przyda się do pomiarów w etapach 9 i 10.
 9. **Dźwięk i muzyka typu LLM** (w toku: rozpoznanie, dekoder, sekundy nagrania,
-   `tools/measure_vram.py`; czeka na pomiar Orpheusa u autora) – modele generujące tokeny dźwięku jak LLM tokeny tekstu:
+   `tools/measure_vram.py`; Orpheus zmierzony 29.10.2026, OuteTTS do zmierzenia) – modele generujące tokeny dźwięku jak LLM tokeny tekstu:
    syntezatory mowy na bazie LLM (np. Orpheus na Llamie 3B, OuteTTS, Dia, CSM), MusicGen,
    modele rozmowy głosem. Obecny model pamięci pasuje; dochodzi: rozpoznanie typu z HF
    (`pipeline_tag`, architektura), znacznik „model mowy / muzyki”, dekoder dźwięku

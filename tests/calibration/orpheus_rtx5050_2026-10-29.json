@@ -1,0 +1,22 @@
+{
+ "_opis": "Pomiar autora 29.10.2026: Orpheus 3B Q4_K_M (isaiahbjork/orpheus-3b-0.1-ft-Q4_K_M-GGUF), llama-server -ngl 99 -c 8192 -np 1 (llama.cpp z CUDA) + orpheus-tts-local (SNAC 24 kHz, PyTorch cu128), laptop RTX 5050 8 GB, tools/measure_vram.py. Szczyty pamięci procesów wg nvidia-smi.",
+ "model": {
+  "weights_gib": 1.945,
+  "n_layers": 28,
+  "n_kv_heads": 8,
+  "head_dim": 128,
+  "context": 8192,
+  "_wagi": "z przewidywania narzędzia: model językowy 2,82 GB = wagi + pamięć rozmowy 0,875 GB"
+ },
+ "llama_server_gib": 2.99,
+ "decoder_gpu_gib": 0.22,
+ "times_s": {
+  "decoder_gpu": 11.06,
+  "decoder_cpu": 11.2
+ },
+ "audio": {
+  "tokens": 497,
+  "seconds": 5.46
+ },
+ "prediction_llm_gib": 2.82
+}
