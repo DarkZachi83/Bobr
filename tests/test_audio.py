@@ -138,6 +138,12 @@ class LabelTest(unittest.TestCase):
         self.assertEqual(label, "model mowy Orpheus (dekoder SNAC 24 kHz) · ≈ 1 min 39 s nagrania")
         self.assertIsNone(audio_label(orpheus_spec(audio=None), RunSettings()))
 
+    def test_spare_context_in_seconds(self):
+        model = LoadedModel("Orpheus", ModelSource.GGUF_FILE, ArchInfo(), (Variant("Q4_K_M", gib(2.3)),))
+        _, e = Advisor(QUANTS).explain(model, orpheus_spec(), pc(gpus=[gpu(vram_gb=8.0)]), RunSettings())
+        spare = next(render(x) for x in e.actions if x.key == "expl.spare.context")
+        self.assertIn("16k (≈ 3 min 17 s nagrania)", spare)
+
     def test_name_note_uses_authors_wording(self):
         spec = orpheus_spec(audio=AUDIO.recognize(loaded("facebook/musicgen-small")))
         model = LoadedModel("m", ModelSource.GGUF_FILE, ArchInfo(), (Variant("Q4_K_M", gib(2.3)),))

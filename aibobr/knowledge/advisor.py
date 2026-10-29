@@ -39,6 +39,20 @@ class Context(int):
     """Tokeny – wyświetlane jako „8k”."""
 
 
+class AudioContext(Context):
+    """Kontekst modelu mowy – „16k (≈ 3 min 17 s nagrania)”."""
+
+    def __new__(cls, value: int, tokens_per_second: float):
+        obj = super().__new__(cls, value)
+        obj.tokens_per_second = tokens_per_second
+        return obj
+
+
+def _ctx(spec: ModelSpec, value: int) -> Context:
+    a = spec.audio
+    return AudioContext(value, a.tokens_per_second) if a and a.tokens_per_second else Context(value)
+
+
 class Params(int):
     """Liczba parametrów – wyświetlana jako „3,3B”."""
 
@@ -70,6 +84,9 @@ class Explanation:
 def _format(value, lang: Optional[str]):
     if isinstance(value, Size):
         return fmt_gb(int(value), lang)
+    if isinstance(value, AudioContext):
+        duration = fmt_duration(int(value) / value.tokens_per_second)
+        return f"{fmt_context(int(value))} ({t('audio.seconds', lang, duration=duration)})"
     if isinstance(value, Context):
         return fmt_context(int(value))
     if isinstance(value, Params):
@@ -260,7 +277,7 @@ class Advisor:
                 break
             best_ctx, ctx = ctx, ctx * 2
         if best_ctx:
-            lines.append(Line("expl.spare.context", {"ctx": Context(best_ctx)}))
+            lines.append(Line("expl.spare.context", {"ctx": _ctx(spec, best_ctx)}))
 
         current = _quality(spec, self.quants) or (0, 0.0)
         for other in self._variants(model):                 # od najdokładniejszej
@@ -311,7 +328,7 @@ class Advisor:
             for c in contexts:                                      # najdłuższy, który wystarczy
                 r = self._eval(spec, hw, replace(settings, context_tokens=c))
                 if r and LEVEL_RANK[r.level] >= LEVEL_RANK[target]:
-                    lines.append(Line("expl.act.context", {"ctx": Context(c), "where": _where(target, cpu)}))
+                    lines.append(Line("expl.act.context", {"ctx": _ctx(spec, c), "where": _where(target, cpu)}))
                     break
             if kv:
                 r = self._eval(spec, hw, kv)
