@@ -95,14 +95,14 @@ def orpheus_spec(**kw) -> ModelSpec:
 class MemoryTest(unittest.TestCase):
     def test_decoder_counts_on_the_card(self):
         n = memory_need(orpheus_spec(), RunSettings(), QUANTS)
-        self.assertEqual(n.decoder, gib(0.5))
+        self.assertEqual(n.decoder, gib(0.25))                       # zmierzone: 0,22 GB
         self.assertIn(n.decoder, (n.total - n.weights_total - n.kv_cache - n.overhead,))
         self.assertEqual(n.vram_part, n.total - n.embd_in_ram)
 
     def test_decoder_on_cpu_moves_to_ram(self):
         n = memory_need(orpheus_spec(), RunSettings(decoder_on_gpu=False), QUANTS)
-        self.assertEqual(n.vram_part, n.total - n.embd_in_ram - gib(0.5))
-        self.assertEqual(n.ram_fixed, n.embd_in_ram + gib(0.5))
+        self.assertEqual(n.vram_part, n.total - n.embd_in_ram - gib(0.25))
+        self.assertEqual(n.ram_fixed, n.embd_in_ram + gib(0.25))
 
     def test_text_models_unchanged(self):
         self.assertEqual(memory_need(orpheus_spec(audio=None), RunSettings(), QUANTS).decoder, 0)
@@ -110,7 +110,7 @@ class MemoryTest(unittest.TestCase):
     def test_tip_moves_decoder_to_cpu(self):
         set_language("pl")
         self.addCleanup(set_language, "en")
-        hw = pc(gpus=[gpu(vram_gb=5.0)])
+        hw = pc(gpus=[gpu(vram_gb=4.8)])            # 3,8 GB użytkowe: bez dekodera 3,7, z nim 3,9
         v = evaluate(orpheus_spec(), hw, RunSettings(), QUANTS)
         self.assertEqual(v.level, FitLevel.YELLOW)                  # z dekoderem nie mieści się
         model = LoadedModel("Orpheus 3B", ModelSource.GGUF_FILE, ArchInfo(),
@@ -118,9 +118,9 @@ class MemoryTest(unittest.TestCase):
         _, e = Advisor(QUANTS).explain(model, orpheus_spec(), hw, RunSettings())
         first = e.actions[0]
         self.assertEqual(first.key, "expl.act.decoder_cpu")
-        self.assertIn("zwolni 0,5 GB w karcie", render(first))
+        self.assertIn("zwolni 0,2 GB w karcie", render(first))
         self.assertIn("w całości w karcie", render(first))
-        self.assertIn("note.audio_decoder_estimate", [n.key for n in e.notes])
+        self.assertNotIn("note.audio_decoder_estimate", [n.key for n in e.notes])   # zmierzony
         self.assertIn("expl.need.decoder", [n.key for n in e.need])
 
 
@@ -173,8 +173,8 @@ class EndToEndTest(unittest.TestCase):
         Cli(c, out=out, palette=PLAIN).run(main.build_parser().parse_args([str(path), "--explain"]))
         text = out.getvalue()
         self.assertIn("model mowy Orpheus (dekoder SNAC 24 kHz) · ≈ 1 min 39 s nagrania", text)
-        self.assertIn("~ dekoder 0,5 GB", text)
-        self.assertIn("0,5 GB dekoder dźwięku (SNAC 24 kHz),", text)
+        self.assertIn("~ dekoder 0,2 GB", text)
+        self.assertIn("0,2 GB dekoder dźwięku (SNAC 24 kHz),", text)
         self.assertIn("Pójdzie na Twoim komputerze", text)
 
     def test_hf_tag_reaches_the_model(self):
@@ -202,3 +202,20 @@ class EndToEndTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MeasuredOrpheusTest(unittest.TestCase):
+    """Pomiar autora (29.10.2026, tests/calibration/orpheus_rtx5050_2026-10-29.json)."""
+
+    def test_prediction_covers_measurement(self):
+        import json
+        data = json.loads((ROOT / "tests" / "calibration" / "orpheus_rtx5050_2026-10-29.json")
+                          .read_text(encoding="utf-8"))
+        m = data["model"]
+        spec = orpheus_spec(weights_bytes=gib(m["weights_gib"]), embd_params=None, tied_embeddings=None)
+        n = memory_need(spec, RunSettings(context_tokens=m["context"]), QUANTS)
+        self.assertGreaterEqual(n.decoder / 2**30, data["decoder_gpu_gib"])           # dekoder
+        llm = (n.vram_part - n.decoder) / 2**30
+        self.assertGreaterEqual(llm, data["llama_server_gib"])                         # z narzutem
+        self.assertAlmostEqual(llm - 0.5, data["prediction_llm_gib"], delta=0.01)
+        self.assertFalse(spec.audio.decoder_estimated)                                 # już zmierzony
