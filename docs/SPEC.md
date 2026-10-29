@@ -201,6 +201,9 @@ koszt to wagi (SNAC 24 kHz: 19,8 mln parametrów) **i** zapas drugiego programu 
 | dekoder SNAC (Python, PyTorch cu128) | 0,22 GB | **0,25 GB** (tabela, z zapasem) |
 | czas: dekoder w karcie / na procesorze | 11,1 s / 11,2 s | – |
 
+Odsłuch autora (4 nagrania, subiektywnie): nagrania z dekoderem w karcie brzmiały odrobinę
+szybciej (5,38 i 5,03 s wobec 5,46 i 5,55 s), bez trzasków i przesterowań w żadnym. Długość
+wybiera losowanie tokenów w llama-server, nie dekoder – obiektywnej różnicy nie stwierdzono.
 Dekoder na procesorze **nie spowolnił** mowy: tempo wyznacza część językowa (ok. 44 tokeny/s
 na tym laptopie, czyli ok. 0,5 s nagrania na sekundę). 497 tokenów dało 5,46 s nagrania
 (ok. 91/s – część tokenów skrypt pomija; tabela: 83). Dekoder domyślnie liczony w karcie
@@ -516,6 +519,7 @@ Z NIUCHACZA **nie przenosimy** `transport/`, `protocol/`, `reader_thread` ani
 
 Stan: etapy 1–7 zakończone, **v0.1.0 wydane 27.10.2026** (`AI-Bobr.exe`, `AI-Bobr-cli.exe`).
 Etap 8 (kalibracja) zakończony – **v0.2.0 wydane 28.10.2026**.
+Etapy 9a (modele na dysku) i 9 (modele mowy i muzyki typu LLM) – **v0.3.0, 29.10.2026**.
 
 ### Plan po v0.1 (zaakceptowany 27.10.2026)
 
