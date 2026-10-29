@@ -51,16 +51,15 @@ class ScanReport:
         return sum(m.size for m in self.models)
 
     def with_copies(self) -> list[FoundModel]:
-        """Lista z oznaczeniem kopii: ten sam model (nazwa i rozmiar) w innym miejscu
-        zajmuje dysk drugi raz – warto wiedzieć, co można usunąć."""
-        seen, result = set(), []
+        """Lista z oznaczeniem kopii: ten sam model (nazwa i rozmiar) w kilku miejscach
+        zajmuje dysk kilka razy. Oznaczamy WSZYSTKIE wystąpienia – program nie wie,
+        z której kopii korzysta użytkownik (np. Ollama jako usługa i z terminala)."""
+        key = lambda m: (m.name, m.quant, m.size)        # noqa: E731
+        counts: dict = {}
         for m in self.models:
-            key = (m.name, m.quant, m.size)
-            if key in seen and m.note is None:
-                m = replace(m, note="scan.note.copy")
-            seen.add(key)
-            result.append(m)
-        return result
+            counts[key(m)] = counts.get(key(m), 0) + 1
+        return [replace(m, note="scan.note.copy") if counts[key(m)] > 1 and m.note is None else m
+                for m in self.models]
 
     def merge(self, other: "ScanReport") -> None:
         seen = {(m.path, m.name) for m in self.models}
