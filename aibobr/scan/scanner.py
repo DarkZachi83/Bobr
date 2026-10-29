@@ -204,5 +204,7 @@ class Scanner:
         language = not audio and any(
             a.endswith(("ForCausalLM", "ForConditionalGeneration", "LMHeadModel")) for a in archs)
         kind = Kind.TEXT if language else Kind.OTHER
-        return FoundModel(d.name, kind, "transformers", size, d, app,
+        # sentence-transformers (modules.json): model do wyszukiwania, np. RAG w Open WebUI.
+        note = "scan.note.embedding" if not language and (d / "modules.json").is_file() else None
+        return FoundModel(d.name, kind, "transformers", size, d, app, note=note,
                           target=str(d) if language else None)
