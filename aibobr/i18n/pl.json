@@ -150,6 +150,7 @@
   "gui.gpu_n": "Karta {n}",
   "gui.integrated": "zintegrowana, nie liczy się",
   "gui.kv_cache": "Cache KV",
+  "gui.lang_system": "Język systemu ({name})",
   "gui.manual": "Wpisz dane modelu ręcznie…",
   "gui.manual.active": "Aktywne parametry MoE (miliardy)",
   "gui.manual.advanced": "Dla dokładnego wyniku (opcjonalnie, z config.json):",

@@ -150,6 +150,7 @@
   "gui.gpu_n": "Card {n}",
   "gui.integrated": "integrated, doesn't count",
   "gui.kv_cache": "KV cache",
+  "gui.lang_system": "System language ({name})",
   "gui.manual": "Enter model data manually…",
   "gui.manual.active": "MoE active parameters (billions)",
   "gui.manual.advanced": "For an exact result (optional, from config.json):",
