@@ -16,7 +16,9 @@ from typing import Optional
 from aibobr.scan.model import FoundModel, Kind
 from aibobr.sources.base import SPLIT_RE, SourceError
 from aibobr.sources import gguf_reader
-from aibobr.sources.gguf_reader import LocalFile, display_name, quant_from_header, read_header
+from aibobr.sources.gguf_reader import (
+    TAIL_SUFFIX, LocalFile, display_name, quant_from_header, read_header, token_pattern,
+)
 
 MIN_SIZE = 50 * 1024**2              # mniejsze pliki to nie modele (tokenizery, konfiguracja)
 PICKLE_SUFFIXES = {".ckpt", ".pt", ".pth", ".bin"}
@@ -51,8 +53,10 @@ def classify_gguf(path: Path, size: int, app: str, name: Optional[str] = None) -
     title = name or display_name(header, fname)
     if projector:
         return FoundModel(title, Kind.ADDON, "GGUF", size, path, app, note="scan.note.projector")
+    tokens = md.get("tokenizer.ggml.tokens" + TAIL_SUFFIX) or md.get("tokenizer.ggml.tokens")
     return FoundModel(title, Kind.TEXT, "GGUF", size, path, app,
-                      quant=quant_from_header(header, fname), target=str(path))
+                      quant=quant_from_header(header, fname), target=str(path),
+                      token_pattern=token_pattern(tokens))
 
 
 def safetensors_keys(path: Path) -> Optional[list[str]]:

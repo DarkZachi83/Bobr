@@ -14,7 +14,8 @@ LABEL_W = 76        # kolumna z napisami „System” / „Model”
 ROW_H = 30
 SYS_Y, MODEL_Y = 12, 54
 LEGEND_Y = 104
-HEIGHT = 128
+LEGEND_LINE = 20     # druga linia legendy w wąskim oknie
+HEIGHT = 140
 
 
 class MemoryBar(tk.Canvas):
@@ -70,7 +71,8 @@ class MemoryBar(tk.Canvas):
             label = "VRAM" if seg.kind == "vram" else "RAM"
             self._label_inside(seg, SYS_Y, f"{label} {fmt_gb(seg.value)}", "white")
 
-        colors = {"weights": weights_c, "kv": kv_c, "overhead": COLORS["overhead"]}
+        colors = {"weights": weights_c, "kv": kv_c, "overhead": COLORS["overhead"],
+                  "decoder": COLORS["decoder"]}
         for seg in lay.model:
             self.create_rectangle(seg.x0, MODEL_Y, seg.x1, MODEL_Y + ROW_H,
                                   fill=colors[seg.kind], outline="")
@@ -90,11 +92,15 @@ class MemoryBar(tk.Canvas):
             (kv_c, t("gui.bar.kv", size=fmt_gb(need.kv_cache))),
             (COLORS["overhead"], t("gui.bar.overhead", size=fmt_gb(need.overhead))),
         ]
-        x = left
+        if need.decoder:
+            items.append((COLORS["decoder"], t("gui.bar.decoder", size=fmt_gb(need.decoder))))
+        x, y = left, LEGEND_Y
         for color, text in items:
             if x + 14 + self.font.measure(text) > right:
-                break                                                 # wąskie okno: mniej legendy
-            self.create_rectangle(x, LEGEND_Y - 5, x + 10, LEGEND_Y + 5, fill=color, outline="")
-            self.create_text(x + 14, LEGEND_Y, text=text, anchor="w", font=self.font,
+                if y > LEGEND_Y:
+                    break                                             # bardzo wąskie okno
+                x, y = left, y + LEGEND_LINE                          # wąskie okno: druga linia
+            self.create_rectangle(x, y - 5, x + 10, y + 5, fill=color, outline="")
+            self.create_text(x + 14, y, text=text, anchor="w", font=self.font,
                              fill=COLORS["muted"])
             x += 14 + self.font.measure(text) + 16

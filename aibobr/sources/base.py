@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from aibobr.domain.enums import ModelSource
-from aibobr.domain.models import ModelSpec
+from aibobr.domain.models import AudioInfo, ModelSpec
 
 
 class SourceError(Exception):
@@ -37,6 +37,10 @@ class ArchInfo:
     swa_layers: Optional[int] = None
     embd_params: Optional[int] = None        # token_embd: słowa × wymiar
     tied_embeddings: Optional[bool] = None   # brak osobnej warstwy wyjściowej
+    # Ślady modelu dźwięku (etap 9) – surowe dane ze źródła, interpretuje knowledge/audio.py:
+    token_pattern: Optional[str] = None      # najczęstszy wzór końca słownika, np. "<custom_token_#>"
+    task: Optional[str] = None               # pipeline_tag z Hugging Face, np. "text-to-speech"
+    audio: Optional[AudioInfo] = None        # wynik rozpoznania (po wczytaniu modelu)
 
     def to_spec(self, *, name: str, source: ModelSource, quant: str,
                 weights_bytes: Optional[int], origin: Optional[str]) -> ModelSpec:
@@ -48,7 +52,7 @@ class ArchInfo:
             n_experts_used=self.n_experts_used, params_active=self.params_active,
             sliding_window=self.sliding_window, swa_layers=self.swa_layers,
             embd_params=self.embd_params, tied_embeddings=self.tied_embeddings,
-            origin=origin,
+            audio=self.audio, origin=origin,
         )
 
 

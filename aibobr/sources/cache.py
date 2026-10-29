@@ -19,11 +19,13 @@ from aibobr.sources.base import ArchInfo, LoadedModel, Variant
 
 log = logging.getLogger(__name__)
 MAX_AGE = 7 * 24 * 3600
-FORMAT = 3              # 3: tablica słownika w ArchInfo – starsze wpisy pobieramy od nowa
+FORMAT = 4              # 4: ślady modeli dźwięku (token_pattern, task) – starsze pobieramy od nowa
 
 
 def model_to_dict(m: LoadedModel) -> dict:
-    return {"name": m.name, "source": m.source.value, "arch": asdict(m.arch),
+    arch = asdict(m.arch)
+    arch.pop("audio", None)                 # wynik rozpoznania liczymy od nowa po wczytaniu
+    return {"name": m.name, "source": m.source.value, "arch": arch,
             "variants": [{"quant": v.quant, "size": v.size, "files": list(v.files)}
                          for v in m.variants],
             "origin": m.origin}
@@ -31,7 +33,7 @@ def model_to_dict(m: LoadedModel) -> dict:
 
 def model_from_dict(d: dict) -> LoadedModel:
     return LoadedModel(
-        name=d["name"], source=ModelSource(d["source"]), arch=ArchInfo(**d["arch"]),
+        name=d["name"], source=ModelSource(d["source"]), arch=ArchInfo(**{k: v for k, v in d["arch"].items() if k != "audio"}),
         variants=tuple(Variant(v["quant"], v["size"], tuple(v["files"])) for v in d["variants"]),
         origin=d.get("origin"),
     )

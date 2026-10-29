@@ -48,7 +48,7 @@ def gguf_bytes(metadata: list[tuple[str, Any, str]],
 
 @lru_cache(maxsize=None)
 def llama_like(arch="llama", layers=32, heads=32, kv_heads=8, embed=4096, ctx=131072,
-               file_type=15, name="Test Model 8B", vocab=128256, extra=()) -> bytes:
+               file_type=15, name="Test Model 8B", vocab=128256, extra=(), tokens=None) -> bytes:
     """Nagłówek podobny do Llama 3.1 8B: duży słownik, tensory jednej warstwy × layers."""
     md = [
         ("general.architecture", arch, "str"),
@@ -59,8 +59,8 @@ def llama_like(arch="llama", layers=32, heads=32, kv_heads=8, embed=4096, ctx=13
         (f"{arch}.embedding_length", embed, "u32"),
         (f"{arch}.attention.head_count", heads, "u32"),
         (f"{arch}.attention.head_count_kv", kv_heads, "u32"),
-        ("tokenizer.ggml.tokens", [f"t{i}" for i in range(vocab)], "arr:str"),
-        ("tokenizer.ggml.scores", [0.0] * vocab, "arr:f32"),
+        ("tokenizer.ggml.tokens", list(tokens or [f"t{i}" for i in range(vocab)]), "arr:str"),
+        ("tokenizer.ggml.scores", [0.0] * len(tokens or range(vocab)), "arr:f32"),
         *extra,
     ]
     head_dim = embed // heads

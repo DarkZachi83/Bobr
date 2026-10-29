@@ -24,7 +24,7 @@ from aibobr.gui.widgets.memory_bar import MemoryBar
 from aibobr.gui.widgets.model_picker import ModelPicker
 from aibobr.gui.worker import Worker
 from aibobr.i18n import LANGUAGES, current_language, fmt_context, fmt_params, set_language, t
-from aibobr.knowledge.advisor import render
+from aibobr.knowledge.advisor import audio_label, render
 from aibobr.sources.base import LoadedModel, SourceError
 from aibobr.sources.factory import OLLAMA_PREFIX, source_kind
 
@@ -238,6 +238,9 @@ class MainWindow:
         header = f"{spec.name}  ·  {spec.quant}  ·  {t('cli.context')} {fmt_context(settings.context_tokens)}"
         if spec.is_moe and spec.params_active:
             header += f"  ·  {t('cli.moe', active=fmt_params(spec.params_active))}"
+        audio = audio_label(spec, settings)
+        if audio:
+            header += f"\n{audio}"
         self.header.configure(text=header)
         self.bar.set_verdict(v)
         self.verdict.configure(text=render(expl.summary), style="Verdict.TLabel",

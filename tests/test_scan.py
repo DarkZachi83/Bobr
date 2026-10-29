@@ -199,6 +199,22 @@ class ScanTreeTest(unittest.TestCase):
         mini = m["sentence-transformers/all-MiniLM-L6-v2"]
         self.assertEqual((mini.kind, mini.note, mini.checkable), (Kind.OTHER, "scan.note.embedding", False))
 
+    def test_speech_model_is_labelled(self):
+        from aibobr.knowledge.audio import AudioCatalog
+        from tests.test_audio import ORPHEUS_TOKENS
+        (self.root / "voices").mkdir()
+        write_model(self.root / "voices" / "orpheus-3b-Q4_K_M.gguf",
+                    llama_like(name="Orpheus", tokens=ORPHEUS_TOKENS), 2_490_000_000)
+        patch = fake_sizes(_sizes)
+        patch.start()
+        self.addCleanup(patch.stop)
+        audio = AudioCatalog.load(ROOT / "data" / "audio_models.json")
+        report = Scanner(audio=audio).scan_folder(self.root)
+        by_name = {m.name: m for m in report.models}
+        self.assertEqual(by_name["Orpheus"].note, "scan.note.speech")
+        self.assertTrue(by_name["Orpheus"].checkable)
+        self.assertIsNone(by_name["Gemma Test"].note)
+
     def test_unfinished_downloads(self):
         report, m = self.scan()
         partials = [x for x in report.models if x.note == "scan.note.partial"]

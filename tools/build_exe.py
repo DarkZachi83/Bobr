@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = [
     ("aibobr/i18n/*.json", "aibobr/i18n"),
     ("data/quants.json", "data"),
+    ("data/audio_models.json", "data"),
     ("data/models/catalog.json", "data/models"),
     ("config/settings.json", "config"),
     ("assets/aibobr.png", "assets"),

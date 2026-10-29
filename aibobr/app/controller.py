@@ -35,13 +35,15 @@ class Overrides:
 class AppController:
     def __init__(self, config: ConfigStore, quants: QuantTable, detector: Detector,
                  cache: Optional[ModelCache] = None, catalog: Optional[Catalog] = None,
-                 catalog_download: Optional[Path] = None):
+                 catalog_download: Optional[Path] = None, audio=None):
         self.config = config
         self.settings = config.load()
         self.quants = quants
         self.detector = detector
         self.cache = cache
         self.catalog_download = catalog_download
+        from aibobr.knowledge.audio import AudioCatalog
+        self.audio = audio or AudioCatalog()
         self.set_catalog(catalog or Catalog(updated="", models=()))
 
     def set_catalog(self, catalog: Catalog) -> None:
@@ -62,7 +64,8 @@ class AppController:
         return HttpClient(token=self.settings.get("hf_token") or None)
 
     def load_model(self, text: str) -> LoadedModel:
-        return load_model(text, self.http(), self.cache, self.ollama_host())
+        model = load_model(text, self.http(), self.cache, self.ollama_host())
+        return self.audio.annotate(model)          # model mowy / muzyki? (etap 9)
 
     def ollama_host(self) -> str:
         return str(self.settings.get("ollama_host") or "http://127.0.0.1:11434")
@@ -86,7 +89,7 @@ class AppController:
         """Modele na dysku: znane miejsca programów albo wskazany folder (etap 9a)."""
         import sys
         from aibobr.scan.scanner import Scanner
-        scanner = Scanner(stop, progress)
+        scanner = Scanner(stop, progress, audio=self.audio)
         return scanner.scan_folder(Path(folder)) if folder else scanner.scan_known(sys.platform)
 
     # ------------------------------------------------------------------ sprzęt

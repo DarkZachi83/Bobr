@@ -25,6 +25,7 @@ class FoundModel:
     quant: Optional[str] = None
     note: Optional[str] = None       # klucz i18n z dopiskiem, np. "scan.note.lora"
     target: Optional[str] = None     # tekst do pola „Wskaż model”; None = nie do sprawdzenia
+    token_pattern: Optional[str] = None  # GGUF: wzór końca słownika – po nim poznajemy modele mowy
 
     @property
     def place(self) -> str:

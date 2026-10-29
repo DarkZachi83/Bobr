@@ -19,6 +19,7 @@ from aibobr.cli.cli import Cli, parse_context, parse_gb_list
 from aibobr.detection.factory import create_detector
 from aibobr.i18n import LANGUAGES, set_language, t
 from aibobr.knowledge import catalog
+from aibobr.knowledge.audio import AudioCatalog
 from aibobr.sources.cache import ModelCache
 
 ROOT = resources.root()
@@ -26,6 +27,7 @@ PATHS = {
     "config": resources.path("config"),
     "quants": resources.path("data", "quants.json"),
     "catalog": resources.path("data", "models", "catalog.json"),
+    "audio": resources.path("data", "audio_models.json"),
 }
 
 
@@ -43,6 +45,7 @@ def build_app(fake_hw: Optional[Path] = None, user_dir: Optional[Path] = None,
         cache=ModelCache(cache_dir or user_cache_dir() / "models"),
         catalog=catalog.load(PATHS["catalog"], downloaded),
         catalog_download=downloaded,
+        audio=AudioCatalog.load(PATHS["audio"]),
     )
 
 

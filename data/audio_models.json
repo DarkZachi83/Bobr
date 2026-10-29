@@ -1,0 +1,48 @@
+{
+  "_comment": "Rodziny modeli mowy i muzyki typu LLM (SPEC §5, etap 9). Rozpoznanie: wzór tokenów dźwięku na końcu słownika GGUF (token_patterns, cyfry jako #), potem pipeline_tag z HF, na końcu nazwa (name_patterns, wyrażenia regularne). decoder_gb: pamięć dekodera dźwięku w karcie – wagi + drugi program (PyTorch); decoder_measured=false oznacza szacunek do czasu pomiaru (tools/measure_vram.py).",
+  "format": 1,
+  "families": [
+    {
+      "id": "orpheus",
+      "name": "Orpheus",
+      "kind": "speech",
+      "token_patterns": ["<custom_token_#>"],
+      "name_patterns": ["orpheus"],
+      "decoder": "SNAC 24 kHz",
+      "decoder_params": 19800000,
+      "decoder_gb": 0.5,
+      "decoder_measured": false,
+      "tokens_per_second": 83,
+      "_sources": [
+        "Llama 3.2 3B + 7 tokenów SNAC na ramkę: github.com/isaiahbjork/orpheus-tts-local (decoder.py)",
+        "SNAC 24 kHz: 19,8 mln parametrów, 0,98 kb/s przy kodach 12-bitowych ≈ 82 tokeny/s: github.com/hubertsiuzdak/snac",
+        "83 tokeny/s: huggingface.co/blog/YatharthS/llm-tts-models"
+      ]
+    },
+    {
+      "id": "outetts",
+      "name": "OuteTTS",
+      "kind": "speech",
+      "token_patterns": ["<|c#_#|>"],
+      "name_patterns": ["oute-?tts"],
+      "decoder": "DAC (speech)",
+      "decoder_params": null,
+      "decoder_gb": 0.5,
+      "decoder_measured": false,
+      "tokens_per_second": 150,
+      "_sources": [
+        "OuteTTS 1.0: Llama 3.2 1B, DAC ibm-research/DAC.speech.v1.0 (2 książki kodowe), 150 tokenów/s: huggingface.co/OuteAI/Llama-OuteTTS-1.0-1B"
+      ]
+    }
+  ],
+  "name_hints": [
+    {"pattern": "(^|[^a-z0-9])(tts|csm|dia|kokoro|parler|xtts|f5-?tts|spark-?tts|llasa|zonos)([^a-z0-9]|$)", "kind": "speech"},
+    {"pattern": "musicgen|ace-?step|stable-?audio|(^|[^a-z0-9])yue([^a-z0-9]|$)|audioldm|riffusion", "kind": "music"}
+  ],
+  "tags": {
+    "text-to-speech": "speech",
+    "text-to-music": "music",
+    "text-to-audio": "audio",
+    "audio-to-audio": "audio"
+  }
+}
