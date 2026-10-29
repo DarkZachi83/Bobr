@@ -115,6 +115,20 @@ w **obu trybach** („co ja w ogóle mam?” to pytanie początkującego), w try
   bez GGUF. Modele obrazów i dodatki są tylko na liście – ocena od etapu 10. Modele dźwięku
   w formacie transformers (Whisper, MusicGen…) na razie jako „inne” – etap 9.
 
+**Modele mowy i muzyki typu LLM** (etap 9, decyzje autora 28.10.2026). Orpheus i OuteTTS
+to w środku zwykła Llama, więc sama architektura ich nie odróżni. Rozpoznanie, od
+najpewniejszego:
+1. **Tokeny dźwięku na końcu słownika GGUF** – czytnik zapamiętuje ostatnie 4096 tokenów
+   i wyznacza najczęstszy wzór (cyfry → `#`), jeśli to wyraźnie tokeny specjalne: Orpheus
+   `<custom_token_#>`, OuteTTS 1.0 `<|c#_#|>`. Działa dla pliku, linku HF i Ollamy.
+2. **`pipeline_tag` z HF** (`text-to-speech` → mowa, `text-to-music` → muzyka,
+   `text-to-audio` → dźwięk). Rodzinę dopasowujemy wtedy po nazwie.
+3. **Nazwa** – tylko gdy 1 i 2 nic nie dały, z komunikatem „Rozpoznano z nazwy pliku –
+   prawdopodobnie model mowy / model muzyczny” (nazwa modelu i pliku, bez folderów).
+Rodziny są w `data/audio_models.json` (wzory tokenów i nazw, dekoder, pamięć dekodera,
+tokeny na sekundę nagrania, źródła) – nową dopisuje się bez zmiany kodu. Model rozpoznany
+bez znanej rodziny dostaje uwagę, że pamięci jego dekodera nie liczymy.
+
 Wszystkie źródła tworzą ten sam obiekt `ModelSpec`. Kalkulator nie wie,
 skąd przyszły dane.
 
@@ -174,6 +188,16 @@ karta  = wagi − tablica (tylko gdy wyjście osobne) + KV + narzut
 RAM    = tablica + to, co nie zmieściło się w karcie
 zielone, gdy karta ≤ VRAM_użyt i RAM ≤ RAM_użyt
 ```
+
+**Dekoder dźwięku** (modele mowy / muzyki, etap 9): czwarta część paska modelu. Zamienia
+tokeny na falę dźwięku i zwykle działa jako osobny program (Python + PyTorch), więc jego
+koszt to wagi (SNAC 24 kHz: 19,8 mln parametrów) **i** zapas drugiego programu na karcie.
+Do czasu pomiaru (`tools/measure_vram.py`, instrukcja: `docs/pomiary-mowy.md`) przyjmujemy
+**0,5 GB, oznaczone jako szacunek**. Domyślnie liczony w karcie (bezpieczniej); podpowiedź
+„dekoder na procesorze zwolni X GB” pojawia się, gdy to zmienia werdykt.
+**Kontekst w sekundach nagrania:** przy werdykcie dopisek „≈ 1 min 39 s nagrania”
+(dla kontekstu z nagłówka, np. 8k) (tokeny na sekundę z tabeli: Orpheus 83 – 7 tokenów SNAC na ramkę, ~12 ramek/s;
+OuteTTS 1.0 150). Obliczenia zostają w tokenach; tekst i próbka głosu też zajmują kontekst.
 
 **Narzut**: bufor obliczeń i kontekst CUDA – **0,5 GB**, zmierzone w etapie 8
 (28.10.2026, Ollama 0.40.11, laptop RTX 5050 8 GB, 6 modeli × konteksty 2k/8k/16k,
@@ -431,6 +455,7 @@ config/
   settings.json             rezerwy, próg zapasu, kontekst domyślny, token HF
 data/
   quants.json               bity na wagę dla kwantyzacji
+  audio_models.json         rodziny modeli mowy / muzyki: wzory tokenów, dekoder, tokeny/s
   models/catalog.json       katalog do podpowiedzi
 aibobr/
   domain/      models.py, enums.py, units.py  HardwareProfile, GpuInfo, ModelSpec, Verdict; bajty ↔ GB
@@ -439,7 +464,7 @@ aibobr/
                cache.py, ollama.py
   scan/        model.py, locations.py, files.py, ollama_store.py, scanner.py  modele na dysku (etap 9a)
   calculator/  quants.py, memory.py, verdict.py  tabela kwantyzacji; wagi + KV + narzut → strefy, zapas
-  knowledge/   catalog.py, advisor.py         warianty „co możesz zrobić”, aktualizacja katalogu
+  knowledge/   catalog.py, advisor.py, audio.py         warianty „co możesz zrobić”, aktualizacja katalogu
   app/         config.py, controller.py
   i18n/        __init__.py, pl.json, en.json
   cli/         cli.py                         pasek tekstowy
@@ -451,6 +476,7 @@ tools/
   try_source.py             narzędzie deweloperskie: co program odczytał z linku / pliku
   try_detection.py          narzędzie deweloperskie: co program wykrył; --json zapisuje profil
   calibrate.py              kalibracja: przewidywania kontra pomiar w Ollamie (etap 8)
+  measure_vram.py           szczyt VRAM każdego procesu (dowolny program; etap 9 i 10)
 tests/
   fake_hardware/*.json      profile sprzętu (także dla --fake-hw)
   test_memory.py, test_verdict.py, test_gguf_reader.py, test_huggingface.py,
@@ -488,7 +514,8 @@ Kolejność wynika z tego, jak te modele zużywają pamięć:
 8. **Kalibracja modeli językowych** (lista w sekcji 16).
 9a. **Modele na dysku** (dopisane 28.10.2026) – szukanie zainstalowanych modeli za zgodą
     użytkownika (SPEC §4); przyda się do pomiarów w etapach 9 i 10.
-9. **Dźwięk i muzyka typu LLM** – modele generujące tokeny dźwięku jak LLM tokeny tekstu:
+9. **Dźwięk i muzyka typu LLM** (w toku: rozpoznanie, dekoder, sekundy nagrania,
+   `tools/measure_vram.py`; czeka na pomiar Orpheusa u autora) – modele generujące tokeny dźwięku jak LLM tokeny tekstu:
    syntezatory mowy na bazie LLM (np. Orpheus na Llamie 3B, OuteTTS, Dia, CSM), MusicGen,
    modele rozmowy głosem. Obecny model pamięci pasuje; dochodzi: rozpoznanie typu z HF
    (`pipeline_tag`, architektura), znacznik „model mowy / muzyki”, dekoder dźwięku

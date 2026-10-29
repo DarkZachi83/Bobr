@@ -85,7 +85,10 @@ def memory_need(model: ModelSpec, settings: RunSettings, quants: QuantTable,
     weights, weights_estimated = weights_bytes(model, quants)
     kv, kv_estimated, sliding = kv_bytes(model, settings)
     in_ram, copy = embd_bytes(model, quants) if gpu else (0, 0)
+    decoder = model.audio.decoder_bytes if model.audio else 0
     return MemoryNeed(
+        decoder=decoder,
+        decoder_in_ram=not (gpu and settings.decoder_on_gpu),
         embd_in_ram=in_ram,
         embd_copy=copy,
         weights=weights,

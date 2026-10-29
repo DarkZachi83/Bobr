@@ -18,6 +18,7 @@ COLORS = {
     "missing_line": "#c94a4a",
     # pasek modelu – kolor werdyktu, KV jaśniejszy, narzut szary
     "overhead": "#8b929b",
+    "decoder": "#6f5bb5",          # dekoder dźwięku (modele mowy / muzyki)
     "marker": "#30363d",
     "warn": "#9a6700",
     "error": "#b42318",

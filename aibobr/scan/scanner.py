@@ -42,8 +42,9 @@ def _is_weight_file(name: str) -> bool:
 
 class Scanner:
     def __init__(self, stop: Optional[threading.Event] = None,
-                 progress: Optional[Callable[[int], None]] = None):
+                 progress: Optional[Callable[[int], None]] = None, audio=None):
         self.stop = stop or threading.Event()
+        self.audio = audio                    # knowledge.audio.AudioCatalog – modele mowy na liście
         self.progress = progress or (lambda n: None)
         self._seen: set = set()
 
@@ -103,7 +104,19 @@ class Scanner:
                 found = self._file(d / name, app)
                 if found:
                     report.models.append(found)
+        report.models = [self._label_audio(m) for m in report.models]
         return report
+
+    def _label_audio(self, m: FoundModel) -> FoundModel:
+        """Model tekstowy, który naprawdę jest modelem mowy / muzyki (etap 9) – dopisek."""
+        if self.audio is None or m.kind != Kind.TEXT or m.note:
+            return m
+        from aibobr.domain.enums import ModelSource
+        from aibobr.sources.base import ArchInfo, LoadedModel
+        probe = LoadedModel(m.name, ModelSource.GGUF_FILE, ArchInfo(token_pattern=m.token_pattern), (),
+                            origin=str(m.path))
+        info = self.audio.recognize(probe)
+        return replace(m, note=f"scan.note.{info.kind}") if info else m
 
     # ------------------------------------------------------------------ pojedyncze rodzaje
     def _first_time(self, path: Path) -> bool:
@@ -123,8 +136,7 @@ class Scanner:
             return None
         found = classify_file(path, size, app)
         if found and name:
-            found = FoundModel(name, found.kind, found.fmt, found.size, found.path, found.app,
-                               found.quant, found.note, found.target)
+            found = replace(found, name=name)
         return found
 
     def _ollama(self, store: Path) -> list[FoundModel]:
@@ -134,8 +146,7 @@ class Scanner:
                 continue
             found = classify_gguf(blob, size or _size(blob), "Ollama", name=name)
             if found and found.kind == Kind.TEXT:
-                found = FoundModel(found.name, found.kind, found.fmt, found.size, found.path,
-                                   "Ollama", found.quant, found.note, f"ollama:{name}")
+                found = replace(found, app="Ollama", target=f"ollama:{name}")
             if found:
                 result.append(found)
         # Same bloby leżą w blobs/ – do nich nie schodzimy, żeby nie liczyć ich drugi raz.
@@ -161,14 +172,13 @@ class Scanner:
                            key=lambda p: p.stat().st_mtime, reverse=True)
         if not snapshots:
             return []
-        sub = Scanner(self.stop)
+        sub = Scanner(self.stop, audio=self.audio)
         sub._seen = self._seen
         report = sub.scan_folder(snapshots[0], "Hugging Face")
         result = []
         for m in report.models:
             name = repo_id if m.fmt in ("transformers", "diffusers") else f"{repo_id} · {m.path.name}"
-            result.append(FoundModel(name, m.kind, m.fmt, m.size, m.path, "Hugging Face",
-                                     m.quant, m.note, m.target))
+            result.append(replace(m, name=name, app="Hugging Face"))
         return result
 
     def _folder_size(self, d: Path) -> int:

@@ -13,7 +13,7 @@ from aibobr.cli.bar import Palette, palette_for, render_bar
 from aibobr.detection.base import PlatformUnsupported
 from aibobr.domain.enums import FitLevel
 from aibobr.i18n import fmt_context, fmt_gb, fmt_params, t
-from aibobr.knowledge.advisor import Explanation, render, render_list
+from aibobr.knowledge.advisor import Explanation, audio_label, render, render_list
 from aibobr.sources.base import SourceError
 from aibobr.sources.factory import source_kind
 
@@ -169,6 +169,9 @@ class Cli:
         model = f"{spec.name} · {spec.quant} · {t('cli.context')} {fmt_context(settings.context_tokens)}"
         if spec.is_moe and spec.params_active:
             model += f" · {t('cli.moe', active=fmt_params(spec.params_active))}"
+        audio = audio_label(spec, settings)
+        if audio:
+            model += f" · {audio}"
         parts = [hw.cpu_name or "?", f"RAM {fmt_gb(hw.ram_total)}"]
         parts += [f"{g.name} {fmt_gb(g.vram_total)}" for g in hw.gpus if not g.integrated]
         self.say(f"{t('cli.model'):<10} {model}")

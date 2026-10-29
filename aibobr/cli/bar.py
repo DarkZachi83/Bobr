@@ -80,20 +80,23 @@ def render_bar(v: Verdict, palette: Palette = PLAIN, width: int = 50,
 
     c_w = col(need.weights_total)
     c_kv = col(need.weights_total + need.kv_cache) - c_w
-    c_ov = c_need - c_w - c_kv
+    c_dec = col(need.decoder) if need.decoder else 0
+    c_ov = c_need - c_w - c_kv - c_dec
     color = getattr(palette, LEVEL_COLOR[v.level])
     if bobr:
         weights = palette.paint("B" * c_w, palette.bold_yellow)
     else:
         weights = palette.paint("#" * c_w, color)
     model = (weights + palette.paint("+" * c_kv, color) + palette.paint(":" * c_ov, color)
-             + " " * (width - c_need))
+             + palette.paint("~" * c_dec, color) + " " * (width - c_need))
 
     label_sys, label_model = t("cli.row.system"), t("cli.row.model")
     pad = max(len(label_sys), len(label_model))
     legend = t("cli.legend", vram=fmt_gb(vram), ram=fmt_gb(cap.ram_usable),
                weights=fmt_gb(need.weights_total), kv=fmt_gb(need.kv_cache),
                overhead=fmt_gb(need.overhead))
+    if need.decoder:
+        legend += "  " + t("cli.legend_decoder", size=fmt_gb(need.decoder))
     return [
         f"  {label_sys:<{pad}} [{system}]",
         f"  {label_model:<{pad}} [{model}]",

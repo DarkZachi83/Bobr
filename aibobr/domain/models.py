@@ -48,6 +48,22 @@ class HardwareProfile:
 # --------------------------------------------------------------------------- model
 
 @dataclass(frozen=True)
+class AudioInfo:
+    """Model mowy albo muzyki typu LLM (etap 9): część językowa + dekoder dźwięku.
+
+    Liczba tokenów na sekundę nagrania i pamięć dekodera pochodzą z data/audio_models.json."""
+
+    kind: str                                # "speech" albo "music"
+    by: str                                  # skąd wiemy: "tokens", "tag" (HF) albo "name"
+    family: Optional[str] = None             # np. "orpheus"; None = model dźwięku, ale nieznany
+    name: Optional[str] = None               # do wyświetlenia, np. "Orpheus"
+    decoder: Optional[str] = None            # np. "SNAC 24 kHz"
+    decoder_bytes: int = 0                   # 0 = nie znamy
+    decoder_estimated: bool = True           # True do czasu pomiaru na prawdziwym sprzęcie
+    tokens_per_second: Optional[float] = None
+
+
+@dataclass(frozen=True)
 class ModelSpec:
     """Konkretny model w konkretnej kwantyzacji (SPEC §4).
 
@@ -70,6 +86,7 @@ class ModelSpec:
     swa_layers: Optional[int] = None         # ile warstw używa okna (reszta: pełny kontekst)
     embd_params: Optional[int] = None        # tablica słownika (token_embd): słowa × wymiar
     tied_embeddings: Optional[bool] = None   # True = ta sama tablica jest też wyjściem modelu
+    audio: Optional[AudioInfo] = None        # model mowy / muzyki (etap 9)
     origin: Optional[str] = None             # link HF albo ścieżka pliku – do raportu
 
     @property
@@ -94,6 +111,7 @@ class RunSettings:
     margin_ratio: float = 0.10               # próg ostrzeżenia o małym zapasie
     margin_min: int = gib(1.0)               # …ale nie mniej niż tyle
     overhead: int = gib(0.5)                 # bufor obliczeń + kontekst CUDA; kalibracja: SPEC §5
+    decoder_on_gpu: bool = True              # modele mowy: dekoder dźwięku w karcie (domyślnie)
 
 
 # --------------------------------------------------------------------------- wynik
@@ -112,11 +130,13 @@ class MemoryNeed:
     # Gdy model ma wspólne wejście i wyjście, w karcie zostaje druga kopia (embd_copy).
     embd_in_ram: int = 0
     embd_copy: int = 0
+    decoder: int = 0                         # dekoder dźwięku (modele mowy / muzyki)
+    decoder_in_ram: bool = False             # dekoder uruchomiony na procesorze
 
     @property
     def total(self) -> int:
         """Cała pamięć modelu (karta + RAM)."""
-        return self.weights + self.embd_copy + self.kv_cache + self.overhead
+        return self.weights + self.embd_copy + self.kv_cache + self.overhead + self.decoder
 
     @property
     def weights_total(self) -> int:
@@ -126,7 +146,12 @@ class MemoryNeed:
     @property
     def vram_part(self) -> int:
         """Ile z tego może trafić do karty – wszystko poza tablicą słownika w RAM."""
-        return self.total - self.embd_in_ram
+        return self.total - self.embd_in_ram - (self.decoder if self.decoder_in_ram else 0)
+
+    @property
+    def ram_fixed(self) -> int:
+        """Co zawsze leży w RAM, niezależnie od miejsca w karcie."""
+        return self.total - self.vram_part
 
     @property
     def is_estimate(self) -> bool:
@@ -169,8 +194,9 @@ class Verdict:
 
     @property
     def spill(self) -> int:
-        """Ile modelu wypchnął brak miejsca w karcie (bez tablicy słownika, która i tak jest w RAM)."""
-        return max(0, self.in_ram - self.need.embd_in_ram)
+        """Ile modelu wypchnął brak miejsca w karcie (bez tego, co i tak jest w RAM:
+        tablicy słownika i dekodera uruchomionego na procesorze)."""
+        return max(0, self.in_ram - self.need.ram_fixed)
 
     @property
     def vram_fraction(self) -> float:

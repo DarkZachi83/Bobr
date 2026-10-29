@@ -130,9 +130,9 @@ class HuggingFaceSource:
                     and "mmproj" not in PurePosixPath(f.path).name.lower()
                     and not OBSOLETE_QUANT_RE.search(PurePosixPath(f.path).name)]
             if gguf:
-                return self._load_gguf_repo(ref, gguf)
+                return self._with_task(ref, self._load_gguf_repo(ref, gguf))
             if any(f.path == "config.json" for f in files):
-                return self._load_transformers_repo(ref, files)
+                return self._with_task(ref, self._load_transformers_repo(ref, files))
             raise SourceError(self._out_of_scope(ref, files), ref.repo_id)
         except SourceError as e:
             # Lista plików jest dostępna, a plik nie: repozytorium wymaga akceptacji licencji.
@@ -141,14 +141,22 @@ class HuggingFaceSource:
             raise
         raise SourceError("source.no_model_files", ref.repo_id)
 
-    def _out_of_scope(self, ref: HfRef, files: list[_File]) -> str:
-        """Brak modelu językowego: obrazy / dźwięk (etapy 9–11) mówimy wprost (SPEC §15)."""
-        tag = ""
+    def _tag(self, ref: HfRef) -> str:
+        """pipeline_tag repozytorium („text-to-speech”…); pusty, gdy go nie ma albo HF milczy."""
         try:
             info = self.client.get_json(f"{HF}/api/models/{ref.repo_id}")
-            tag = str((info or {}).get("pipeline_tag") or "") if isinstance(info, dict) else ""
         except SourceError:
-            pass                                       # bez typu też coś powiemy
+            return ""                                  # bez typu też coś powiemy
+        return str(info.get("pipeline_tag") or "") if isinstance(info, dict) else ""
+
+    def _with_task(self, ref: HfRef, model: LoadedModel) -> LoadedModel:
+        """Znacznik typu z HF – po nim poznajemy modele mowy i muzyki (etap 9)."""
+        tag = self._tag(ref)
+        return replace(model, arch=replace(model.arch, task=tag)) if tag in AUDIO_TAGS else model
+
+    def _out_of_scope(self, ref: HfRef, files: list[_File]) -> str:
+        """Brak modelu językowego: obrazy / dźwięk (etapy 9–11) mówimy wprost (SPEC §15)."""
+        tag = self._tag(ref)
         if tag in IMAGE_TAGS or (not tag and any(f.path == "model_index.json" for f in files)):
             return "source.image_model"
         if tag in AUDIO_TAGS:

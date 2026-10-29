@@ -14,7 +14,7 @@ from aibobr.domain.models import Verdict
 
 @dataclass(frozen=True)
 class Segment:
-    kind: str          # vram, ram, missing | weights, kv, overhead
+    kind: str          # vram, ram, missing | weights, kv, overhead, decoder
     x0: float
     x1: float
     value: int         # bajty – do podpisu
@@ -50,7 +50,7 @@ def bar_layout(v: Verdict, x0: float, width: float, headroom: float = 1.04) -> B
 
     model, start = [], 0
     for kind, value in (("weights", need.weights_total), ("kv", need.kv_cache),
-                        ("overhead", need.overhead)):
+                        ("overhead", need.overhead), ("decoder", need.decoder)):
         if value:
             model.append(Segment(kind, x(start), x(start + value), value))
             start += value

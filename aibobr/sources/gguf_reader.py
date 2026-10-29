@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +37,10 @@ _STRING, _ARRAY = 8, 9
 # Tablice dłuższe niż to (słownik tokenizera: 100–250 tys. pozycji) pomijamy bez
 # zapamiętywania – potrzebne nam tablice (np. głowice KV per warstwa) są krótkie.
 _MAX_KEPT_ARRAY = 4096
+# Z długiej tablicy napisów (słownik) zapamiętujemy koniec – tam modele mowy dopisują
+# tokeny dźwięku (Orpheus: <custom_token_…>, OuteTTS: <|c1_…|>). Klucz: "<klucz>#tail".
+TAIL_SUFFIX = "#tail"
+_TAIL = 4096
 _MAX_COUNT = 10_000_000      # zabezpieczenie przed uszkodzonym plikiem
 _MAX_STRING = 64 * 1024 * 1024
 
@@ -101,7 +106,7 @@ class _Parser:
             raise SourceError("source.bad_file", f"string too long ({n})")
         return self.src.read(n).decode("utf-8", errors="replace")
 
-    def _value(self, vtype: int) -> Any:
+    def _value(self, vtype: int, tail: Optional[list] = None) -> Any:
         if vtype in _SCALAR:
             return self._u(_SCALAR[vtype])
         if vtype == _STRING:
@@ -115,8 +120,13 @@ class _Parser:
                 self.src.skip(count * struct.calcsize(_SCALAR[etype]))
                 return None
             if etype == _STRING and not keep:
-                for _ in range(count):          # słownik tokenizera: tylko przewijamy
-                    self.src.skip(self._u("<Q"))
+                start = count - _TAIL           # słownik tokenizera: przewijamy, koniec czytamy
+                for i in range(count):
+                    n = self._u("<Q")
+                    if tail is not None and i >= start and n <= 256:
+                        tail.append(self.src.read(n).decode("utf-8", errors="replace"))
+                    else:
+                        self.src.skip(n)
                 return None
             items = [self._value(etype) for _ in range(count)]
             return items if keep else None
@@ -135,7 +145,10 @@ class _Parser:
         metadata = {}
         for _ in range(n_kv):
             key = self._string()
-            metadata[key] = self._value(self._u("<I"))
+            tail: list = []
+            metadata[key] = self._value(self._u("<I"), tail)
+            if tail:
+                metadata[key + TAIL_SUFFIX] = tail
         tensors = []
         for _ in range(n_tensors):
             name = self._string()
@@ -170,6 +183,32 @@ def _int_or_max(value: Any) -> Optional[int]:
         nums = [v for v in value if isinstance(v, (int, float))]
         return int(max(nums)) if nums else None
     return int(value) if isinstance(value, (int, float)) else None
+
+
+_DIGITS = re.compile(r"\d+")
+
+
+def token_pattern(tokens) -> Optional[str]:
+    """Najczęstszy wzór tokenów na końcu słownika (cyfry → „#”), gdy jest wyraźny.
+
+    Modele mowy dopisują do słownika tysiące tokenów dźwięku o jednym wzorze:
+    Orpheus „<custom_token_#>”, OuteTTS 1.0 „<|c#_#|>” (c1_…, c2_…). Zwykły model ma
+    tam mieszankę słów – wtedy None."""
+    if not isinstance(tokens, list) or not tokens:
+        return None
+    tail = [t for t in tokens[-_TAIL:] if isinstance(t, str)]
+    counts: dict[str, int] = {}
+    for tok in tail:
+        if any(c.isdigit() for c in tok):
+            key = _DIGITS.sub("#", tok)
+            counts[key] = counts.get(key, 0) + 1
+    if not counts:
+        return None
+    best, n = max(counts.items(), key=lambda kv: kv[1])
+    # Tokeny dźwięku to zawsze tokeny specjalne (<…>, <|…|>, […]); liczby w zwykłym
+    # słowniku („Ġ2024”, „000”…) się nie liczą.
+    special = any(c in best for c in "<[|")
+    return best if special and n >= max(256, len(tail) // 8) else None
 
 
 def arch_from_headers(headers: list[GgufHeader]) -> ArchInfo:
@@ -234,6 +273,8 @@ def arch_from_headers(headers: list[GgufHeader]) -> ArchInfo:
         n_experts=experts if experts and experts > 1 else None,
         n_experts_used=used if experts and experts > 1 else None,
         params_active=active, architecture=arch, embd_params=embd, tied_embeddings=tied,
+        token_pattern=token_pattern(md.get("tokenizer.ggml.tokens" + TAIL_SUFFIX)
+                                    or md.get("tokenizer.ggml.tokens")),
     )
 
 

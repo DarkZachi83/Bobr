@@ -39,6 +39,20 @@ class Context(int):
     """Tokeny – wyświetlane jako „8k”."""
 
 
+class AudioContext(Context):
+    """Kontekst modelu mowy – „16k (≈ 3 min 17 s nagrania)”."""
+
+    def __new__(cls, value: int, tokens_per_second: float):
+        obj = super().__new__(cls, value)
+        obj.tokens_per_second = tokens_per_second
+        return obj
+
+
+def _ctx(spec: ModelSpec, value: int) -> Context:
+    a = spec.audio
+    return AudioContext(value, a.tokens_per_second) if a and a.tokens_per_second else Context(value)
+
+
 class Params(int):
     """Liczba parametrów – wyświetlana jako „3,3B”."""
 
@@ -70,6 +84,9 @@ class Explanation:
 def _format(value, lang: Optional[str]):
     if isinstance(value, Size):
         return fmt_gb(int(value), lang)
+    if isinstance(value, AudioContext):
+        duration = fmt_duration(int(value) / value.tokens_per_second)
+        return f"{fmt_context(int(value))} ({t('audio.seconds', lang, duration=duration)})"
     if isinstance(value, Context):
         return fmt_context(int(value))
     if isinstance(value, Params):
@@ -131,6 +148,28 @@ def _quality(spec: ModelSpec, quants: QuantTable) -> Optional[tuple[int, float]]
     return nominal, bits
 
 
+def fmt_duration(seconds: float) -> str:
+    s = int(round(seconds))
+    return f"{s} s" if s < 60 else f"{s // 60} min {s % 60:02d} s"
+
+
+def audio_label(spec: ModelSpec, settings: RunSettings) -> Optional[str]:
+    """„model mowy Orpheus (dekoder SNAC 24 kHz) · ≈ 1 min 39 s nagrania” albo None."""
+    a = spec.audio
+    if a is None:
+        return None
+    text = t(f"audio.kind.{a.kind}")
+    if a.name:
+        text += f" {a.name}"
+    if a.decoder:
+        text += " " + t("audio.decoder", decoder=a.decoder)
+    if a.tokens_per_second:
+        # Kontekst jest już w nagłówku obok – tu tylko, ile to sekund nagrania.
+        text += " · " + t("audio.seconds",
+                          duration=fmt_duration(settings.context_tokens / a.tokens_per_second))
+    return text
+
+
 def _where(level: FitLevel, cpu_only: bool = False) -> Text:
     if level == FitLevel.GREEN:
         return Text("expl.where.vram")
@@ -174,17 +213,24 @@ class Advisor:
 
     # ------------------------------------------------------------------ sekcje
     @staticmethod
-    def _need(v: Verdict, settings: RunSettings) -> list[Line]:
+    def _need(v: Verdict, settings: RunSettings, spec: Optional[ModelSpec] = None) -> list[Line]:
         n = v.need
-        return [
+        decoder_name = (spec.audio.decoder if spec and spec.audio else None) or "?"
+        lines = [
             Line("expl.need.title", {"total": Size(n.total)}),
             Line("expl.need.weights_est" if n.weights_estimated else "expl.need.weights",
                  {"size": Size(n.weights_total)}),
             Line("expl.need.kv_est" if n.kv_estimated else
                  "expl.need.kv_swa" if n.kv_sliding else "expl.need.kv",
                  {"size": Size(n.kv_cache), "ctx": Context(settings.context_tokens)}),
-            Line("expl.need.overhead", {"size": Size(n.overhead)}),
-        ] + ([Line("expl.need.embd_ram", {"size": Size(n.embd_in_ram)})] if n.embd_in_ram else [])
+        ]
+        if n.decoder:
+            lines.append(Line("expl.need.decoder_cpu" if n.decoder_in_ram else "expl.need.decoder",
+                              {"size": Size(n.decoder), "decoder": decoder_name}))
+        lines.append(Line("expl.need.overhead", {"size": Size(n.overhead)}))
+        if n.embd_in_ram:
+            lines.append(Line("expl.need.embd_ram", {"size": Size(n.embd_in_ram)}))
+        return lines
 
     @staticmethod
     def _computer(v: Verdict, spec: ModelSpec, hw: HardwareProfile,
@@ -231,7 +277,7 @@ class Advisor:
                 break
             best_ctx, ctx = ctx, ctx * 2
         if best_ctx:
-            lines.append(Line("expl.spare.context", {"ctx": Context(best_ctx)}))
+            lines.append(Line("expl.spare.context", {"ctx": _ctx(spec, best_ctx)}))
 
         current = _quality(spec, self.quants) or (0, 0.0)
         for other in self._variants(model):                 # od najdokładniejszej
@@ -256,6 +302,8 @@ class Advisor:
             if settings.kv_cache_type == KvCacheType.F16 else None
 
         cpu = v.capacity.cpu_only
+        # Model mowy: dekoder dźwięku jest mały i na procesorze działa znośnie (SPEC §5).
+        decoder_tip = bool(spec.audio and spec.audio.decoder_bytes and not cpu and settings.decoder_on_gpu)
         # MoE w strefie żółtej jest używalny (SPEC §7) – zamiast „potrzebny mniejszy model”
         # podpowiadamy opcję runtime'u, która trzyma ekspertów w RAM, a resztę na karcie.
         moe_tip = [Line("expl.act.moe_offload")] \
@@ -280,12 +328,17 @@ class Advisor:
             for c in contexts:                                      # najdłuższy, który wystarczy
                 r = self._eval(spec, hw, replace(settings, context_tokens=c))
                 if r and LEVEL_RANK[r.level] >= LEVEL_RANK[target]:
-                    lines.append(Line("expl.act.context", {"ctx": Context(c), "where": _where(target, cpu)}))
+                    lines.append(Line("expl.act.context", {"ctx": _ctx(spec, c), "where": _where(target, cpu)}))
                     break
             if kv:
                 r = self._eval(spec, hw, kv)
                 if r and LEVEL_RANK[r.level] >= LEVEL_RANK[target]:
                     lines.append(Line("expl.act.kv", {"where": _where(target, cpu)}))
+            if decoder_tip:                                         # bez utraty jakości – na początek
+                r = self._eval(spec, hw, replace(settings, decoder_on_gpu=False))
+                if r and LEVEL_RANK[r.level] >= LEVEL_RANK[target]:
+                    lines.insert(0, Line("expl.act.decoder_cpu", {
+                        "size": Size(spec.audio.decoder_bytes), "where": _where(target, cpu)}))
             if lines:
                 return moe_tip + lines + self._catalog(spec, hw, settings)
         if moe_tip:
@@ -329,6 +382,15 @@ class Advisor:
                 "ctx": Context(settings.context_tokens), "max": Context(spec.max_context or 0)}))
         if v.need.is_estimate:
             notes.append(Line("note.estimate"))
+        a = spec.audio
+        if a is not None:
+            kind = Text(f"audio.kind.{a.kind}")
+            if a.by == "name":                              # decyzja autora: wyraźny komunikat
+                notes.append(Line("note.audio_by_name", {"kind": kind}))
+            if not a.decoder_bytes:
+                notes.append(Line("note.audio_decoder_unknown", {"kind": kind}))
+            elif a.decoder_estimated:
+                notes.append(Line("note.audio_decoder_estimate", {"size": Size(a.decoder_bytes)}))
         notes += [Line(w) for w in v.warnings]
         return notes
 
@@ -342,7 +404,7 @@ class Advisor:
             title, actions = "expl.act.title", self._actions(model, spec, v, hw, settings)
         return v, Explanation(
             summary=self.summary(v, spec),
-            need=tuple(self._need(v, settings)),
+            need=tuple(self._need(v, settings, spec)),
             computer=tuple(self._computer(v, spec, hw, settings)),
             actions_title=title, actions=tuple(actions),
             notes=tuple(self._notes(v, spec, settings)),

@@ -12,6 +12,7 @@ dist/
 # dane lokalne / local data
 *.log
 calibration-*.json
+measure-*.json
 
 # system
 .DS_Store
