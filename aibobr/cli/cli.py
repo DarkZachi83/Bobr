@@ -146,11 +146,11 @@ class Cli:
             self.say(t("cli.scan_none"))
         else:
             self.say(t("cli.scan_found", count=len(report.models), size=fmt_gb(report.total_size)))
-            for m in sorted(report.models, key=lambda m: (m.kind.value != "text", m.name.lower())):
+            for m in sorted(report.with_copies(), key=lambda m: (m.kind.value != "text", m.name.lower())):
                 label = m.name + (f" · {m.quant}" if m.quant else "")
                 kind = t(f"scan.kind.{m.kind.value}") + (f", {t(m.note)}" if m.note else "")
                 self.say(f"  {kind:<22} {label[:52]:<52} {fmt_gb(m.size):>9}  {m.app}")
-                self.say(self.p.paint(f"      {m.target or m.path}", self.p.dim))
+                self.say(self.p.paint(f"      {m.place}", self.p.dim))
             if any(m.checkable for m in report.models):
                 self.say()
                 self.say(t("cli.scan_hint"))

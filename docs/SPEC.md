@@ -98,6 +98,12 @@ w **obu trybach** („co ja w ogóle mam?” to pytanie początkującego), w try
   z `manifests/`, wagi w `blobs/`), repozytorium w pamięci HF (`models--org--nazwa` →
   `org/nazwa`), folder transformers (`config.json` + wagi), folder diffusers
   (`model_index.json`). Plik widziany dwa razy (dowiązania) liczony raz.
+- **Poprawki po pierwszym skanie u autora** (29.10.2026): foldery diffusers bez wag
+  (Forge `backend/huggingface`, SD.Next `configs` – same pliki JSON) są pomijane; pickle
+  bez podpowiedzi z folderu pokazujemy tylko jako `.ckpt` (inaczej np. pamięć shaderów gier
+  `*.bin` udawała model); nazwy folderów porównywane bez „-” i „_” (Stability Matrix:
+  `StableDiffusion`); ten sam model w drugim miejscu oznaczony „kopia – drugi raz na dysku”;
+  dla Ollamy pokazujemy folder modeli zamiast pliku `sha256-…`.
 - **Wynik:** lista (nazwa, typ, rozmiar, skąd) i łączny rozmiar. Modele tekstowe można od
   razu sprawdzić: Ollama → `ollama:NAZWA` (gdy Ollama jest wyłączona, program czyta jej
   plik z dysku), folder transformers → szacunek z `config.json` jak dla repozytorium HF

@@ -1,7 +1,7 @@
 """Wynik szukania: znaleziony model i raport z przebiegu."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -27,6 +27,13 @@ class FoundModel:
     target: Optional[str] = None     # tekst do pola „Wskaż model”; None = nie do sprawdzenia
 
     @property
+    def place(self) -> str:
+        """Gdzie leży – dla Ollamy folder modeli i nazwa zamiast pliku sha256-…"""
+        if self.target and self.target.startswith("ollama:"):
+            return f"{self.path.parent.parent}  ({self.target})"
+        return str(self.path)
+
+    @property
     def checkable(self) -> bool:
         return self.target is not None
 
@@ -42,6 +49,18 @@ class ScanReport:
     @property
     def total_size(self) -> int:
         return sum(m.size for m in self.models)
+
+    def with_copies(self) -> list[FoundModel]:
+        """Lista z oznaczeniem kopii: ten sam model (nazwa i rozmiar) w innym miejscu
+        zajmuje dysk drugi raz – warto wiedzieć, co można usunąć."""
+        seen, result = set(), []
+        for m in self.models:
+            key = (m.name, m.quant, m.size)
+            if key in seen and m.note is None:
+                m = replace(m, note="scan.note.copy")
+            seen.add(key)
+            result.append(m)
+        return result
 
     def merge(self, other: "ScanReport") -> None:
         seen = {(m.path, m.name) for m in self.models}

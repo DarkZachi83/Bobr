@@ -82,7 +82,9 @@ class Scanner:
                 dirnames[:] = []
                 continue
             if "model_index.json" in filenames:
-                report.models.append(self._diffusers(d, app))
+                found = self._diffusers(d, app)
+                if found:                       # same pliki konfiguracji (Forge, SD.Next) pomijamy
+                    report.models.append(found)
                 dirnames[:] = []
                 continue
             grouped = False
@@ -163,8 +165,13 @@ class Scanner:
                     total += _size(p)
         return total
 
-    def _diffusers(self, d: Path, app: str) -> FoundModel:
-        return FoundModel(d.name, Kind.IMAGE, "diffusers", self._folder_size(d), d, app)
+    def _diffusers(self, d: Path, app: str) -> Optional[FoundModel]:
+        """Folder diffusers. Forge i SD.Next trzymają też „szkielety” – same pliki JSON
+        z konfiguracją, bez wag (backend/huggingface, configs). To nie są modele."""
+        size = self._folder_size(d)
+        if size < MIN_SIZE:
+            return None
+        return FoundModel(d.name, Kind.IMAGE, "diffusers", size, d, app)
 
     def _transformers(self, d: Path, filenames: list[str], app: str) -> Optional[FoundModel]:
         weights = [d / f for f in filenames if _is_weight_file(f)]

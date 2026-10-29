@@ -145,7 +145,7 @@ class FoundModelsDialog(tk.Toplevel):
     def _fill(self) -> None:
         self.tree.delete(*self.tree.get_children())
         self.rows.clear()
-        models = sorted(self.report.models, key=lambda m: (ORDER[m.kind], m.name.lower()))
+        models = sorted(self.report.with_copies(), key=lambda m: (ORDER[m.kind], m.name.lower()))
         for i, m in enumerate(models):
             iid = str(i)
             self.rows[iid] = m
@@ -163,8 +163,8 @@ class FoundModelsDialog(tk.Toplevel):
         m = self.rows.get(sel[0]) if sel else None
         self.ok.state(["!disabled"] if m and m.checkable else ["disabled"])
         if m:
-            self.path_label.configure(text=str(m.path) if m.checkable
-                                      else f"{m.path}\n{t('gui.scan_not_checkable')}")
+            self.path_label.configure(text=m.place if m.checkable
+                                      else f"{m.place}\n{t('gui.scan_not_checkable')}")
         return m
 
     def pick_folder(self) -> None:

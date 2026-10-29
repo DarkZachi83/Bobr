@@ -103,6 +103,23 @@ class ScanTreeTest(unittest.TestCase):
         safetensors(diff / "unet" / "diffusion_pytorch_model.safetensors", ["down_blocks.0.x"],
                     3_400_000_000)
 
+        # Pomijane – przypadki z dysku autora (29.10.2026):
+        # Forge/SD.Next trzymają „szkielety” diffusers – same JSON-y, bez wag,
+        skeleton = r / "forge" / "backend" / "huggingface" / "stabilityai" / "sdxl"
+        (skeleton / "unet").mkdir(parents=True)
+        (skeleton / "model_index.json").write_text("{}")
+        (skeleton / "unet" / "config.json").write_text("{}")
+        # pamięć shaderów gry (*.bin) to nie model,
+        steam = r / "SteamLibrary" / "steamapps" / "shadercache" / "steamapp_merged_shader_cache.bin"
+        steam.parent.mkdir(parents=True)
+        steam.write_bytes(b"x")
+        _sizes[steam.name] = 120_000_000
+        # Stability Matrix: Data/Models/StableDiffusion (bez myślnika).
+        sm = r / "Data" / "Models" / "StableDiffusion" / "dreamshaper.ckpt"
+        sm.parent.mkdir(parents=True)
+        sm.write_bytes(b"\x80\x02")
+        _sizes[sm.name] = 2_100_000_000
+
         # Ukryty folder i zwykłe śmieci – pomijane
         safetensors(r / "lmstudio" / ".trash" / "hidden.safetensors", ["model.layers.0.x"], 2 * GB)
 
@@ -121,7 +138,7 @@ class ScanTreeTest(unittest.TestCase):
         report, by_name = self.scan()
         self.assertEqual(sorted(by_name), sorted([
             "llama3.1:8b", "Gemma Test", "Big Split", "mmproj-gemma-f16",
-            "Qwen/Qwen3-0.6B", "sdxl_base", "style", "old", "sd15"]))
+            "Qwen/Qwen3-0.6B", "sdxl_base", "style", "old", "sd15", "dreamshaper"]))
         self.assertEqual(len(report.models), len(by_name))
 
     def test_ollama_names_from_manifests(self):
@@ -157,6 +174,28 @@ class ScanTreeTest(unittest.TestCase):
         self.assertEqual((m["sd15"].kind, m["sd15"].fmt), (Kind.IMAGE, "diffusers"))
         self.assertEqual(m["sd15"].size, 3_400_000_002)
         self.assertFalse(any(x.checkable for x in (m["sdxl_base"], m["style"], m["old"], m["sd15"])))
+
+    def test_pickle_kind_from_folder_only(self):
+        _, m = self.scan()
+        self.assertEqual((m["dreamshaper"].kind, m["dreamshaper"].fmt), (Kind.IMAGE, "ckpt"))
+        self.assertNotIn("steamapp_merged_shader_cache", m)
+        self.assertNotIn("sdxl", m)                             # szkielet bez wag
+
+    def test_second_copy_is_marked(self):
+        other = self.root / "backup" / "ollama"
+        (other / "blobs").mkdir(parents=True)
+        write_model(other / "blobs" / ("sha256-" + "99" * 32), llama_like(name="Meta Llama 3.1 8B"),
+                    4_920_000_000)
+        manifest = other / "manifests" / "registry.ollama.ai" / "library" / "llama3.1" / "8b"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({"layers": [{"mediaType": "application/vnd.ollama.image.model",
+                                                    "digest": "sha256:" + "99" * 32, "size": 4_920_001_400}]}))
+        patch = fake_sizes(_sizes)
+        patch.start()
+        self.addCleanup(patch.stop)
+        report, _ = self.scan()
+        copies = [x for x in report.with_copies() if x.name == "llama3.1:8b"]
+        self.assertEqual([x.note for x in copies], [None, "scan.note.copy"])
 
     def test_same_file_twice_counts_once(self):
         link = self.root / "copy-of-gemma.gguf"
@@ -198,7 +237,8 @@ class ScanTreeTest(unittest.TestCase):
         code = Cli(c, out=out, palette=PLAIN).run(args)
         text = out.getvalue()
         self.assertEqual(code, 0)
-        self.assertIn("Znaleziono 9 modeli", text)
+        self.assertIn("Znaleziono 10 modeli", text)
+        self.assertIn(f"{self.root / 'ollama'}  (ollama:llama3.1:8b)", text)   # folder, nie sha256
         self.assertIn("ollama:llama3.1:8b", text)
         self.assertIn("obraz", text)
         self.assertLess(text.index("llama3.1:8b"), text.index("sdxl_base"))   # tekstowe najpierw

@@ -23,9 +23,11 @@ PICKLE_SUFFIXES = {".ckpt", ".pt", ".pth", ".bin"}
 _MAX_SAFETENSORS_HEADER = 64 * 1024**2
 
 # Nazwy folderów używane przez Stable Diffusion WebUI, ComfyUI, Forge, InvokeAI…
-_IMAGE_DIRS = {"stable-diffusion", "checkpoints", "unet", "diffusion_models", "sd", "sdxl"}
+# Porównujemy bez „-”, „_” i spacji: Stable-diffusion (WebUI) = StableDiffusion (Stability Matrix).
+_IMAGE_DIRS = {"stablediffusion", "checkpoints", "unet", "diffusionmodels", "sd", "sdxl"}
 _LORA_DIRS = {"lora", "loras", "lycoris", "locon"}
-_VAE_DIRS = {"vae", "vae_approx"}
+_VAE_DIRS = {"vae", "vaeapprox"}
+_UPSCALER_DIRS = {"esrgan", "realesrgan", "upscalemodels", "upscalers", "swinir", "dat"}
 
 
 def is_gguf(path: Path) -> bool:
@@ -83,14 +85,20 @@ def kind_from_keys(keys: list[str]) -> tuple[Kind, Optional[str]]:
     return Kind.OTHER, None
 
 
+def _norm(name: str) -> str:
+    return name.lower().replace("-", "").replace("_", "").replace(" ", "")
+
+
 def kind_from_folder(path: Path) -> tuple[Kind, Optional[str]]:
-    names = {p.name.lower() for p in path.parents}
+    names = {_norm(p.name) for p in path.parents}
     if names & _LORA_DIRS:
         return Kind.ADDON, "scan.note.lora"
     if names & _VAE_DIRS:
         return Kind.ADDON, "scan.note.vae"
     if names & _IMAGE_DIRS:
         return Kind.IMAGE, None
+    if names & _UPSCALER_DIRS:
+        return Kind.ADDON, "scan.note.upscaler"
     return Kind.OTHER, None
 
 
@@ -112,6 +120,12 @@ def classify_file(path: Path, size: int, app: str = "folder") -> Optional[FoundM
         return FoundModel(path.stem, kind, "safetensors", size, path, app, note=note)
     if suffix in PICKLE_SUFFIXES:
         kind, note = kind_from_folder(path)
+        # Bez podpowiedzi z folderu pickle to zwykle nie model (np. pamięć shaderów gier
+        # *.bin) – pokazujemy tylko .ckpt, które prawie zawsze jest modelem obrazów.
+        if kind == Kind.OTHER:
+            if suffix != ".ckpt":
+                return None
+            kind = Kind.IMAGE
         return FoundModel(path.stem, kind, "ckpt", size, path, app, note=note)
     return None
 
