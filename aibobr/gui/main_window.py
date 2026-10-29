@@ -59,7 +59,8 @@ class MainWindow:
         ttk.Label(head, text=t("gui.app_name"), font=("TkDefaultFont", 16, "bold")).pack(side="left")
         ttk.Label(head, text="  AI Hardware Checker", foreground=COLORS["muted"]).pack(side="left", pady=(6, 0))
 
-        self.picker = ModelPicker(outer, self.check, self.manual, self.select_quant, self.from_ollama)
+        self.picker = ModelPicker(outer, self.check, self.manual, self.select_quant, self.from_ollama,
+                                  self.from_disk)
         self.picker.pack(fill="x", pady=(0, 8))
         self.picker.text.set(self.model_text)
 
@@ -197,6 +198,15 @@ class MainWindow:
             text = OLLAMA_PREFIX + dialog.result
             self.picker.text.set(text)
             self.check(text)
+
+    def from_disk(self) -> None:
+        from aibobr.gui.dialogs.found_models import FoundModelsDialog
+        dialog = FoundModelsDialog(self.root, self.worker, self.c.find_models,
+                                   self.c.scan_consent, self.c.set_scan_consent)
+        self.root.wait_window(dialog)
+        if dialog.result:
+            self.picker.text.set(dialog.result)
+            self.check(dialog.result)
 
     def recompute(self) -> None:
         if not hasattr(self, "bar"):

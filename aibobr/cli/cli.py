@@ -72,6 +72,10 @@ class Cli:
             code = self._update_catalog()
             if not args.model:
                 return code
+        if getattr(args, "scan", None) is not None:
+            code = self._find_models(args.scan or None)
+            if not args.model:
+                return code
         text = args.model or self._ask_model()
         if not text:
             self.error("cli.no_model")
@@ -130,6 +134,28 @@ class Cli:
         cat = self.c.catalog
         key = "catalog.updated" if newer else "catalog.current"
         self.say(t(key, count=len(cat), date=cat.updated or "—"))
+        self.say()
+        return EXIT_OK
+
+    def _find_models(self, folder: str | None) -> int:
+        """--scan [FOLDER]: lista modeli na dysku. Sama flaga jest zgodą użytkownika."""
+        self.say(self.p.paint(t("cli.scan_folder", folder=folder) if folder else t("cli.scan_known"),
+                              self.p.dim))
+        report = self.c.find_models(folder)
+        if not report.models:
+            self.say(t("cli.scan_none"))
+        else:
+            self.say(t("cli.scan_found", count=len(report.models), size=fmt_gb(report.total_size)))
+            for m in sorted(report.with_copies(), key=lambda m: (m.kind.value != "text", m.name.lower())):
+                label = m.name + (f" · {m.quant}" if m.quant else "")
+                kind = t(f"scan.kind.{m.kind.value}") + (f", {t(m.note)}" if m.note else "")
+                self.say(f"  {kind:<22} {label[:52]:<52} {fmt_gb(m.size):>9}  {m.app}")
+                self.say(self.p.paint(f"      {m.place}", self.p.dim))
+            if any(m.checkable for m in report.models):
+                self.say()
+                self.say(t("cli.scan_hint"))
+        for d in report.denied[:5]:
+            self.say(self.p.paint(t("cli.scan_denied", folder=str(d)), self.p.yellow))
         self.say()
         return EXIT_OK
 

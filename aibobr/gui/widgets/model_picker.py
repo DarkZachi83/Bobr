@@ -11,7 +11,8 @@ from aibobr.sources.base import LoadedModel
 
 class ModelPicker(ttk.Frame):
     def __init__(self, master, on_check: Callable[[str], None], on_manual: Callable[[], None],
-                 on_quant: Callable[[str], None], on_ollama: Optional[Callable[[], None]] = None):
+                 on_quant: Callable[[str], None], on_ollama: Optional[Callable[[], None]] = None,
+                 on_found: Optional[Callable[[], None]] = None):
         super().__init__(master, style="Panel.TFrame")
         self.on_check, self.on_quant = on_check, on_quant
         self.text = tk.StringVar()
@@ -38,6 +39,9 @@ class ModelPicker(ttk.Frame):
         self.combo.pack(side="left", padx=6)
         self.combo.bind("<<ComboboxSelected>>", lambda e: self.on_quant(self._quants[self.quant_label.get()]))
         ttk.Button(bottom, text=t("gui.manual"), command=on_manual).pack(side="right")
+        # W obu trybach: „co ja w ogóle mam na dysku?” (etap 9a).
+        self.found_button = ttk.Button(bottom, text=t("gui.scan"), command=on_found or (lambda: None))
+        self.found_button.pack(side="right", padx=(0, 6))
         # Tylko w trybie Zaawansowanym (decyzja autora: tryb Automatyczny zostaje prosty).
         self.ollama_button = ttk.Button(bottom, text=t("gui.ollama"), command=on_ollama or (lambda: None))
         self.advanced = False

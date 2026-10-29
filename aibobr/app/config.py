@@ -32,6 +32,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "overhead_gb": 0.5,             # zmierzone w etapie 8 (SPEC §5)
     "hf_token": "",
     "ollama_host": "http://127.0.0.1:11434",   # tryb Zaawansowany: modele z Ollamy
+    "scan_consent": False,          # zgoda na szukanie modeli na dysku (pytamy raz)
 }
 
 

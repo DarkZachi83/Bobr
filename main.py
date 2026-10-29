@@ -60,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lang", choices=LANGUAGES, help=t("args.lang"))
     p.add_argument("--no-color", action="store_true", help=t("args.no_color"))
     p.add_argument("--update-catalog", action="store_true", help=t("args.update_catalog"))
+    p.add_argument("--scan", nargs="?", const="", metavar=t("args.scan_metavar"), help=t("args.scan"))
     p.add_argument("-v", "--verbose", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--bobr", action="store_true", help=argparse.SUPPRESS)
     return p
@@ -83,6 +84,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.context:
         controller.settings["default_context"] = args.context
+    if args.scan is not None:
+        args.cli = True                              # lista modeli to wydruk, nie okno
     if not args.cli:
         code = _try_gui(controller, args)
         if code is not None:

@@ -11,11 +11,12 @@ oraz <repo>/resolve/<rev>/<plik> (zawartość pliku).
 """
 from __future__ import annotations
 
+import json
 import math
 import re
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any, Optional
 from urllib.parse import quote
 
@@ -23,6 +24,7 @@ from aibobr.domain.enums import ModelSource
 from aibobr.sources.base import (
     OBSOLETE_QUANT_RE, SPLIT_RE, ArchInfo, count_swa_layers, LoadedModel, SourceError, Variant, quant_from_filename,
 )
+from aibobr.sources import gguf_reader
 from aibobr.sources.gguf_reader import arch_from_headers, display_name, read_header
 from aibobr.sources.http import HttpClient
 
@@ -280,3 +282,29 @@ def arch_from_config(config: Any, files: list[_File] = ()) -> ArchInfo:
         params_active=active, architecture=(config.get("architectures") or [None])[0],
         embd_params=embd, tied_embeddings=tied,
     )
+
+
+# --------------------------------------------------------------------------- folder lokalny
+
+def load_transformers_folder(path) -> LoadedModel:
+    """Folder transformers na dysku (config.json + wagi), np. z pamięci podręcznej HF.
+
+    Liczymy jak repozytorium HF bez plików GGUF: architektura z config.json, warianty
+    kwantyzacji szacowane z tabeli. Nic nie pobieramy z internetu."""
+    folder = Path(path)
+    try:
+        config = json.loads((folder / "config.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise SourceError("source.is_directory", str(folder)) from None
+    except (OSError, ValueError) as e:
+        raise SourceError("source.bad_file", str(e)) from e
+    files = [_File(p.name, gguf_reader.file_size(p)) for p in sorted(folder.iterdir())
+             if p.is_file() and (p.suffix == ".safetensors"
+                                 or (p.name.startswith("pytorch_model") and p.suffix == ".bin"))]
+    # Pamięć podręczna HF: …/models--org--nazwa/snapshots/<wersja>/ → „org/nazwa”
+    name = folder.name
+    if folder.parent.name == "snapshots" and folder.parent.parent.name.startswith("models--"):
+        name = folder.parent.parent.name[len("models--"):].replace("--", "/")
+    return LoadedModel(name=name, source=ModelSource.GGUF_FILE, arch=arch_from_config(config, files),
+                       variants=tuple(Variant(q, None) for q in ESTIMATED_QUANTS),
+                       origin=str(folder))

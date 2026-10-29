@@ -73,6 +73,22 @@ class AppController:
         models = OllamaSource(HttpClient(timeout=10), self.ollama_host()).installed()
         return [m for m in models if "embed" not in str(m.get("name", "")).lower()]
 
+    # ------------------------------------------------------------------ modele na dysku
+    @property
+    def scan_consent(self) -> bool:
+        return bool(self.settings.get("scan_consent"))
+
+    def set_scan_consent(self, value: bool) -> None:
+        self.settings["scan_consent"] = value
+        self.config.save_user({"scan_consent": value})
+
+    def find_models(self, folder: Optional[Path] = None, stop=None, progress=None):
+        """Modele na dysku: znane miejsca programów albo wskazany folder (etap 9a)."""
+        import sys
+        from aibobr.scan.scanner import Scanner
+        scanner = Scanner(stop, progress)
+        return scanner.scan_folder(Path(folder)) if folder else scanner.scan_known(sys.platform)
+
     # ------------------------------------------------------------------ sprzęt
     def scan(self) -> HardwareProfile:
         return self.detector.detect()          # PlatformUnsupported leci wyżej
