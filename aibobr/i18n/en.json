@@ -195,6 +195,7 @@
   "scan.kind.other": "other",
   "scan.kind.text": "text",
   "scan.note.copy": "the same model is also elsewhere",
+  "scan.note.embedding": "search model (embedding)",
   "scan.note.lora": "LoRA",
   "scan.note.partial": "unfinished download",
   "scan.note.projector": "image projector",

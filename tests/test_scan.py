@@ -185,6 +185,20 @@ class ScanTreeTest(unittest.TestCase):
         self.assertEqual(m["sd15"].size, 3_400_000_002)
         self.assertFalse(any(x.checkable for x in (m["sdxl_base"], m["style"], m["old"], m["sd15"])))
 
+    def test_embedding_model_is_labelled(self):
+        # Dysk autora: Open WebUI trzyma all-MiniLM-L6-v2 do wyszukiwania w dokumentach.
+        repo = self.root / "webui_data" / "models--sentence-transformers--all-MiniLM-L6-v2"
+        snap = repo / "snapshots" / "1110a2"
+        safetensors(snap / "minilm.safetensors", ["embeddings.word_embeddings.weight"], 90_000_000)
+        (snap / "config.json").write_text(json.dumps({"architectures": ["BertModel"]}))
+        (snap / "modules.json").write_text("[]")
+        patch = fake_sizes(_sizes)
+        patch.start()
+        self.addCleanup(patch.stop)
+        _, m = self.scan()
+        mini = m["sentence-transformers/all-MiniLM-L6-v2"]
+        self.assertEqual((mini.kind, mini.note, mini.checkable), (Kind.OTHER, "scan.note.embedding", False))
+
     def test_unfinished_downloads(self):
         report, m = self.scan()
         partials = [x for x in report.models if x.note == "scan.note.partial"]

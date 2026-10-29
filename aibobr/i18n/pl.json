@@ -195,6 +195,7 @@
   "scan.kind.other": "inne",
   "scan.kind.text": "tekst",
   "scan.note.copy": "ten sam model jest też w innym miejscu",
+  "scan.note.embedding": "model wyszukiwania (embedding)",
   "scan.note.lora": "LoRA",
   "scan.note.partial": "przerwane pobieranie",
   "scan.note.projector": "projektor obrazu",
