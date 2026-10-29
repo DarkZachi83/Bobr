@@ -11,11 +11,12 @@ from __future__ import annotations
 import json
 import os
 import threading
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Optional
 
 from aibobr.scan import ollama_store
-from aibobr.scan.files import MIN_SIZE, classify_file, classify_gguf
+from aibobr.scan.files import MIN_SIZE, classify_file, classify_gguf, is_partial, partial
 from aibobr.scan.locations import known_locations
 from aibobr.scan.model import FoundModel, Kind, ScanReport
 from aibobr.sources import gguf_reader
@@ -138,10 +139,24 @@ class Scanner:
             if found:
                 result.append(found)
         # Same bloby leżą w blobs/ – do nich nie schodzimy, żeby nie liczyć ich drugi raz.
-        return result
+        # Wyjątek: przerwane `ollama pull` (sha256-…-partial) – Ollama ich nie zna.
+        return result + self._partials(store / "blobs", "Ollama")
+
+    def _partials(self, folder: Path, app: str) -> list[FoundModel]:
+        try:
+            files = sorted(p for p in folder.iterdir() if p.is_file() and is_partial(p))
+        except OSError:
+            return []
+        return [partial(p, _size(p), app) for p in files
+                if _size(p) >= MIN_SIZE and self._first_time(p)]
 
     def _hf_repo(self, repo_dir: Path) -> list[FoundModel]:
         repo_id = repo_dir.name[len("models--"):].replace("--", "/")
+        partials = [replace(p, name=f"{repo_id} · {p.name}")
+                    for p in self._partials(repo_dir / "blobs", "Hugging Face")]
+        return self._hf_snapshot(repo_dir, repo_id) + partials
+
+    def _hf_snapshot(self, repo_dir: Path, repo_id: str) -> list[FoundModel]:
         snapshots = sorted((p for p in (repo_dir / "snapshots").iterdir() if p.is_dir()),
                            key=lambda p: p.stat().st_mtime, reverse=True)
         if not snapshots:

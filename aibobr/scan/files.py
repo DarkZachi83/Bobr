@@ -102,10 +102,25 @@ def kind_from_folder(path: Path) -> tuple[Kind, Optional[str]]:
     return Kind.OTHER, None
 
 
+# Przerwane pobrania: Stability Matrix (.smdownload, np. „Unconfirmed 5348838.smdownload”),
+# przeglądarki (.crdownload, .part, .download), pamięć HF (.incomplete), Ollama (…-partial).
+PARTIAL_SUFFIXES = {".smdownload", ".crdownload", ".part", ".partial", ".download", ".incomplete"}
+
+
+def is_partial(path: Path) -> bool:
+    return path.suffix.lower() in PARTIAL_SUFFIXES or "-partial" in path.name
+
+
+def partial(path: Path, size: int, app: str) -> FoundModel:
+    return FoundModel(path.name, Kind.OTHER, "partial", size, path, app, note="scan.note.partial")
+
+
 def classify_file(path: Path, size: int, app: str = "folder") -> Optional[FoundModel]:
     """Pojedynczy plik (nie część folderu transformers/diffusers) albo None."""
     if size < MIN_SIZE:
         return None
+    if is_partial(path):
+        return partial(path, size, app)
     suffix = path.suffix.lower()
     match = SPLIT_RE.match(path.name)
     if match and int(match.group("no")) != 1:

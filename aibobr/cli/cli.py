@@ -153,6 +153,9 @@ class Cli:
                 label = m.name + (f" · {m.quant}" if m.quant else "")
                 self.say(f"  {kind:<{width}}  {label[:52]:<52} {fmt_gb(m.size):>9}  {m.app}")
                 self.say(self.p.paint(f"      {m.place}", self.p.dim))
+            if report.partial_size:
+                self.say()
+                self.say(self.p.paint(t("cli.scan_partial", size=fmt_gb(report.partial_size)), self.p.yellow))
             if any(m.checkable for m in report.models):
                 self.say()
                 self.say(t("cli.scan_hint"))

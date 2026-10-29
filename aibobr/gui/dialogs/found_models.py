@@ -131,6 +131,8 @@ class FoundModelsDialog(tk.Toplevel):
             text = t("gui.scan_none_folder") if self.folder else t("gui.scan_none")
         else:
             text = t("gui.scan_found", count=len(self.report.models), size=fmt_gb(self.report.total_size))
+        if self.report.partial_size:
+            text += "\n" + t("cli.scan_partial", size=fmt_gb(self.report.partial_size))
         if report.cancelled:
             text += " " + t("gui.scan_cancelled")
         if report.denied:

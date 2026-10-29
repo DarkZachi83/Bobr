@@ -105,6 +105,10 @@ w **obu trybach** („co ja w ogóle mam?” to pytanie początkującego), w try
   `StableDiffusion`); ten sam model w kilku miejscach – wszystkie wystąpienia oznaczone „ten sam model jest też
   w innym miejscu” (program nie wie, z której kopii korzysta użytkownik);
   dla Ollamy pokazujemy folder modeli zamiast pliku `sha256-…`.
+- **Przerwane pobrania** (dysk autora: 6 plików `Unconfirmed …smdownload` w Stability Matrix,
+  14,8 GB): `.smdownload`, `.crdownload`, `.part`, `.partial`, `.download`, `.incomplete`
+  (pamięć HF, `blobs/`) i `sha256-…-partial` (Ollama). Na liście jako „przerwane pobieranie”
+  z łącznym rozmiarem do odzyskania. Program niczego nie usuwa – pokazuje, gdzie leży plik.
 - **Wynik:** lista (nazwa, typ, rozmiar, skąd) i łączny rozmiar. Modele tekstowe można od
   razu sprawdzić: Ollama → `ollama:NAZWA` (gdy Ollama jest wyłączona, program czyta jej
   plik z dysku), folder transformers → szacunek z `config.json` jak dla repozytorium HF

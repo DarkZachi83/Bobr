@@ -120,6 +120,14 @@ class ScanTreeTest(unittest.TestCase):
         sm.write_bytes(b"\x80\x02")
         _sizes[sm.name] = 2_100_000_000
 
+        # Przerwane pobrania (dysk autora: 6 × „Unconfirmed …smdownload”, 14,8 GB)
+        for path, size in ((sm.parent / "Unconfirmed 5348838.smdownload", 3_657_792_256),
+                           (store / "blobs" / ("sha256-" + "77" * 32 + "-partial"), 900_000_000),
+                           (snap.parent.parent / "blobs" / ("aa" * 32 + ".incomplete"), 700_000_000)):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"x")
+            _sizes[path.name] = size
+
         # Ukryty folder i zwykłe śmieci – pomijane
         safetensors(r / "lmstudio" / ".trash" / "hidden.safetensors", ["model.layers.0.x"], 2 * GB)
 
@@ -138,7 +146,9 @@ class ScanTreeTest(unittest.TestCase):
         report, by_name = self.scan()
         self.assertEqual(sorted(by_name), sorted([
             "llama3.1:8b", "Gemma Test", "Big Split", "mmproj-gemma-f16",
-            "Qwen/Qwen3-0.6B", "sdxl_base", "style", "old", "sd15", "dreamshaper"]))
+            "Qwen/Qwen3-0.6B", "sdxl_base", "style", "old", "sd15", "dreamshaper",
+            "Unconfirmed 5348838.smdownload", "sha256-" + "77" * 32 + "-partial",
+            "Qwen/Qwen3-0.6B · " + "aa" * 32 + ".incomplete"]))
         self.assertEqual(len(report.models), len(by_name))
 
     def test_ollama_names_from_manifests(self):
@@ -174,6 +184,13 @@ class ScanTreeTest(unittest.TestCase):
         self.assertEqual((m["sd15"].kind, m["sd15"].fmt), (Kind.IMAGE, "diffusers"))
         self.assertEqual(m["sd15"].size, 3_400_000_002)
         self.assertFalse(any(x.checkable for x in (m["sdxl_base"], m["style"], m["old"], m["sd15"])))
+
+    def test_unfinished_downloads(self):
+        report, m = self.scan()
+        partials = [x for x in report.models if x.note == "scan.note.partial"]
+        self.assertEqual(sorted(x.app for x in partials), ["Hugging Face", "Ollama", "folder"])
+        self.assertFalse(any(x.checkable for x in partials))
+        self.assertEqual(report.partial_size, 3_657_792_256 + 900_000_000 + 700_000_000)
 
     def test_pickle_kind_from_folder_only(self):
         _, m = self.scan()
@@ -237,7 +254,8 @@ class ScanTreeTest(unittest.TestCase):
         code = Cli(c, out=out, palette=PLAIN).run(args)
         text = out.getvalue()
         self.assertEqual(code, 0)
-        self.assertIn("Znaleziono 10 modeli", text)
+        self.assertIn("Znaleziono 13 modeli", text)
+        self.assertIn("Przerwane pobrania zajmują 4,9 GB", text)
         self.assertIn(f"{self.root / 'ollama'}  (ollama:llama3.1:8b)", text)   # folder, nie sha256
         self.assertIn("ollama:llama3.1:8b", text)
         self.assertIn("obraz", text)
