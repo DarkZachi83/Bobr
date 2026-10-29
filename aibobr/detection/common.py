@@ -14,5 +14,5 @@ def ram_info() -> tuple[Optional[int], Optional[int]]:
         vm = psutil.virtual_memory()
         return int(vm.total), int(vm.total - vm.available)
     except Exception as e:  # brak psutil albo nietypowe środowisko
-        log.warning("psutil unavailable: %s", e)
+        log.info("psutil unavailable: %s", e)           # RAM odczytamy inaczej (np. /proc/meminfo)
         return None, None

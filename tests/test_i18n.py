@@ -46,6 +46,12 @@ class DictionariesTest(unittest.TestCase):
             for key, text in d.items():
                 self.assertTrue(text.strip(), f"{lang}:{key}")
 
+    def test_system_language_from_environment(self):
+        sl = i18n.system_language
+        self.assertEqual(sl({"LANG": "pl_PL.UTF-8"}), "pl")
+        self.assertEqual(sl({"LC_ALL": "C.UTF-8", "LANG": "pl_PL.UTF-8"}), "pl")   # „C” pomijamy
+        self.assertEqual(sl({"LC_MESSAGES": "en_US.UTF-8", "LANG": "pl_PL.UTF-8"}), "en")
+
     def test_every_language_has_a_name(self):
         for lang in LANGUAGES:
             self.assertIn(f"lang.{lang}", self.base)
