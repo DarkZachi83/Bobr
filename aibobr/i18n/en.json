@@ -193,7 +193,7 @@
   "scan.kind.image": "image",
   "scan.kind.other": "other",
   "scan.kind.text": "text",
-  "scan.note.copy": "copy – on disk twice",
+  "scan.note.copy": "the same model is also elsewhere",
   "scan.note.lora": "LoRA",
   "scan.note.projector": "image projector",
   "scan.note.upscaler": "upscaler",

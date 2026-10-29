@@ -195,7 +195,7 @@ class ScanTreeTest(unittest.TestCase):
         self.addCleanup(patch.stop)
         report, _ = self.scan()
         copies = [x for x in report.with_copies() if x.name == "llama3.1:8b"]
-        self.assertEqual([x.note for x in copies], [None, "scan.note.copy"])
+        self.assertEqual([x.note for x in copies], ["scan.note.copy", "scan.note.copy"])   # obie
 
     def test_same_file_twice_counts_once(self):
         link = self.root / "copy-of-gemma.gguf"
