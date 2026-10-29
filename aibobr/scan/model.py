@@ -50,6 +50,11 @@ class ScanReport:
     def total_size(self) -> int:
         return sum(m.size for m in self.models)
 
+    @property
+    def partial_size(self) -> int:
+        """Przerwane pobrania – miejsce do odzyskania bez utraty żadnego modelu."""
+        return sum(m.size for m in self.models if m.note == "scan.note.partial")
+
     def with_copies(self) -> list[FoundModel]:
         """Lista z oznaczeniem kopii: ten sam model (nazwa i rozmiar) w kilku miejscach
         zajmuje dysk kilka razy. Oznaczamy WSZYSTKIE wystąpienia – program nie wie,
