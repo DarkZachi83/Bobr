@@ -19,21 +19,29 @@ from aibobr.sources.base import ArchInfo, LoadedModel, Variant
 
 log = logging.getLogger(__name__)
 MAX_AGE = 7 * 24 * 3600
-FORMAT = 4              # 4: ślady modeli dźwięku (token_pattern, task) – starsze pobieramy od nowa
+FORMAT = 5              # 5: części modeli obrazów (image_parts, image_hint) – starsze pobieramy od nowa
 
 
 def model_to_dict(m: LoadedModel) -> dict:
     arch = asdict(m.arch)
     arch.pop("audio", None)                 # wynik rozpoznania liczymy od nowa po wczytaniu
+    arch.pop("image", None)
     return {"name": m.name, "source": m.source.value, "arch": arch,
             "variants": [{"quant": v.quant, "size": v.size, "files": list(v.files)}
                          for v in m.variants],
             "origin": m.origin}
 
 
+def _arch(d: dict) -> ArchInfo:
+    d = {k: v for k, v in d.items() if k not in ("audio", "image")}
+    if isinstance(d.get("image_parts"), list):                      # JSON: listy zamiast krotek
+        d["image_parts"] = tuple(tuple(p) for p in d["image_parts"])
+    return ArchInfo(**d)
+
+
 def model_from_dict(d: dict) -> LoadedModel:
     return LoadedModel(
-        name=d["name"], source=ModelSource(d["source"]), arch=ArchInfo(**{k: v for k, v in d["arch"].items() if k != "audio"}),
+        name=d["name"], source=ModelSource(d["source"]), arch=_arch(d["arch"]),
         variants=tuple(Variant(v["quant"], v["size"], tuple(v["files"])) for v in d["variants"]),
         origin=d.get("origin"),
     )

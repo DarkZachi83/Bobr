@@ -107,6 +107,18 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertIn("a bit slower", w.verdict.cget("text"))
         self.assertTrue(w.explanation.expanded)
 
+    def test_language_back_to_system(self):
+        import json
+        w = self.window()
+        w.change_language("en")
+        self.pump(seconds=0.3)
+        self.assertIn("AI BEAVER", self.root.title())
+        w.change_language("")                                   # „Język systemu”
+        self.pump(seconds=0.3)
+        saved = json.loads((Path(self.tmp.name) / "cfg" / "settings.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["language"], "")
+        self.assertEqual(w.lang_var.get(), "")
+
     def test_ollama_button_only_in_advanced_mode(self):
         w = self.window()
         self.assertFalse(w.picker.ollama_button.winfo_ismapped())

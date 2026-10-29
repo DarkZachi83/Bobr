@@ -35,7 +35,7 @@ class Overrides:
 class AppController:
     def __init__(self, config: ConfigStore, quants: QuantTable, detector: Detector,
                  cache: Optional[ModelCache] = None, catalog: Optional[Catalog] = None,
-                 catalog_download: Optional[Path] = None, audio=None):
+                 catalog_download: Optional[Path] = None, audio=None, images=None):
         self.config = config
         self.settings = config.load()
         self.quants = quants
@@ -44,6 +44,8 @@ class AppController:
         self.catalog_download = catalog_download
         from aibobr.knowledge.audio import AudioCatalog
         self.audio = audio or AudioCatalog()
+        from aibobr.knowledge.images import ImageCatalog
+        self.images = images or ImageCatalog()
         self.set_catalog(catalog or Catalog(updated="", models=()))
 
     def set_catalog(self, catalog: Catalog) -> None:
@@ -65,6 +67,7 @@ class AppController:
 
     def load_model(self, text: str) -> LoadedModel:
         model = load_model(text, self.http(), self.cache, self.ollama_host())
+        model = self.images.annotate(model)         # model obrazów? (etap 10)
         return self.audio.annotate(model)          # model mowy / muzyki? (etap 9)
 
     def ollama_host(self) -> str:

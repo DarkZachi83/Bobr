@@ -23,8 +23,8 @@ from aibobr.gui.widgets.hardware_panel import HardwarePanel
 from aibobr.gui.widgets.memory_bar import MemoryBar
 from aibobr.gui.widgets.model_picker import ModelPicker
 from aibobr.gui.worker import Worker
-from aibobr.i18n import LANGUAGES, current_language, fmt_context, fmt_params, set_language, t
-from aibobr.knowledge.advisor import audio_label, render
+from aibobr.i18n import LANGUAGES, fmt_context, fmt_params, set_language, system_language, t
+from aibobr.knowledge.advisor import audio_label, image_label, render
 from aibobr.sources.base import LoadedModel, SourceError
 from aibobr.sources.factory import OLLAMA_PREFIX, source_kind
 
@@ -101,7 +101,12 @@ class MainWindow:
         settings.add_command(label=t("gui.menu.token"), command=self.set_token)
         settings.add_command(label=t("gui.menu.update_catalog"), command=self.update_catalog)
         lang = tk.Menu(settings, tearoff=False)
-        self.lang_var = tk.StringVar(value=current_language())
+        # "" = język systemu (zapis "language": "") – powrót do automatu bez edycji pliku
+        saved = str(self.c.settings.get("language") or "")
+        self.lang_var = tk.StringVar(value=saved if saved in LANGUAGES else "")
+        lang.add_radiobutton(label=t("gui.lang_system", name=t(f"lang.{system_language()}")), value="",
+                             variable=self.lang_var, command=lambda: self.change_language(""))
+        lang.add_separator()
         for code in LANGUAGES:
             lang.add_radiobutton(label=t(f"lang.{code}"), value=code, variable=self.lang_var,
                                  command=lambda c=code: self.change_language(c))
@@ -235,7 +240,11 @@ class MainWindow:
             self._clear_result(t("note.estimate"), color=COLORS["error"])
             return
 
-        header = f"{spec.name}  ·  {spec.quant}  ·  {t('cli.context')} {fmt_context(settings.context_tokens)}"
+        image = image_label(spec, settings)
+        if image:                                    # obrazy: rozdzielczość zamiast kontekstu
+            header = f"{spec.name}  ·  {spec.quant}  ·  {image}"
+        else:
+            header = f"{spec.name}  ·  {spec.quant}  ·  {t('cli.context')} {fmt_context(settings.context_tokens)}"
         if spec.is_moe and spec.params_active:
             header += f"  ·  {t('cli.moe', active=fmt_params(spec.params_active))}"
         audio = audio_label(spec, settings)
@@ -254,7 +263,9 @@ class MainWindow:
 
     # ------------------------------------------------------------------ menu
     def change_language(self, code: str) -> None:
+        """code = "" – język systemu (zapisujemy pusty wybór, więc działa też po zmianie systemu)."""
         set_language(code)
+        self.c.settings["language"] = code
         self.c.config.save_user({"language": code})
         expanded = self.explanation.expanded
         self.build(self.hardware.export_state())

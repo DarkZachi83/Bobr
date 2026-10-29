@@ -43,15 +43,26 @@ def reload() -> None:
     _dicts.clear()
 
 
-def system_language() -> str:
-    try:
-        code = (locale.getlocale()[0] or "").lower()
-    except (ValueError, TypeError):
-        code = ""
-    if not code:
-        import os
-        code = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES")
-                or os.environ.get("LANG") or "").lower()
+_NEUTRAL = ("c", "c.utf-8", "c.utf8", "posix", "")
+
+
+def system_language(env=None) -> str:
+    """Język systemu: najpierw zmienne użytkownika (LC_ALL, LC_MESSAGES, LANG – Linux),
+    potem ustawienia regionalne (Windows: „Polish_Poland”).
+
+    Neutralne „C” / „POSIX” pomijamy: Python z uv (python-build-standalone) i część
+    środowisk wirtualnych zgłasza „C.UTF-8” mimo polskiego systemu (zgłoszenie autora)."""
+    import os
+    env = os.environ if env is None else env
+    for var in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        code = (env.get(var) or "").lower()
+        if code not in _NEUTRAL:
+            break
+    else:
+        try:
+            code = (locale.getlocale()[0] or "").lower()
+        except (ValueError, TypeError):
+            code = ""
     return "pl" if code.startswith(("pl", "polish")) else DEFAULT_LANGUAGE
 
 

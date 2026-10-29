@@ -15,11 +15,12 @@ from aibobr import resources
 from aibobr.app.config import ConfigStore, user_cache_dir, user_config_dir
 from aibobr.app.controller import AppController
 from aibobr.calculator.quants import QuantTable
-from aibobr.cli.cli import Cli, parse_context, parse_gb_list
+from aibobr.cli.cli import Cli, parse_context, parse_gb_list, parse_resolution
 from aibobr.detection.factory import create_detector
 from aibobr.i18n import LANGUAGES, set_language, t
 from aibobr.knowledge import catalog
 from aibobr.knowledge.audio import AudioCatalog
+from aibobr.knowledge.images import ImageCatalog
 from aibobr.sources.cache import ModelCache
 
 ROOT = resources.root()
@@ -28,6 +29,7 @@ PATHS = {
     "quants": resources.path("data", "quants.json"),
     "catalog": resources.path("data", "models", "catalog.json"),
     "audio": resources.path("data", "audio_models.json"),
+    "images": resources.path("data", "image_models.json"),
 }
 
 
@@ -46,6 +48,7 @@ def build_app(fake_hw: Optional[Path] = None, user_dir: Optional[Path] = None,
         catalog=catalog.load(PATHS["catalog"], downloaded),
         catalog_download=downloaded,
         audio=AudioCatalog.load(PATHS["audio"]),
+        images=ImageCatalog.load(PATHS["images"]),
     )
 
 
@@ -56,6 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--quant", help=t("args.quant"))
     p.add_argument("--context", type=parse_context, help=t("args.context"))
     p.add_argument("--kv-cache", choices=("f16", "q8_0", "q4_0"), help=t("args.kv_cache"))
+    p.add_argument("--resolution", type=parse_resolution, metavar="PX[xPX]", help=t("args.resolution"))
+    p.add_argument("--batch", type=int, metavar="N", help=t("args.batch"))
     p.add_argument("-e", "--explain", action="store_true", help=t("args.explain"))
     p.add_argument("--ram", type=float, metavar="GB", help=t("args.ram"))
     p.add_argument("--vram", type=parse_gb_list, metavar="GB[,GB]", help=t("args.vram"))

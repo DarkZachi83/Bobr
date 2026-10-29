@@ -196,7 +196,7 @@ class Scanner:
         size = self._folder_size(d)
         if size < MIN_SIZE:
             return None
-        return FoundModel(d.name, Kind.IMAGE, "diffusers", size, d, app)
+        return FoundModel(d.name, Kind.IMAGE, "diffusers", size, d, app, target=str(d))
 
     def _transformers(self, d: Path, filenames: list[str], app: str) -> Optional[FoundModel]:
         weights = [d / f for f in filenames if _is_weight_file(f)]

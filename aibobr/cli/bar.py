@@ -63,8 +63,56 @@ def palette_for(stream, force_plain: bool = False) -> Palette:
 LEVEL_COLOR = {FitLevel.GREEN: "green", FitLevel.YELLOW: "yellow", FitLevel.RED: "red"}
 
 
+def render_image_bar(v: Verdict, palette: Palette = PLAIN, width: int = 50,
+                     bobr: bool = False) -> list[str]:
+    """Modele obrazów (SPEC §5a): System · Szczyt (najcięższy etap) · Naraz (wszystkie części)."""
+    cap, n = v.capacity, v.need
+    vram, total = cap.vram_usable, cap.total
+    scale = max(total, n.all_at_once, n.peak) or 1
+
+    def col(x: int) -> int:
+        return min(width, round(x * width / scale))
+
+    c_vram, c_total = col(vram), col(total)
+    c_miss = max(0, col(max(n.peak, n.weights)) - c_total) if v.level.name == "RED" else 0
+    system = (palette.paint("=" * c_vram, palette.green) + palette.paint("-" * (c_total - c_vram), palette.yellow)
+              + palette.paint("x" * c_miss, palette.red) + " " * (width - c_total - c_miss))
+    color = getattr(palette, LEVEL_COLOR[v.level])
+    stage = n.peak_stage
+    weight, comp = {"sample": (n.main, n.main_compute), "decode": (n.vae, n.vae_compute),
+                    "encode": (n.encoders, 0)}[stage]
+    c_w = col(weight)
+    c_c = col(weight + comp) - c_w
+    c_o = col(n.peak) - c_w - c_c
+    mark = "B" if bobr and v.level.name == "GREEN" else "#"
+    peak = (palette.paint(mark * c_w, palette.bold_yellow if mark == "B" else color)
+            + palette.paint("+" * c_c, color) + palette.paint(":" * c_o, color))
+    peak += " " * max(0, width - (c_w + c_c + c_o))
+    parts = [("#", n.main), ("+", max(n.main_compute, n.vae_compute)), (":", n.overhead),
+             ("~", n.encoders), ("°", n.vae)]
+    at_once, used = "", 0
+    for ch, size in parts:
+        c = col(used + size) - col(used)
+        at_once += ch * c
+        used += size
+    at_once = palette.paint(at_once[:width], palette.dim) + " " * max(0, width - len(at_once))
+
+    labels = [t("cli.row.system"), t("cli.row.peak"), t("cli.row.all")]
+    pad = max(len(x) for x in labels)
+    legend = t("cli.legend_image", vram=fmt_gb(vram), ram=fmt_gb(cap.ram_usable), main=fmt_gb(n.main),
+               comp=fmt_gb(comp), overhead=fmt_gb(n.overhead),
+               enc=fmt_gb(n.encoders), vae=fmt_gb(n.vae))
+    return [f"  {labels[0]:<{pad}} [{system}]",
+            f"  {labels[1]:<{pad}} [{peak}]",
+            f"  {labels[2]:<{pad}} [{at_once}]",
+            "  " + palette.paint(legend, palette.dim)]
+
+
 def render_bar(v: Verdict, palette: Palette = PLAIN, width: int = 50,
                bobr: bool = False) -> list[str]:
+    from aibobr.domain.models import ImageNeed
+    if isinstance(v.need, ImageNeed):
+        return render_image_bar(v, palette, width, bobr)
     cap, need = v.capacity, v.need
     vram, total = cap.vram_usable, cap.total
     scale = max(total, need.total) or 1

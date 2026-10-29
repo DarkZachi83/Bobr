@@ -17,7 +17,7 @@ from aibobr.scan.model import FoundModel, Kind
 from aibobr.sources.base import SPLIT_RE, SourceError
 from aibobr.sources import gguf_reader
 from aibobr.sources.gguf_reader import (
-    TAIL_SUFFIX, LocalFile, display_name, quant_from_header, read_header, token_pattern,
+    GGUF_IMAGE_ARCHS, TAIL_SUFFIX, LocalFile, display_name, quant_from_header, read_header, token_pattern,
 )
 
 MIN_SIZE = 50 * 1024**2              # mniejsze pliki to nie modele (tokenizery, konfiguracja)
@@ -53,6 +53,9 @@ def classify_gguf(path: Path, size: int, app: str, name: Optional[str] = None) -
     title = name or display_name(header, fname)
     if projector:
         return FoundModel(title, Kind.ADDON, "GGUF", size, path, app, note="scan.note.projector")
+    if arch in GGUF_IMAGE_ARCHS:                     # np. FLUX w GGUF od city96
+        return FoundModel(title, Kind.IMAGE, "GGUF", size, path, app,
+                          quant=quant_from_header(header, fname), target=str(path))
     tokens = md.get("tokenizer.ggml.tokens" + TAIL_SUFFIX) or md.get("tokenizer.ggml.tokens")
     return FoundModel(title, Kind.TEXT, "GGUF", size, path, app,
                       quant=quant_from_header(header, fname), target=str(path),
@@ -136,7 +139,9 @@ def classify_file(path: Path, size: int, app: str = "folder") -> Optional[FoundM
     if suffix == ".safetensors":
         keys = safetensors_keys(path)
         kind, note = kind_from_keys(keys) if keys else (Kind.OTHER, None)
-        return FoundModel(path.stem, kind, "safetensors", size, path, app, note=note)
+        # Model obrazów w jednym pliku AI Bóbr ocenia od etapu 10.
+        return FoundModel(path.stem, kind, "safetensors", size, path, app, note=note,
+                          target=str(path) if kind == Kind.IMAGE else None)
     if suffix in PICKLE_SUFFIXES:
         kind, note = kind_from_folder(path)
         # Bez podpowiedzi z folderu pickle to zwykle nie model (np. pamięć shaderów gier

@@ -57,6 +57,21 @@ class SamplerTest(unittest.TestCase):
         mv.report(r, out.append)
         self.assertTrue(any("0.62 GB" in line and "gguf_orpheus.py" in line for line in out))
 
+    def test_process_running_before_counts_its_growth(self):
+        frames = [(3000, [(4444, "python launch.py", 2900)]),
+                  (6900, [(4444, "python launch.py", 6800)]),
+                  (3100, [(4444, "python launch.py", 3000)])]
+        s = mv.Sampler(run=FakeSmi(frames), cmdline=lambda pid: "python launch.py --forge")
+        s.baseline()
+        for _ in range(2):
+            s.sample()
+        r = mv.Result("forge sdxl 1024", 30, 3000, s.total_peak, list(s.processes.values()))
+        self.assertEqual(r.new_processes(), [])
+        self.assertEqual([(p.pid, p.peak_mib) for p in r.grown_processes()], [(4444, 6800)])
+        out = []
+        mv.report(r, out.append)
+        self.assertTrue(any("6.64 GB" in x and "przed 2.83 GB" in x for x in out))
+
     def test_cli_writes_json(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "m.json"

@@ -96,6 +96,13 @@ class Result:
         new = [p for p in self.processes if p.before_mib is None and p.peak_mib]
         return sorted(new, key=lambda p: p.peak_mib or 0, reverse=True)
 
+    def grown_processes(self, min_mib: int = 50) -> list[Process]:
+        """Procesy działające już przed pomiarem, które w trakcie zajęły wyraźnie więcej
+        (np. Forge albo ComfyUI uruchomione wcześniej – liczy się ich szczyt przy obrazie)."""
+        grown = [p for p in self.processes if p.before_mib is not None and p.peak_mib
+                 and p.peak_mib - p.before_mib >= min_mib]
+        return sorted(grown, key=lambda p: p.peak_mib or 0, reverse=True)
+
 
 class Sampler:
     def __init__(self, run: Callable = CommandRunner(), interval: float = 0.5,
@@ -130,13 +137,20 @@ class Sampler:
             self.stop.wait(self.interval)
 
 
-def predict(model: str, context: int) -> dict:
+def predict(model: str, context: int, resolution: Optional[tuple[int, int]] = None) -> dict:
     """Przewidywanie AI Bóbra (bez narzutu runtime'u) – do porównania z pomiarem."""
     import main
     from aibobr.calculator.memory import memory_need
     from aibobr.domain.models import RunSettings
     c = main.build_app()
     spec = c.load_model(model).spec()
+    if spec.image is not None:                                # model obrazów (etap 10)
+        from aibobr.calculator.image import image_need
+        w, h = resolution or (None, None)
+        n = image_need(spec, RunSettings(image_width=w, image_height=h))
+        return {"model": spec.name, "quant": spec.quant, "resolution": f"{n.width}×{n.height}",
+                "peak_gib": round(n.peak / GIB, 3), "all_gib": round(n.all_at_once / GIB, 3),
+                "stage": n.peak_stage, "stages_gib": {k: round(v / GIB, 3) for k, v in n.stages.items()}}
     need = memory_need(spec, RunSettings(context_tokens=context, overhead=0), c.quants)
     llm = need.vram_part - need.decoder
     return {"model": spec.name, "quant": spec.quant, "context": context,
@@ -157,8 +171,13 @@ def report(r: Result, log=print) -> None:
         log("  Żaden nowy proces nie użył karty (albo sterownik nie podaje pamięci procesów).")
     for p in new:
         log(f"  {gb(p.peak_mib):>9}  pid {p.pid}  {(p.command or p.name)[:90]}")
-    if r.prediction:
-        pr = r.prediction
+    for p in r.grown_processes():
+        log(f"  {gb(p.peak_mib):>9}  pid {p.pid}  (przed {gb(p.before_mib)})  {(p.command or p.name)[:80]}")
+    pr = r.prediction
+    if pr and "peak_gib" in pr:
+        log(f"\nAI Bóbr dla {pr['model']} · {pr['resolution']}: szczyt {pr['peak_gib']:.2f} GB "
+            f"({pr['stage']}), wszystko naraz {pr['all_gib']:.2f} GB (szacunek)")
+    elif pr:
         log(f"\nAI Bóbr dla {pr['model']} · {pr['quant']} · kontekst {pr['context']}: "
             f"model językowy {pr['llm_gib']:.2f} GB + narzut"
             + (f", dekoder {pr['decoder_gib']:.2f} GB (szacunek)" if pr["decoder_gib"] else ""))
@@ -169,6 +188,7 @@ def main_cli(argv: Optional[list[str]] = None, stdin=sys.stdin, sampler: Optiona
     ap.add_argument("--label", default="", help="opis pomiaru, np. „orpheus Q4_K_M, dekoder na GPU”")
     ap.add_argument("--model", help="ten sam model dla AI Bóbra (plik .gguf, link HF, ollama:NAZWA)")
     ap.add_argument("--context", type=int, default=8192)
+    ap.add_argument("--resolution", help="modele obrazów: np. 1024 albo 1024x768")
     ap.add_argument("--interval", type=float, default=0.5)
     ap.add_argument("--output", type=Path)
     args = ap.parse_args(argv)
@@ -182,7 +202,9 @@ def main_cli(argv: Optional[list[str]] = None, stdin=sys.stdin, sampler: Optiona
     prediction = None
     if args.model:
         try:
-            prediction = predict(args.model, args.context)
+            from aibobr.cli.cli import parse_resolution
+            res = parse_resolution(args.resolution) if args.resolution else None
+            prediction = predict(args.model, args.context, res)
         except Exception as e:                                # pomiar ma działać i bez tego
             print(f"(Nie udało się policzyć przewidywania: {e})")
     print("Uruchom teraz model i wygeneruj nagranie (albo obraz). Gdy skończysz – naciśnij Enter.")
@@ -204,6 +226,7 @@ def main_cli(argv: Optional[list[str]] = None, stdin=sys.stdin, sampler: Optiona
     out.write_text(json.dumps({
         "date": datetime.datetime.now().isoformat(timespec="minutes"), "system": platform.platform(),
         **asdict(r), "total_delta_mib": r.total_delta_mib, "samples": sampler.samples,
+        "grown": [p.pid for p in r.grown_processes()],
     }, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"Zapisano {out}")
     return 0

@@ -183,7 +183,9 @@ class ScanTreeTest(unittest.TestCase):
         self.assertEqual((m["old"].kind, m["old"].fmt), (Kind.IMAGE, "ckpt"))   # z nazwy folderu
         self.assertEqual((m["sd15"].kind, m["sd15"].fmt), (Kind.IMAGE, "diffusers"))
         self.assertEqual(m["sd15"].size, 3_400_000_002)
-        self.assertFalse(any(x.checkable for x in (m["sdxl_base"], m["style"], m["old"], m["sd15"])))
+        # od etapu 10: modele obrazów (safetensors, diffusers) da się sprawdzić; LoRA i .ckpt nie
+        self.assertTrue(m["sdxl_base"].checkable and m["sd15"].checkable)
+        self.assertFalse(m["style"].checkable or m["old"].checkable)
 
     def test_embedding_model_is_labelled(self):
         # Dysk autora: Open WebUI trzyma all-MiniLM-L6-v2 do wyszukiwania w dokumentach.

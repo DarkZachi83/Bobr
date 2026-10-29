@@ -129,10 +129,15 @@ class HuggingFaceSource:
             gguf = [f for f in files if f.path.lower().endswith(".gguf")
                     and "mmproj" not in PurePosixPath(f.path).name.lower()
                     and not OBSOLETE_QUANT_RE.search(PurePosixPath(f.path).name)]
+            if any(f.path == "model_index.json" for f in files):        # diffusers (etap 10)
+                return self._load_diffusers_repo(ref, files)
             if gguf:
                 return self._with_task(ref, self._load_gguf_repo(ref, gguf))
             if any(f.path == "config.json" for f in files):
                 return self._with_task(ref, self._load_transformers_repo(ref, files))
+            single = self._load_single_image(ref, files)
+            if single:
+                return single
             raise SourceError(self._out_of_scope(ref, files), ref.repo_id)
         except SourceError as e:
             # Lista plików jest dostępna, a plik nie: repozytorium wymaga akceptacji licencji.
@@ -162,6 +167,34 @@ class HuggingFaceSource:
         if tag in AUDIO_TAGS:
             return "source.audio_model"
         return "source.no_model_files"
+
+    # ------------------------------------------------------------------ modele obrazów
+    def _load_diffusers_repo(self, ref: HfRef, files: list[_File]) -> LoadedModel:
+        from aibobr.sources.image import diffusers_model
+        index = self.client.get_json(self._file_url(ref, "model_index.json"))
+        return diffusers_model(ref.repo_id, index if isinstance(index, dict) else {},
+                               [(f.path, f.size) for f in files], f"{HF}/{ref.repo_id}",
+                               ModelSource.HUGGINGFACE)
+
+    def _load_single_image(self, ref: HfRef, files: list[_File]) -> Optional[LoadedModel]:
+        """Repozytorium z jednym plikiem modelu obrazów (np. checkpoint SDXL) – nagłówek."""
+        from aibobr.sources.image import check_whole_model, image_model
+        from aibobr.sources.safetensors_reader import read_header as read_st
+        candidates = [f for f in files if f.path.endswith(".safetensors") and "/" not in f.path and f.size]
+        if not candidates:
+            return None
+        best = max(candidates, key=lambda f: f.size)
+        try:
+            header = read_st(self.client.open_remote(self._file_url(ref, best.path)))
+            check_whole_model(header, best.path)
+        except SourceError as e:
+            if e.code in ("source.access_denied", "source.network"):
+                raise
+            return None                       # nie model obrazów (albo nieczytelny) – opisujemy dalej
+        model = image_model(PurePosixPath(best.path).stem, header, best.size, f"{HF}/{ref.repo_id}",
+                            ModelSource.HUGGINGFACE, files=(best.path,))
+        hint = model.arch.image_hint or ""
+        return model if hint != "keys:" else None
 
     # ------------------------------------------------------------------ repo GGUF
     def _load_gguf_repo(self, ref: HfRef, files: list[_File]) -> LoadedModel:

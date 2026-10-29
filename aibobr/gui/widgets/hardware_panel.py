@@ -12,7 +12,7 @@ from dataclasses import replace
 from tkinter import ttk
 from typing import Callable, Optional
 
-from aibobr.cli.cli import parse_context
+from aibobr.cli.cli import parse_context, parse_resolution
 from aibobr.domain.enums import GpuVendor, KvCacheType
 from aibobr.domain.models import GpuInfo, HardwareProfile, RunSettings
 from aibobr.domain.units import gib, to_gib
@@ -60,9 +60,12 @@ class HardwarePanel(ttk.Frame):
         self.vram_reserve = tk.StringVar()
         self.ram_reserve = tk.StringVar()
         self.margin = tk.StringVar()
+        self.resolution = tk.StringVar()          # modele obrazów: pusto = natywna rodziny
+        self.batch = tk.StringVar(value="1")
         self.entries: dict[str, ttk.Entry] = {}
         self._pending = None
-        for var in (self.ram, self.context, self.kv, self.vram_reserve, self.ram_reserve, self.margin):
+        for var in (self.ram, self.context, self.kv, self.vram_reserve, self.ram_reserve, self.margin,
+                    self.resolution, self.batch):
             var.trace_add("write", lambda *_: self._changed())
 
         top = ttk.Frame(self, style="Inner.TFrame")
@@ -97,16 +100,19 @@ class HardwarePanel(ttk.Frame):
         self.vram_reserve.set(_num(to_gib(d.vram_reserve)))
         self.ram_reserve.set(_num(to_gib(d.ram_reserve)))
         self.margin.set(_num(d.margin_ratio * 100, 0))
+        self.resolution.set("")
+        self.batch.set("1")
 
     def export_state(self) -> dict:
         return {"mode": self.mode.get(), "ram": self.ram.get(), "context": self.context.get(),
                 "kv": self.kv.get(), "vram_reserve": self.vram_reserve.get(),
                 "ram_reserve": self.ram_reserve.get(), "margin": self.margin.get(),
+                "resolution": self.resolution.get(), "batch": self.batch.get(),
                 "rows": [(r.gpu, r.name, r.vram.get(), r.selected.get()) for r in self.rows]}
 
     def import_state(self, state: dict) -> None:
-        for key in ("ram", "context", "kv", "vram_reserve", "ram_reserve", "margin"):
-            getattr(self, key).set(state[key])
+        for key in ("ram", "context", "kv", "vram_reserve", "ram_reserve", "margin", "resolution", "batch"):
+            getattr(self, key).set(state.get(key, ""))
         self.rows = []
         for gpu, name, vram, selected in state["rows"]:
             row = GpuRow(gpu, name, vram, selected)
@@ -197,6 +203,8 @@ class HardwarePanel(ttk.Frame):
             ("vram_reserve", self.vram_reserve, t("gui.vram_reserve"), t("gui.vram_reserve_hint")),
             ("ram_reserve", self.ram_reserve, t("gui.ram_reserve"), "GB"),
             ("margin", self.margin, t("gui.margin"), "%"),
+            ("resolution", self.resolution, t("gui.resolution"), t("gui.resolution_hint")),
+            ("batch", self.batch, t("gui.batch"), ""),
         ]
         for key, var, label, unit in params:
             ttk.Label(g, text=label, style="Muted.TLabel").grid(row=r, column=0, sticky="w")
@@ -240,6 +248,16 @@ class HardwarePanel(ttk.Frame):
             values["context"] = parse_context(self.context.get())
         except ValueError:
             invalid.add("context")
+        values["resolution"] = None
+        if self.resolution.get().strip():
+            try:
+                values["resolution"] = parse_resolution(self.resolution.get())
+            except ValueError:
+                invalid.add("resolution")
+        try:
+            values["batch"] = max(1, int(self.batch.get().strip() or "1"))
+        except ValueError:
+            invalid.add("batch")
         gpus = []
         vendor = next((r.gpu.vendor for r in self.rows if r.gpu), GpuVendor.OTHER)
         for i, row in enumerate(self.rows):
@@ -271,7 +289,10 @@ class HardwarePanel(ttk.Frame):
                            kv_cache_type=KvCacheType(self.kv.get()),
                            vram_reserve=gib(values["vram_reserve"]),
                            ram_reserve=gib(values["ram_reserve"]),
-                           margin_ratio=values["margin"] / 100)
+                           margin_ratio=values["margin"] / 100,
+                           image_width=values["resolution"][0] if values["resolution"] else None,
+                           image_height=values["resolution"][1] if values["resolution"] else None,
+                           image_batch=values["batch"])
         return hw, settings
 
     def _save(self) -> None:
