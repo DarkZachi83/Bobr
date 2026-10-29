@@ -64,9 +64,16 @@ class CliTest(CliRun):
         self.assertIn("Twój komputer:", out)
         self.assertIn("Co możesz zrobić:", out)
         self.assertIn("  → cache KV w q8_0 (opcja runtime'u) zmieści się w całości w karcie", out)
-        actions = out.split("Co możesz zrobić:")[1].strip().splitlines()
+        actions = out.split("Co możesz zrobić:")[1].strip().split("\n\n")[0].splitlines()
         self.assertTrue(all(a.endswith(",") for a in actions[:-1]))
         self.assertTrue(actions[-1].endswith("."))
+
+    def test_star_hint_only_once(self):
+        _, first = self.run_cli(str(self.gguf))
+        self.assertIn("⭐ Podoba się AI Bóbr? Zostaw gwiazdkę", first)
+        self.assertIn("https://github.com/DarkZachi83/Bobr", first)
+        _, second = self.run_cli(str(self.gguf))                     # ten sam katalog ustawień
+        self.assertNotIn("Zostaw gwiazdkę", second)
 
     def test_bobr(self):
         code, out = self.run_cli(str(self.gguf), "--bobr", "--lang", "en",

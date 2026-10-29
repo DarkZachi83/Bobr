@@ -33,6 +33,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "hf_token": "",
     "ollama_host": "http://127.0.0.1:11434",   # tryb Zaawansowany: modele z Ollamy
     "scan_consent": False,          # zgoda na szukanie modeli na dysku (pytamy raz)
+    "star_hint_shown": False,       # prośba o gwiazdkę w trybie tekstowym – tylko raz
 }
 
 
