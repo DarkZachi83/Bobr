@@ -167,7 +167,7 @@ def report(r: Result, log=print) -> None:
     log(f"  karta razem: przed {gb(r.total_before_mib)}, szczyt {gb(r.total_peak_mib)}, "
         f"przyrost {gb(r.total_delta_mib)}")
     new = r.new_processes()
-    if not new:
+    if not new and not r.grown_processes():
         log("  Żaden nowy proces nie użył karty (albo sterownik nie podaje pamięci procesów).")
     for p in new:
         log(f"  {gb(p.peak_mib):>9}  pid {p.pid}  {(p.command or p.name)[:90]}")
