@@ -132,10 +132,24 @@ class OutOfScopeRepoTest(unittest.TestCase):
         tree = [lfs("flux-3-klein.safetensors", 8_000_000_000)]         # jak u autora
         self.assertEqual(self.load(tree, {"pipeline_tag": "text-to-image"}), "source.image_model")
 
-    def test_diffusers_layout_without_tag(self):
+    def test_diffusers_repo_is_an_image_model(self):
+        # Od etapu 10 folder diffusers to zwykłe źródło: części z rozmiarów podfolderów.
+        repo = "someone/sdxl-diffusers"
         tree = [{"type": "file", "path": "model_index.json", "size": 500},
-                lfs("unet/diffusion_pytorch_model.safetensors", 5_000_000_000)]
-        self.assertEqual(self.load(tree), "source.image_model")
+                lfs("unet/diffusion_pytorch_model.safetensors", 10_000_000_000),
+                lfs("unet/diffusion_pytorch_model.fp16.safetensors", 5_000_000_000),
+                lfs("text_encoder/model.fp16.safetensors", 246_000_000),
+                lfs("text_encoder_2/model.fp16.safetensors", 1_390_000_000),
+                lfs("vae/diffusion_pytorch_model.fp16.safetensors", 167_000_000)]
+        http = FakeHttp(json={f"{HF}/api/models/{repo}/tree/main?recursive=true": tree,
+                              f"{HF}/{repo}/resolve/main/model_index.json": {
+                                  "_class_name": "StableDiffusionXLPipeline", "unet": ["diffusers", "U"],
+                                  "text_encoder": ["t", "C"], "text_encoder_2": ["t", "C"],
+                                  "vae": ["diffusers", "A"]}})
+        m = HuggingFaceSource(http).load(HfRef(repo))
+        self.assertEqual(m.arch.image_hint, "index:StableDiffusionXLPipeline")
+        self.assertEqual(dict(m.arch.image_parts),
+                         {"main": 5_000_000_000, "encoders": 1_636_000_000, "vae": 167_000_000})
 
     def test_audio_and_unknown(self):
         tree = [lfs("model.safetensors", 1_000_000_000)]

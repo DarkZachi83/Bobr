@@ -10,6 +10,7 @@ from aibobr.sources.base import LoadedModel, SourceError
 from aibobr.sources.gguf_reader import load_gguf_file
 from aibobr.sources.http import HttpClient
 from aibobr.sources.huggingface import HuggingFaceSource, load_transformers_folder, parse_reference
+from aibobr.sources.image import load_diffusers_folder, load_safetensors_file
 from aibobr.sources.ollama import DEFAULT_HOST, OllamaSource
 
 OLLAMA_PREFIX = "ollama:"
@@ -24,7 +25,7 @@ def source_kind(text: str) -> str:
     if text.lower().startswith(OLLAMA_PREFIX):
         return "ollama"
     path = Path(text).expanduser()
-    return "file" if path.suffix.lower() == ".gguf" or path.exists() else "remote"
+    return "file" if path.suffix.lower() in (".gguf", ".safetensors") or path.exists() else "remote"
 
 
 def is_local(text: str) -> bool:
@@ -60,13 +61,15 @@ def load_model(text: str, client: HttpClient, cache=None,
         raise SourceError("source.empty_input")
 
     path = Path(text).expanduser()
-    if path.suffix.lower() == ".gguf" or path.exists():
+    if path.suffix.lower() in (".gguf", ".safetensors") or path.exists():
         if path.is_dir():
             if (path / "model_index.json").is_file():
-                raise SourceError("source.image_model", str(path))
+                return load_diffusers_folder(path)           # model obrazów (etap 10)
             if (path / "config.json").is_file():
                 return load_transformers_folder(path)
             raise SourceError("source.is_directory", str(path))
+        if path.suffix.lower() == ".safetensors":
+            return load_safetensors_file(path)
         return load_gguf_file(path)
 
     if _UNSUPPORTED_SITES.search(text):

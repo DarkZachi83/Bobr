@@ -238,6 +238,60 @@ Obserwacje z pomiarów:
 - Zmierzone na modelach 3–14B; dla dużo większych narzut może rosnąć (bufor obliczeń
   zależy od rozmiaru warstw) – do sprawdzenia, gdy będą pomiary.
 
+## 5a. Modele obrazów (etap 10, decyzje autora 29.10.2026)
+
+**Co jest „modelem”** – trzy układy, od najdokładniejszego:
+1. **Jeden plik „wszystko w jednym”** (`.safetensors`, np. SD 1.5, SDXL, Illustrious, Pony):
+   nagłówek ma nazwy i przesunięcia tensorów, więc rozmiar dzielimy **dokładnie** na część
+   główną (`model.diffusion_model.`), enkodery tekstu (`cond_stage_model.`,
+   `conditioner.embedders.`) i VAE (`first_stage_model.`) – bez czytania wag.
+2. **Folder diffusers / repozytorium HF** (`model_index.json`): rozmiar każdej części
+   z jej podfolderu (`unet`/`transformer`, `text_encoder*`, `vae`); przy kilku wariantach
+   tej samej części bierzemy fp16 (tak ładują programy).
+3. **Części w osobnych plikach** (FLUX, SD 3, GGUF od city96): użytkownik wskazuje plik
+   główny, enkodery i VAE dobieramy z tabeli rodziny – **szacunek**.
+
+**Rodzina** po nazwach tensorów (albo klasie z `model_index.json`, albo architekturze GGUF):
+
+| Rodzina | znak rozpoznawczy | natywnie | enkodery i VAE |
+|---|---|---|---|
+| SD 1.5 | `cond_stage_model.transformer.` | 512×512 | w pliku |
+| SD 2.x | `cond_stage_model.model.` | 768×768 | w pliku |
+| SDXL (Illustrious, Pony) | `conditioner.embedders.1.` | 1024×1024 | w pliku |
+| FLUX | `double_blocks.` | 1024×1024 | osobno: T5-XXL, CLIP-L, VAE |
+| SD 3 | `joint_blocks.` | 1024×1024 | zależnie od pliku |
+
+Tabela: `data/image_models.json` (wzory, rozdzielczość, części domyślne, współczynniki).
+
+**Pamięć – szczyt największego etapu, nie suma.** ComfyUI, Forge, SD.Next i diffusers
+pracują etapami i między etapami przenoszą części do RAM:
+```
+kodowanie opisu = enkodery + narzut
+rysowanie       = część główna + obliczenia(rozdzielczość × obrazy) + narzut
+dekodowanie     = VAE + dekodowanie(rozdzielczość × obrazy) + narzut
+szczyt          = max(etapów)            całość naraz = wszystkie części + większe z obliczeń + narzut
+```
+Obliczenia rosną z liczbą pikseli (część główna liczy na latencie 8× mniejszym, VAE w pełnej
+rozdzielczości – dlatego przy dużych obrazach szczytem bywa dekodowanie). Współczynniki
+(GB na megapiksel) i narzut: **szacunek do czasu pomiaru** w Forge-neo (`tools/measure_vram.py`).
+
+**Światła:**
+- 🟢 **całość naraz w karcie** – najszybciej,
+- 🟢 **mieści się etapami** – części są przeładowywane (sekunda–dwie przy zmianie opisu),
+  sam obraz liczy się w pełnym tempie,
+- 🟡 część główna nie mieści się w karcie, program dociąga ją z RAM – **wolniej** (kilka razy),
+- 🔴 nie mieszczą się nawet karta i RAM razem.
+Enkoder, który nie mieści się w karcie, a mieści w RAM (np. T5-XXL przy FLUX), **nie zmienia
+werdyktu** – dopisek „opis przetworzy procesor, kilka sekund dłużej”.
+
+**Rozdzielczość zamiast kontekstu:** tryb Automatyczny – natywna rodziny; Zaawansowany –
+własna rozdzielczość i liczba obrazów naraz. CLI: `--resolution 1024` albo `1024x768`,
+`--batch 2`.
+
+**Pasek – trzy wiersze** na wspólnej skali: **System**; **Szczyt** (kolor werdyktu,
+z nazwą największego etapu); **Całość naraz** (jaśniejszy, informacyjnie – czy wszystko
+zmieściłoby się jednocześnie). Wyjaśnienie wymienia każdy etap z jego szczytem.
+
 ## 6. Werdykt: pasek pamięci
 
 Zamiast samych świateł: **dwie warstwy na wspólnej skali w GB**.
@@ -470,6 +524,7 @@ config/
 data/
   quants.json               bity na wagę dla kwantyzacji
   audio_models.json         rodziny modeli mowy / muzyki: wzory tokenów, dekoder, tokeny/s
+  image_models.json         rodziny modeli obrazów: znaczniki, rozdzielczość, części, współczynniki
   models/catalog.json       katalog do podpowiedzi
 aibobr/
   domain/      models.py, enums.py, units.py  HardwareProfile, GpuInfo, ModelSpec, Verdict; bajty ↔ GB
@@ -478,7 +533,7 @@ aibobr/
                cache.py, ollama.py
   scan/        model.py, locations.py, files.py, ollama_store.py, scanner.py  modele na dysku (etap 9a)
   calculator/  quants.py, memory.py, verdict.py  tabela kwantyzacji; wagi + KV + narzut → strefy, zapas
-  knowledge/   catalog.py, advisor.py, audio.py         warianty „co możesz zrobić”, aktualizacja katalogu
+  knowledge/   catalog.py, advisor.py, audio.py, images.py         warianty „co możesz zrobić”, aktualizacja katalogu
   app/         config.py, controller.py
   i18n/        __init__.py, pl.json, en.json
   cli/         cli.py                         pasek tekstowy
@@ -535,7 +590,7 @@ Kolejność wynika z tego, jak te modele zużywają pamięć:
    modele rozmowy głosem. Obecny model pamięci pasuje; dochodzi: rozpoznanie typu z HF
    (`pipeline_tag`, architektura), znacznik „model mowy / muzyki”, dekoder dźwięku
    (np. SNAC) w narzucie, kilka takich modeli w katalogu.
-10. **Obrazy** – drugi model pamięci: kilka części (główny model, enkodery tekstu, VAE)
+10. **Obrazy** (w toku, szczegóły: §5a) – drugi model pamięci: kilka części (główny model, enkodery tekstu, VAE)
     + pamięć obliczeń zależna od rozdzielczości, bez cache KV. Inne znaczenie świateł:
     ComfyUI / Forge / diffusers ładują części po kolei i przenoszą do RAM, więc model
     większy od VRAM zwykle **zadziała wolniej**; czerwony dopiero, gdy największa część

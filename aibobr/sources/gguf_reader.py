@@ -186,6 +186,9 @@ def _int_or_max(value: Any) -> Optional[int]:
 
 
 _DIGITS = re.compile(r"\d+")
+# general.architecture modeli obrazów w GGUF od city96 (ComfyUI-GGUF) – to nie są LLM-y.
+GGUF_IMAGE_ARCHS = {"flux", "sd1", "sdxl", "sd3", "aura", "hidream", "cosmos", "ltxv", "hyvid", "wan",
+                    "lumina2"}
 
 
 def token_pattern(tokens) -> Optional[str]:
@@ -220,6 +223,9 @@ def arch_from_headers(headers: list[GgufHeader]) -> ArchInfo:
 
     def g(key: str) -> Any:
         return md.get(f"{arch}.{key}")
+
+    if arch in GGUF_IMAGE_ARCHS:                       # model obrazów (etap 10) – bez warstw LLM
+        return ArchInfo(architecture=arch, image_hint=f"gguf:{arch}")
 
     layers = _int_or_max(g("block_count"))
     heads = _int_or_max(g("attention.head_count"))

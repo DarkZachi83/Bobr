@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import sys
 from argparse import Namespace
+from dataclasses import replace
 from typing import TextIO
 
 from aibobr import __version__
@@ -13,7 +14,7 @@ from aibobr.cli.bar import Palette, palette_for, render_bar
 from aibobr.detection.base import PlatformUnsupported
 from aibobr.domain.enums import FitLevel
 from aibobr.i18n import fmt_context, fmt_gb, fmt_params, t
-from aibobr.knowledge.advisor import Explanation, audio_label, render, render_list
+from aibobr.knowledge.advisor import Explanation, audio_label, image_label, render, render_list
 from aibobr.sources.base import SourceError
 from aibobr.sources.factory import source_kind
 
@@ -31,6 +32,15 @@ def parse_context(text: str) -> int:
     if value <= 0:
         raise ValueError(text)
     return value
+
+
+def parse_resolution(text: str) -> tuple[int, int]:
+    """'1024' → (1024, 1024); '1024x768' / '1024×768' → (1024, 768)."""
+    m = re.fullmatch(r"\s*(\d{2,5})\s*(?:[x×*]\s*(\d{2,5}))?\s*", str(text))
+    if not m:
+        raise ValueError(text)
+    w = int(m.group(1))
+    return w, int(m.group(2) or w)
 
 
 def parse_gb_list(text: str) -> list[float]:
@@ -103,6 +113,10 @@ class Cli:
             hw = None
         hw = self.c.apply_overrides(hw, overrides, sys.platform)
         settings = self.c.run_settings(hw.platform, args.context, args.kv_cache)
+        if getattr(args, "resolution", None):
+            settings = replace(settings, image_width=args.resolution[0], image_height=args.resolution[1])
+        if getattr(args, "batch", None):
+            settings = replace(settings, image_batch=max(1, args.batch))
 
         try:
             v, expl = self.c.explain(model, spec, hw, settings)
@@ -166,7 +180,11 @@ class Cli:
 
     # ------------------------------------------------------------------ wydruk
     def _header(self, spec, hw, settings) -> None:
-        model = f"{spec.name} · {spec.quant} · {t('cli.context')} {fmt_context(settings.context_tokens)}"
+        image = image_label(spec, settings)
+        if image:                                    # obrazy: rozdzielczość zamiast kontekstu
+            model = f"{spec.name} · {spec.quant} · {image}"
+        else:
+            model = f"{spec.name} · {spec.quant} · {t('cli.context')} {fmt_context(settings.context_tokens)}"
         if spec.is_moe and spec.params_active:
             model += f" · {t('cli.moe', active=fmt_params(spec.params_active))}"
         audio = audio_label(spec, settings)

@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import replace
 
+from aibobr.calculator.image import image_need, tiled
 from aibobr.calculator.memory import memory_need
 from aibobr.calculator.quants import QuantTable
 from aibobr.calculator.runtime_support import gpu_warnings
@@ -80,6 +82,8 @@ def evaluate(
     cap, warnings = capacity(hw, settings)
     if not cap.complete:
         raise IncompleteProfileError(cap.missing)
+    if model.image is not None:
+        return evaluate_image(model, cap, warnings, settings)
 
     need = memory_need(model, settings, quants, gpu=not cap.cpu_only)
     total = need.total
@@ -116,3 +120,45 @@ def evaluate(
         ),
         warnings=warnings,
     )
+
+
+def evaluate_image(model: ModelSpec, cap: Capacity, warnings: tuple[str, ...],
+                   settings: RunSettings) -> Verdict:
+    """Modele obrazów (SPEC §5a): części wędrują między RAM a kartą etapami.
+
+    🟢 całość naraz w karcie · 🟢 mieści się etapami · 🟡 część główna dociągana z RAM
+    (wolniej) · 🔴 nie mieszczą się nawet karta i RAM razem."""
+    need = image_need(model, settings)
+    vram, ram = cap.vram_usable, cap.ram_usable
+    # Enkoder większy od karty, ale mieszczący się w RAM, liczy procesor – raz na opis.
+    if vram and need.stages["encode"] > vram and need.encoders <= ram:
+        need = replace(need, encoders_on_cpu=True)
+    # Zwykłe dekodowanie VAE się nie mieści – programy same przechodzą na kafelki.
+    if vram and need.stages["decode"] > vram:
+        need = tiled(model, need)
+    peak, all_at_once = need.peak, False
+    working = peak - need.main if need.peak_stage == "sample" else peak   # obliczenia bez wag
+
+    if cap.cpu_only:
+        fits = need.weights + max(need.main_compute, need.vae_compute) + need.overhead <= ram
+        level = FitLevel.YELLOW if fits else FitLevel.RED
+        margin = ram - need.total if fits else None
+        zone = ram
+    elif peak <= vram and need.weights <= vram + ram:
+        level, margin, zone = FitLevel.GREEN, vram - peak, vram
+        all_at_once = need.all_at_once <= vram
+    elif working <= vram and need.weights <= vram + ram:
+        level, margin, zone = FitLevel.YELLOW, vram + ram - need.weights - working, ram
+    else:
+        level, margin, zone = FitLevel.RED, None, 0
+
+    in_vram = min(peak, vram)
+    shortfall = 0
+    if level == FitLevel.RED:
+        shortfall = max(need.weights + working - vram - ram, working - vram, 0) if vram \
+            else max(need.total - ram, 0)
+    low_margin = margin is not None and margin < max(settings.margin_ratio * zone, settings.margin_min)
+    return Verdict(level=level, need=need, capacity=cap, in_vram=in_vram,
+                   in_ram=max(0, peak - in_vram), shortfall=shortfall, margin=margin,
+                   low_margin=low_margin, context_exceeds_model=False, warnings=warnings,
+                   all_at_once=all_at_once)

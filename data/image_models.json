@@ -1,0 +1,53 @@
+{
+  "_comment": "Rodziny modeli obrazów (SPEC §5a, etap 10). Rozpoznanie: keys_all / keys_any – znaczniki z nazw tensorów safetensors, diffusers – klasa z model_index.json, gguf – general.architecture (city96/ComfyUI-GGUF). parts_gb: części dobierane, gdy nie ma ich w pliku (fp16; T5-XXL 4,76 mld param., CLIP-L 0,12 mld, OpenCLIP-G 0,69 mld, VAE 0,08 mld). main_gb_per_mpx / vae_gb_per_mpx / overhead_gb: pamięć obliczeń na megapiksel i obraz – SZACUNEK do czasu pomiaru (measured=false).",
+  "format": 1,
+  "families": [
+    {
+      "id": "sdxl", "name": "SDXL",
+      "keys_all": ["model.diffusion_model.", "conditioner.embedders."],
+      "diffusers": ["StableDiffusionXLPipeline", "StableDiffusionXLImg2ImgPipeline", "StableDiffusionXLInpaintPipeline"],
+      "gguf": ["sdxl"],
+      "native": 1024,
+      "parts_gb": {"encoders": 1.52, "vae": 0.16},
+      "main_gb_per_mpx": 1.0, "vae_gb_per_mpx": 2.5, "overhead_gb": 0.6, "measured": false
+    },
+    {
+      "id": "sd15", "name": "SD 1.5",
+      "keys_all": ["model.diffusion_model.", "cond_stage_model.transformer."],
+      "diffusers": [],
+      "gguf": ["sd1"],
+      "native": 512,
+      "parts_gb": {"encoders": 0.23, "vae": 0.16},
+      "main_gb_per_mpx": 1.0, "vae_gb_per_mpx": 2.5, "overhead_gb": 0.6, "measured": false
+    },
+    {
+      "id": "sd2", "name": "SD 2.x",
+      "keys_all": ["model.diffusion_model.", "cond_stage_model.model."],
+      "diffusers": [],
+      "gguf": [],
+      "native": 768,
+      "parts_gb": {"encoders": 0.66, "vae": 0.16},
+      "main_gb_per_mpx": 1.0, "vae_gb_per_mpx": 2.5, "overhead_gb": 0.6, "measured": false
+    },
+    {
+      "id": "flux", "name": "FLUX",
+      "keys_any": ["double_blocks.", "single_blocks."],
+      "diffusers": ["FluxPipeline", "FluxImg2ImgPipeline", "FluxFillPipeline", "FluxKontextPipeline"],
+      "gguf": ["flux"],
+      "native": 1024,
+      "parts_gb": {"encoders": 9.1, "vae": 0.16},
+      "main_gb_per_mpx": 1.5, "vae_gb_per_mpx": 3.0, "overhead_gb": 0.6, "measured": false
+    },
+    {
+      "id": "sd3", "name": "SD 3",
+      "keys_any": ["joint_blocks."],
+      "diffusers": ["StableDiffusion3Pipeline"],
+      "gguf": ["sd3"],
+      "native": 1024,
+      "parts_gb": {"encoders": 10.4, "vae": 0.16},
+      "main_gb_per_mpx": 1.2, "vae_gb_per_mpx": 3.0, "overhead_gb": 0.6, "measured": false
+    }
+  ],
+  "fallback": {"native": 1024, "main_gb_per_mpx": 1.5, "vae_gb_per_mpx": 3.0, "overhead_gb": 0.6},
+  "_sd_diffusers": "StableDiffusionPipeline: SD 1.5 albo SD 2.x – rozstrzyga rozmiar text_encoder (CLIP-L ok. 0,23 GB, OpenCLIP-H ok. 0,66 GB)"
+}

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from aibobr.domain.enums import ModelSource
-from aibobr.domain.models import AudioInfo, ModelSpec
+from aibobr.domain.models import AudioInfo, ImageInfo, ModelSpec
 
 
 class SourceError(Exception):
@@ -41,6 +41,10 @@ class ArchInfo:
     token_pattern: Optional[str] = None      # najczęstszy wzór końca słownika, np. "<custom_token_#>"
     task: Optional[str] = None               # pipeline_tag z Hugging Face, np. "text-to-speech"
     audio: Optional[AudioInfo] = None        # wynik rozpoznania (po wczytaniu modelu)
+    # Modele obrazów (etap 10) – surowe dane ze źródła, interpretuje knowledge/images.py:
+    image_parts: Optional[tuple] = None      # ((rola, bajty), …): main / encoders / vae
+    image_hint: Optional[str] = None         # "keys:…", "index:<klasa>", "gguf:<arch>"
+    image: Optional[ImageInfo] = None        # wynik rozpoznania
 
     def to_spec(self, *, name: str, source: ModelSource, quant: str,
                 weights_bytes: Optional[int], origin: Optional[str]) -> ModelSpec:
@@ -52,7 +56,7 @@ class ArchInfo:
             n_experts_used=self.n_experts_used, params_active=self.params_active,
             sliding_window=self.sliding_window, swa_layers=self.swa_layers,
             embd_params=self.embd_params, tied_embeddings=self.tied_embeddings,
-            audio=self.audio, origin=origin,
+            audio=self.audio, image=self.image, origin=origin,
         )
 
 

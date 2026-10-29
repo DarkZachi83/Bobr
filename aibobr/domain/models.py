@@ -48,6 +48,28 @@ class HardwareProfile:
 # --------------------------------------------------------------------------- model
 
 @dataclass(frozen=True)
+class ImageInfo:
+    """Model obrazów (etap 10, SPEC §5a): części i współczynniki pamięci obliczeń.
+
+    parts: rola → bajty; role: "main" (UNet / DiT), "encoders", "vae". Części dobrane
+    z tabeli rodziny (bo nie ma ich w pliku) są w `assumed`."""
+
+    family: Optional[str]                    # "sdxl", "flux"…; None = nie rozpoznano
+    name: Optional[str]                      # do wyświetlenia, np. "SDXL"
+    by: str                                  # skąd: "keys", "index" (diffusers), "gguf"
+    parts: tuple[tuple[str, int], ...]
+    assumed: tuple[str, ...] = ()            # role wzięte z tabeli (szacunek)
+    native: int = 1024                       # bok obrazu natywny dla rodziny (px)
+    main_gb_per_mpx: float = 1.5             # obliczenia rysowania na megapiksel i obraz
+    vae_gb_per_mpx: float = 3.0              # dekodowanie VAE na megapiksel i obraz
+    overhead_gb: float = 0.6                 # PyTorch, cuDNN
+    measured: bool = False                   # współczynniki z pomiaru (inaczej szacunek)
+
+    def part(self, role: str) -> int:
+        return sum(size for r, size in self.parts if r == role)
+
+
+@dataclass(frozen=True)
 class AudioInfo:
     """Model mowy albo muzyki typu LLM (etap 9): część językowa + dekoder dźwięku.
 
@@ -87,6 +109,7 @@ class ModelSpec:
     embd_params: Optional[int] = None        # tablica słownika (token_embd): słowa × wymiar
     tied_embeddings: Optional[bool] = None   # True = ta sama tablica jest też wyjściem modelu
     audio: Optional[AudioInfo] = None        # model mowy / muzyki (etap 9)
+    image: Optional[ImageInfo] = None        # model obrazów (etap 10)
     origin: Optional[str] = None             # link HF albo ścieżka pliku – do raportu
 
     @property
@@ -112,6 +135,9 @@ class RunSettings:
     margin_min: int = gib(1.0)               # …ale nie mniej niż tyle
     overhead: int = gib(0.5)                 # bufor obliczeń + kontekst CUDA; kalibracja: SPEC §5
     decoder_on_gpu: bool = True              # modele mowy: dekoder dźwięku w karcie (domyślnie)
+    image_width: Optional[int] = None        # modele obrazów: None = natywna rozdzielczość rodziny
+    image_height: Optional[int] = None
+    image_batch: int = 1                     # obrazów naraz
 
 
 # --------------------------------------------------------------------------- wynik
@@ -178,11 +204,76 @@ class Capacity:
 
 
 @dataclass(frozen=True)
+class ImageNeed:
+    """Modele obrazów: szczyty trzech etapów (SPEC §5a). Bajty."""
+
+    main: int
+    encoders: int
+    vae: int
+    main_compute: int
+    vae_compute: int
+    overhead: int
+    width: int
+    height: int
+    batch: int
+    estimated: bool                          # współczynniki albo części z tabeli
+    encoders_on_cpu: bool = False            # enkoder nie mieści się w karcie – liczy procesor
+    vae_tiled: bool = False                  # dekodowanie kafelkami (tiled VAE) – mniej pamięci
+
+    @property
+    def stages(self) -> dict[str, int]:
+        return {"encode": self.encoders + self.overhead,
+                "sample": self.main + self.main_compute + self.overhead,
+                "decode": self.vae + self.vae_compute + self.overhead}
+
+    @property
+    def gpu_stages(self) -> dict[str, int]:
+        s = self.stages
+        if self.encoders_on_cpu:
+            s.pop("encode")
+        return s
+
+    @property
+    def peak_stage(self) -> str:
+        s = self.gpu_stages
+        return max(s, key=s.get)
+
+    @property
+    def peak(self) -> int:
+        return max(self.gpu_stages.values())
+
+    @property
+    def weights(self) -> int:
+        return self.main + self.encoders + self.vae
+
+    @property
+    def all_at_once(self) -> int:
+        return self.weights + max(self.main_compute, self.vae_compute) + self.overhead
+
+    # Zgodność z paskiem i doradcą modeli językowych (total = co musi się zmieścić łącznie)
+    @property
+    def total(self) -> int:
+        return self.all_at_once
+
+    @property
+    def is_estimate(self) -> bool:
+        return self.estimated
+
+    @property
+    def vram_part(self) -> int:
+        return self.peak
+
+    @property
+    def ram_fixed(self) -> int:
+        return 0
+
+
+@dataclass(frozen=True)
 class Verdict:
     """Werdykt dla jednej pary model + komputer."""
 
     level: FitLevel
-    need: MemoryNeed
+    need: "MemoryNeed | ImageNeed"
     capacity: Capacity
     in_vram: int                             # ile bajtów modelu trafia do VRAM
     in_ram: int                              # ile do RAM
@@ -191,6 +282,7 @@ class Verdict:
     low_margin: bool
     context_exceeds_model: bool              # kontekst większy niż model obsługuje
     warnings: tuple[str, ...] = field(default=())  # klucze i18n, np. "warn.nvidia_legacy"
+    all_at_once: bool = False                # modele obrazów: wszystkie części naraz w karcie
 
     @property
     def spill(self) -> int:

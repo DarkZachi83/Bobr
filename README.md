@@ -102,6 +102,14 @@ KV cache = 2 × layers × KV heads × head size × context × bytes per element
   cards that depend on the runtime get a warning next to the bar.
 - Windows: the current VRAM usage of AMD/Intel cards isn't shown (it doesn't affect the verdict).
 
+### Image models (preview)
+
+Single-file checkpoints (`.safetensors` – SD 1.5, SDXL, Illustrious, Pony), diffusers folders
+and repositories, and FLUX/SD 3 (also as GGUF) are checked by **the peak of the heaviest stage**
+(prompt encoding → drawing → decoding), because Forge, ComfyUI and SD.Next move parts between RAM
+and the card. Native resolution by default, `--resolution 1024x768` / `--batch 2` to change.
+The compute memory per megapixel is still an **estimate** until it's measured.
+
 ### Models on your disk
 
 **Models on disk…** (or `--scan [FOLDER]`) lists the models you already have – from Ollama,
@@ -227,6 +235,14 @@ cache KV = 2 × warstwy × głowice KV × wymiar głowicy × kontekst × bajty n
 - Duży VRAM nie zawsze znaczy, że runtime go użyje: bardzo stare karty NVIDIA, starsze sterowniki
   i karty AMD/Intel zależne od runtime'u dostają ostrzeżenie obok paska.
 - Windows: bieżące zajęcie VRAM kart AMD/Intel nie jest pokazywane (nie wpływa na werdykt).
+
+### Modele obrazów (wersja wstępna)
+
+Pliki „wszystko w jednym” (`.safetensors` – SD 1.5, SDXL, Illustrious, Pony), foldery i repozytoria
+diffusers oraz FLUX/SD 3 (także w GGUF) program ocenia po **szczycie najcięższego etapu**
+(kodowanie opisu → rysowanie → dekodowanie), bo Forge, ComfyUI i SD.Next przenoszą części między RAM
+a kartą. Domyślnie rozdzielczość natywna, zmiana: `--resolution 1024x768`, `--batch 2`. Pamięć
+obliczeń na megapiksel to na razie **szacunek** – do czasu pomiaru.
 
 ### Modele na dysku
 

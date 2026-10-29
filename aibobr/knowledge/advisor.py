@@ -170,6 +170,19 @@ def audio_label(spec: ModelSpec, settings: RunSettings) -> Optional[str]:
     return text
 
 
+def image_label(spec: ModelSpec, settings: RunSettings) -> Optional[str]:
+    """„model obrazów SDXL · 1024×1024” (· „2 obrazy naraz”) albo None."""
+    info = spec.image
+    if info is None:
+        return None
+    from aibobr.calculator.image import resolution
+    w, h = resolution(spec, settings)
+    text = t("image.kind") + (f" {info.name}" if info.name else "") + f" · {w}×{h}"
+    if settings.image_batch > 1:
+        text += " · " + t("image.batch", n=settings.image_batch)
+    return text
+
+
 def _where(level: FitLevel, cpu_only: bool = False) -> Text:
     if level == FitLevel.GREEN:
         return Text("expl.where.vram")
@@ -241,8 +254,12 @@ class Advisor:
         for g in cap.gpus_used:
             lines.append(Line("expl.pc.gpu", {
                 "name": g.name, "usable": Size(max(0, (g.vram_total or 0) - settings.vram_reserve))}))
+        image = spec.image is not None
         if v.level == FitLevel.GREEN:
-            lines.append(Line("expl.pc.fits", {"margin": Size(v.margin or 0)}))
+            lines.append(Line("expl.pc.img_fits" if image else "expl.pc.fits", {"margin": Size(v.margin or 0)}))
+        elif v.level == FitLevel.YELLOW and image:
+            lines.append(Line("expl.pc.img_slow_cpu" if cap.cpu_only else "expl.pc.img_stream",
+                              {"cpu": hw.cpu_name or "?"}))
         elif v.level == FitLevel.YELLOW:
             if cap.cpu_only:
                 lines.append(Line("expl.pc.all_in_ram", {"size": Size(v.in_ram)}))
@@ -395,8 +412,103 @@ class Advisor:
         return notes
 
     # ------------------------------------------------------------------ całość
+    # ------------------------------------------------------------------ modele obrazów
+    def _image_summary(self, v: Verdict) -> Line:
+        if v.level == FitLevel.GREEN:
+            return Line("verdict.image_green_all" if v.all_at_once else "verdict.image_green_stages")
+        if v.level == FitLevel.RED:
+            return Line("verdict.red", {"short": Size(v.shortfall)})
+        return Line("verdict.image_cpu" if v.capacity.cpu_only else "verdict.image_yellow")
+
+    @staticmethod
+    def _image_need(v: Verdict) -> list[Line]:
+        n = v.need
+        stages = n.stages
+        lines = [Line("expl.img.title", {"peak": Size(n.peak), "stage": Text(f"expl.img.stage.{n.peak_stage}")})]
+        lines.append(Line("expl.img.encode_cpu" if n.encoders_on_cpu else "expl.img.encode",
+                          {"size": Size(stages["encode"]), "enc": Size(n.encoders)}))
+        lines.append(Line("expl.img.sample", {"size": Size(stages["sample"]), "main": Size(n.main),
+                                              "comp": Size(n.main_compute)}))
+        lines.append(Line("expl.img.decode_tiled" if n.vae_tiled else "expl.img.decode",
+                          {"size": Size(stages["decode"]), "vae": Size(n.vae), "comp": Size(n.vae_compute)}))
+        lines.append(Line("expl.img.overhead", {"size": Size(n.overhead)}))
+        lines.append(Line("expl.img.all", {"size": Size(n.all_at_once)}))
+        return lines
+
+    def _image_variant(self, spec, hw, settings, side: int, batch: int) -> Optional[Verdict]:
+        return self._eval(spec, hw, replace(settings, image_width=side, image_height=side, image_batch=batch))
+
+    def _image_actions(self, spec: ModelSpec, v: Verdict, hw: HardwareProfile,
+                       settings: RunSettings) -> list[Line]:
+        cpu = v.capacity.cpu_only
+        n = v.need
+        target = FitLevel.YELLOW if cpu or v.level == FitLevel.RED else FitLevel.GREEN
+        where = _where(target, cpu)
+        lines = []
+        if n.batch > 1:
+            r = self._image_variant(spec, hw, settings, n.width, 1)
+            if r and LEVEL_RANK[r.level] >= LEVEL_RANK[target]:
+                lines.append(Line("expl.act.img_batch", {"where": where}))
+        for side in (1024, 768, 512):
+            if side >= max(n.width, n.height):
+                continue
+            r = self._image_variant(spec, hw, settings, side, n.batch)
+            if r and LEVEL_RANK[r.level] >= LEVEL_RANK[target]:
+                lines.append(Line("expl.act.img_res", {"res": f"{side}×{side}", "where": where}))
+                break
+        if not lines:
+            lines.append(Line("expl.act.img_nothing"))
+        return lines
+
+    def _image_spare(self, spec: ModelSpec, v: Verdict, hw: HardwareProfile,
+                     settings: RunSettings) -> list[Line]:
+        n, best = v.need, None
+        for side in (1024, 1280, 1536, 2048):
+            if side <= max(n.width, n.height):
+                continue
+            r = self._image_variant(spec, hw, settings, side, n.batch)
+            if not r or r.level != FitLevel.GREEN or r.low_margin:
+                break
+            best = side
+        if best:
+            return [Line("expl.spare.img_res", {"res": f"{best}×{best}"})]
+        return [Line("expl.spare.none")]
+
+    @staticmethod
+    def _image_notes(v: Verdict, spec: ModelSpec) -> list[Line]:
+        n, info, notes = v.need, spec.image, []
+        if v.low_margin:
+            notes.append(Line("note.img_low_margin"))
+        if info.family is None:
+            notes.append(Line("note.img_unknown"))
+        if info.assumed:
+            size = sum(info.part(r) for r in info.assumed)
+            notes.append(Line("note.img_assumed", {"family": info.name or "?", "size": Size(size)}))
+        if n.encoders_on_cpu:
+            notes.append(Line("note.img_encoders_cpu", {"size": Size(n.encoders)}))
+        if n.vae_tiled:
+            notes.append(Line("note.img_tiled"))
+        if not info.measured:
+            notes.append(Line("note.img_estimate"))
+        notes += [Line(w) for w in v.warnings]
+        return notes
+
+    def _explain_image(self, spec, hw, settings) -> tuple[Verdict, Explanation]:
+        v = evaluate(spec, hw, settings, self.quants)
+        if v.level == FitLevel.GREEN:
+            title, actions = "expl.spare.title", self._image_spare(spec, v, hw, settings)
+        else:
+            title, actions = "expl.act.title", self._image_actions(spec, v, hw, settings)
+        return v, Explanation(
+            summary=self._image_summary(v), need=tuple(self._image_need(v)),
+            computer=tuple(self._computer(v, spec, hw, settings)),
+            actions_title=title, actions=tuple(actions), notes=tuple(self._image_notes(v, spec)))
+
+    # ------------------------------------------------------------------ całość
     def explain(self, model: LoadedModel, spec: ModelSpec, hw: HardwareProfile,
                 settings: RunSettings) -> tuple[Verdict, Explanation]:
+        if spec.image is not None:
+            return self._explain_image(spec, hw, settings)
         v = evaluate(spec, hw, settings, self.quants)   # IncompleteProfileError leci wyżej
         if v.level == FitLevel.GREEN:
             title, actions = "expl.spare.title", self._spare(model, spec, hw, settings)
