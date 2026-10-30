@@ -180,6 +180,18 @@ tablica `attention.head_count_kv` na warstwę (0 = brak uwagi), z config.json `l
 (`linear_attention`, `mamba`, `conv`), `full_attention_interval`, `hybrid_override_pattern`
 („*” = uwaga) albo `attn_layer_period/offset`. Stan jest wliczony w „pamięć rozmowy”.
 Przykład: Qwen 3.8 27B przy 90k, KV q8_0 – 2,9 GB + 0,15 GB stanu zamiast 11,9 GB.
+Mapa warstw: najpierw `{arch}.attention.recurrent_layers` z pliku (tablica prawda/fałsz),
+dopiero potem reguły powyżej. Potwierdzone logiem llama-server (v0.3.2,
+`tests/calibration/swift27b_rx7900xt_2026-10-30.json`): KV 2992 MiB, stan 149,6 MiB na kopię,
+bufor obliczeń 540 MiB – zgodne z wzorem.
+
+**Warstwy MTP** (`{arch}.nextn_predict_layers`, z config.json `mtp_num_hidden_layers` /
+`num_nextn_predict_layers`): leżą na końcu `block_count` i nie dostają miejsca w głównej
+pamięci KV – odejmujemy je od warstw. Dekodowanie spekulatywne (`--spec-type draft-mtp`) to
+opcja, więc nie wchodzi do sumy; uwaga `note.mtp` podaje szacunek (z jednego pomiaru):
+```
+MTP = warstwy_MTP × per_warstwę_token(f16) × kontekst + 156 MiB + 3 × stan
+```
 
 **Aktywne parametry MoE** liczymy bez tablicy embedding, gdy model ma osobną warstwę
 wyjściową (na token czytany jest jeden wiersz tablicy) – jak OpenAI dla gpt-oss (3,6B).
@@ -624,8 +636,10 @@ Każdy etap zaczyna się od omówienia uwag i dopisania szczegółów do tej spe
 Etap 8 – kalibracja:
 - ✅ **Okno przesuwne** (Gemma 3, gpt-oss) – SPEC §5.
 - ✅ **Hybrydy i SSM** (Qwen 3.5+, Granite 4, Nemotron-H, Jamba, LFM2, Mamba, RWKV) – SPEC §5.
-- ⏳ **Narzut przy długim kontekście** (≥ 64k): bufor obliczeń rośnie z kontekstem; Swift
-  27B przy 90k – przewidywanie 16,9 GB, pomiar 18,4 GB. Kalibracja z logu llama-server.
+- ✅ **Narzut przy długim kontekście:** bufor obliczeń przy 90k to 540 MiB (log llama-server),
+  czyli 0,5 GB wystarcza – hipoteza o rosnącym buforze była błędna.
+- ⏳ **ROCm na Windows:** Menedżer zadań pokazuje ~1,1 GB więcej niż prognoza samej llama.cpp
+  (Radeon 7900 XT, jeden pomiar). Zbieramy kolejne pomiary z kart AMD, zanim zmienimy narzut.
 - ✅ **gpt-oss-20b:** 3,6B aktywnych zamiast 4,2B – SPEC §5.
 - ✅ **Repozytoria spoza zakresu:** `model_index.json` albo `pipeline_tag` z HF →
   „to model obrazów / dźwięku” zamiast „brak plików modelu”.

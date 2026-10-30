@@ -246,6 +246,7 @@
   "note.img_tiled": "At this resolution the image will be decoded in tiles (tiled VAE) – ComfyUI and Forge do this on their own.",
   "note.img_unknown": "We didn't recognise this image model's family – the estimate is cautious.",
   "note.low_margin": "Small margin – a longer context or other programs may exceed the memory.",
+  "note.mtp": "The model has an MTP head. With speculative decoding (llama.cpp: --spec-type draft-mtp) it takes about {size} more on the card – an estimate based on a single measurement.",
   "ollama.no_metadata": "Ollama didn't provide this model's data.",
   "ollama.not_found": "Ollama has no such model. List: ollama list.",
   "ollama.not_running": "Ollama isn't responding. Start it (ollama serve or the system service) and try again.",

@@ -106,3 +106,21 @@ def memory_need(model: ModelSpec, settings: RunSettings, quants: QuantTable,
         kv_estimated=kv_estimated,
         kv_sliding=sliding,
     )
+
+
+# Dekodowanie spekulatywne z głowicą MTP (llama.cpp --spec-type draft-mtp) – pomiar
+# z logu llama-server (Qwen 3.8 27B, 90k, Radeon 7900 XT, 30.10.2026): drugi kontekst
+# z KV warstw MTP w f16, bufor obliczeń 156 MiB i 3 dodatkowe kopie stanu warstw liniowych
+# do cofania odrzuconych tokenów („3 rs_seq”) – razem z prognozą llama.cpp (common_fit)
+# zgodne co do 31 MiB. Szacunek – nie w sumie, bo to opcja (domyślnie wyłączona
+# w llama-server, Ollamie i LM Studio).
+MTP_COMPUTE = 156 * 1024**2
+MTP_STATE_COPIES = 3
+
+
+def mtp_extra_bytes(model: ModelSpec, settings: RunSettings) -> int:
+    """Ile więcej zajmie karta z draft-mtp; 0, gdy model nie ma warstw MTP."""
+    if not model.mtp_layers or not model.has_architecture:
+        return 0
+    kv = 2 * model.n_kv_heads * model.head_dim * 2 * model.mtp_layers * settings.context_tokens
+    return int(kv + MTP_COMPUTE + MTP_STATE_COPIES * (model.recurrent_bytes or 0))

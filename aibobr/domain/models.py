@@ -112,6 +112,7 @@ class ModelSpec:
     # (Mamba, RWKV): tylko część warstw ma pamięć KV, reszta trzyma stały stan.
     kv_layers: Optional[int] = None          # warstwy z pamięcią KV; None = wszystkie
     recurrent_bytes: Optional[int] = None    # stan warstw liniowych (nie rośnie z kontekstem)
+    mtp_layers: Optional[int] = None         # warstwy MTP – tylko dla dekodowania spekulatywnego
     audio: Optional[AudioInfo] = None        # model mowy / muzyki (etap 9)
     image: Optional[ImageInfo] = None        # model obrazów (etap 10)
     origin: Optional[str] = None             # link HF albo ścieżka pliku – do raportu

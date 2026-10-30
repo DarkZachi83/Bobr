@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Iterable, Optional, Sequence
 
-from aibobr.calculator.memory import MissingModelData
+from aibobr.calculator.memory import MissingModelData, mtp_extra_bytes
 from aibobr.calculator.quants import QuantTable
 from aibobr.calculator.verdict import evaluate
 from aibobr.domain.enums import FitLevel, KvCacheType
@@ -402,6 +402,9 @@ class Advisor:
                 "ctx": Context(settings.context_tokens), "max": Context(spec.max_context or 0)}))
         if v.need.is_estimate:
             notes.append(Line("note.estimate"))
+        mtp = mtp_extra_bytes(spec, settings)
+        if mtp:
+            notes.append(Line("note.mtp", {"size": Size(mtp)}))
         a = spec.audio
         if a is not None:
             kind = Text(f"audio.kind.{a.kind}")

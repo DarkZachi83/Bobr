@@ -200,6 +200,10 @@ def layer_kinds(arch: str, layers: int, kv_value: Any, g: Callable[[str], Any]) 
     """(warstwy z pamięcią KV, warstwy ze stałym stanem) – reguły z llama.cpp."""
     if arch in RECURRENT_ONLY:
         return [False] * layers, [True] * layers
+    marked = g("attention.recurrent_layers")          # gotowa mapa w nowszych plikach (qwen35)
+    if isinstance(marked, list) and len(marked) >= layers:
+        state = [bool(x) for x in marked[:layers]]
+        return [not x for x in state], state
     interval = _int_or_max(g("full_attention_interval")) or ATTENTION_INTERVAL_DEFAULT.get(arch)
     if interval:
         kv = [(il + 1) % interval == 0 for il in range(layers)]
@@ -274,6 +278,11 @@ def arch_from_headers(headers: list[GgufHeader]) -> ArchInfo:
         return ArchInfo(architecture=arch, image_hint=f"gguf:{arch}")
 
     layers = _int_or_max(g("block_count"))
+    # Warstwy MTP (multi-token prediction) leżą na końcu block_count. llama.cpp nie daje im
+    # miejsca w głównej pamięci KV – używa ich tylko dekodowanie spekulatywne (draft-mtp).
+    mtp = _int_or_max(g("nextn_predict_layers")) or 0
+    if layers and 0 < mtp < layers:
+        layers -= mtp
     heads = _int_or_max(g("attention.head_count"))
     kv_value = g("attention.head_count_kv")
     kv_heads = _int_or_max(kv_value) or heads
@@ -330,7 +339,7 @@ def arch_from_headers(headers: list[GgufHeader]) -> ArchInfo:
                 kv_heads, head_dim = kv_heads or 0, head_dim or 0
 
     return ArchInfo(
-        kv_layers=kv_layers, recurrent_bytes=recurrent_bytes,
+        kv_layers=kv_layers, recurrent_bytes=recurrent_bytes, mtp_layers=mtp or None,
         sliding_window=window, swa_layers=swa_layers,
         params_total=total, n_layers=layers, n_kv_heads=kv_heads, head_dim=head_dim,
         max_context=_int_or_max(g("context_length")),
