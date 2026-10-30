@@ -1,0 +1,18 @@
+{
+ "_opis": "Zgłoszenie z Reddita (Kaioh_shin, r/Oobabooga), 30.10.2026: Swift-1.5-Qwen3.8-27B-Uncensored-Dynamic-MTP-UD-IQ4_XS.gguf (qwen35, 64 warstwy + 1 MTP), llama-server (ROCm, Windows) -c 90000 -ctk q8_0 -ctv q8_0 -fa on -ngl 99 -np 1 -b 1024 -ub 512, --spec-type draft-mtp,ngram-mod,ngram-map-k4v, mmproj na CPU. AMD Radeon RX 7900 XT 20 GB, Ryzen 7 5700X3D, 32 GB RAM. Wartości z logu llama-server (MiB) i z Menedżera zadań.",
+ "settings": {"context": 90000, "kv_cache": "q8_0", "cells": 90112},
+ "log_mib": {
+  "model_gpu": 13061.10,
+  "embd_host": 521.00,
+  "kv": 2992.00,
+  "kv_layers": 16,
+  "recurrent_total": 598.50,
+  "recurrent_copies": 4,
+  "compute": 540.29,
+  "mtp_kv_f16": 352.00,
+  "mtp_compute": 156.02,
+  "fit_projection": 17699
+ },
+ "task_manager_mib": 18855.5,
+ "_wniosek": "KV, stan i wagi zgodne z llama.cpp. Różnica do Menedżera zadań (~1,1 GB) jest poza rachunkiem llama.cpp – najpewniej środowisko ROCm na Windows; jeden pomiar, narzutu nie zmieniamy."
+}

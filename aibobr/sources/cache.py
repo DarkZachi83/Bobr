@@ -19,7 +19,7 @@ from aibobr.sources.base import ArchInfo, LoadedModel, Variant
 
 log = logging.getLogger(__name__)
 MAX_AGE = 7 * 24 * 3600
-FORMAT = 6              # 6: hybrydy (kv_layers, recurrent_bytes) – starsze pobieramy od nowa
+FORMAT = 7              # 7: warstwy MTP (mtp_layers) – starsze pobieramy od nowa
 
 
 def model_to_dict(m: LoadedModel) -> dict:

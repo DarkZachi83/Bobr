@@ -369,6 +369,7 @@ def arch_from_config(config: Any, files: list[_File] = ()) -> ArchInfo:
 
     return ArchInfo(
         kv_layers=kv_layers, recurrent_bytes=recurrent,
+        mtp_layers=_first(c, "mtp_num_hidden_layers", "num_nextn_predict_layers") or None,
         sliding_window=window, swa_layers=swa_layers,
         params_total=total, n_layers=layers, n_kv_heads=kv_heads, head_dim=head_dim,
         max_context=_first(c, "max_position_embeddings", "max_sequence_length", "n_positions"),

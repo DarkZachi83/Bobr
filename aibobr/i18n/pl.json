@@ -246,6 +246,7 @@
   "note.img_tiled": "Przy tej rozdzielczości obraz zostanie zdekodowany kafelkami (tiled VAE) – ComfyUI i Forge robią to same.",
   "note.img_unknown": "Nie rozpoznaliśmy rodziny tego modelu obrazów – liczymy ostrożnie.",
   "note.low_margin": "Mały zapas – dłuższy kontekst albo inne programy mogą przekroczyć pamięć.",
+  "note.mtp": "Model ma głowicę MTP. Z dekodowaniem spekulatywnym (llama.cpp: --spec-type draft-mtp) zajmie ok. {size} więcej w karcie – to dane szacunkowe, z jednego pomiaru.",
   "ollama.no_metadata": "Ollama nie podała danych tego modelu.",
   "ollama.not_found": "Ollama nie ma takiego modelu. Lista: ollama list.",
   "ollama.not_running": "Ollama nie odpowiada. Uruchom ją (ollama serve albo usługa systemowa) i spróbuj ponownie.",

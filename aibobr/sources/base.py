@@ -39,6 +39,7 @@ class ArchInfo:
     tied_embeddings: Optional[bool] = None   # brak osobnej warstwy wyjściowej
     kv_layers: Optional[int] = None          # hybrydy: warstwy z pamięcią KV (None = wszystkie)
     recurrent_bytes: Optional[int] = None    # hybrydy/SSM: stały stan warstw liniowych
+    mtp_layers: Optional[int] = None         # warstwy MTP (dekodowanie spekulatywne)
     # Ślady modelu dźwięku (etap 9) – surowe dane ze źródła, interpretuje knowledge/audio.py:
     token_pattern: Optional[str] = None      # najczęstszy wzór końca słownika, np. "<custom_token_#>"
     task: Optional[str] = None               # pipeline_tag z Hugging Face, np. "text-to-speech"
@@ -59,6 +60,7 @@ class ArchInfo:
             sliding_window=self.sliding_window, swa_layers=self.swa_layers,
             embd_params=self.embd_params, tied_embeddings=self.tied_embeddings,
             kv_layers=self.kv_layers, recurrent_bytes=self.recurrent_bytes,
+            mtp_layers=self.mtp_layers,
             audio=self.audio, image=self.image, origin=origin,
         )
 
