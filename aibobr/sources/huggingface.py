@@ -254,6 +254,56 @@ def _first(c: dict, *keys: str) -> Any:
     return None
 
 
+_ATTENTION_TYPES = {"full_attention", "attention", "sliding_attention", "global_attention"}
+
+
+def hybrid_layers(c: dict, layers: Optional[int], hidden: Optional[int]) -> tuple[Optional[int], Optional[int]]:
+    """Hybrydy w config.json: (warstwy z pamięcią KV, bajty stałego stanu) albo (None, None).
+
+    Qwen 3.5+/Qwen3-Next: layer_types z "linear_attention" albo full_attention_interval;
+    Granite 4 / LFM2: layer_types ("mamba", "conv"); Nemotron-H: hybrid_override_pattern
+    („*” = uwaga); Jamba: attn_layer_period/offset."""
+    if not layers:
+        return None, None
+    kv, layers_with_state = None, None
+    types = c.get("layer_types")
+    if isinstance(types, list) and len(types) >= layers and \
+            any(isinstance(t, str) and t not in _ATTENTION_TYPES for t in types[:layers]):
+        kv = [t in _ATTENTION_TYPES for t in types[:layers]]
+    elif _first(c, "full_attention_interval"):
+        n = _first(c, "full_attention_interval")
+        kv = [(il + 1) % n == 0 for il in range(layers)]
+    elif isinstance(c.get("hybrid_override_pattern"), str) and len(c["hybrid_override_pattern"]) >= layers:
+        pattern = c["hybrid_override_pattern"][:layers]
+        kv = [ch == "*" for ch in pattern]
+        layers_with_state = sum(ch == "M" for ch in pattern)
+    elif _first(c, "attn_layer_period"):
+        period, offset = _first(c, "attn_layer_period"), _first(c, "attn_layer_offset") or 0
+        kv = [il % period == offset for il in range(layers)]
+    if kv is None or all(kv):
+        return None, None
+    if layers_with_state is None:
+        layers_with_state = sum(not x for x in kv)
+    # Stan na warstwę jak w llama.cpp (n_embd_r + n_embd_s), F32.
+    if _first(c, "linear_num_value_heads"):                     # Gated DeltaNet (Qwen)
+        v_heads, k_heads = _first(c, "linear_num_value_heads"), _first(c, "linear_num_key_heads") or 0
+        k_dim, v_dim = _first(c, "linear_key_head_dim") or 0, _first(c, "linear_value_head_dim") or 0
+        d_inner, conv = v_heads * v_dim, (_first(c, "linear_conv_kernel_dim") or 4) - 1
+        per_layer = conv * (d_inner + 2 * k_heads * k_dim) + k_dim * d_inner
+    elif _first(c, "mamba_d_state") or _first(c, "ssm_state_size"):   # Mamba / Mamba 2
+        d_state = _first(c, "mamba_d_state", "ssm_state_size")
+        d_inner = (_first(c, "mamba_n_heads") or 0) * (_first(c, "mamba_d_head", "mamba_head_dim") or 0) \
+            or (_first(c, "mamba_expand", "expand") or 2) * (hidden or 0)
+        groups = _first(c, "mamba_n_groups", "n_groups") or 0
+        conv = (_first(c, "mamba_d_conv", "conv_kernel") or 4) - 1
+        per_layer = conv * (d_inner + 2 * groups * d_state) + d_state * d_inner
+    elif _first(c, "conv_L_cache"):                             # LFM2: krótki splot
+        per_layer = (hidden or 0) * (_first(c, "conv_L_cache") - 1)
+    else:
+        per_layer = 0
+    return sum(kv), layers_with_state * per_layer * 4
+
+
 def arch_from_config(config: Any, files: list[_File] = ()) -> ArchInfo:
     """config.json (transformers) → ArchInfo. Modele multimodalne trzymają część
     tekstową w "text_config"; jej wartości mają pierwszeństwo."""
@@ -315,7 +365,10 @@ def arch_from_config(config: Any, files: list[_File] = ()) -> ArchInfo:
     if not swa_layers:
         window = None
 
+    kv_layers, recurrent = hybrid_layers(c, layers, hidden)
+
     return ArchInfo(
+        kv_layers=kv_layers, recurrent_bytes=recurrent,
         sliding_window=window, swa_layers=swa_layers,
         params_total=total, n_layers=layers, n_kv_heads=kv_heads, head_dim=head_dim,
         max_context=_first(c, "max_position_embeddings", "max_sequence_length", "n_positions"),

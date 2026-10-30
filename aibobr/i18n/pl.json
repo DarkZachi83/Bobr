@@ -87,6 +87,8 @@
   "expl.need.embd_ram": "Tablica słownika ({size}) zostaje w RAM, nie w karcie – tak działają llama.cpp, Ollama i LM Studio.",
   "expl.need.kv": "{size} pamięć rozmowy (kontekst {ctx}),",
   "expl.need.kv_est": "{size} pamięć rozmowy (kontekst {ctx}, szacunek),",
+  "expl.need.kv_hybrid": "{size} pamięć rozmowy (kontekst {ctx}; tylko {kv_layers} z {layers} warstw pamięta cały kontekst – reszta to warstwy liniowe o stałej pamięci),",
+  "expl.need.kv_recurrent": "{size} pamięć rozmowy (kontekst {ctx}; model bez warstw uwagi – stała pamięć, nie rośnie z kontekstem),",
   "expl.need.kv_swa": "{size} pamięć rozmowy (kontekst {ctx}; większość warstw pamięta tylko ostatnie tokeny),",
   "expl.need.overhead": "{size} narzut.",
   "expl.need.title": "Model potrzebuje {total}:",

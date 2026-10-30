@@ -234,8 +234,11 @@ class Advisor:
             Line("expl.need.weights_est" if n.weights_estimated else "expl.need.weights",
                  {"size": Size(n.weights_total)}),
             Line("expl.need.kv_est" if n.kv_estimated else
+                 "expl.need.kv_recurrent" if n.kv_layers == 0 else
+                 "expl.need.kv_hybrid" if n.kv_layers else
                  "expl.need.kv_swa" if n.kv_sliding else "expl.need.kv",
-                 {"size": Size(n.kv_cache), "ctx": Context(settings.context_tokens)}),
+                 {"size": Size(n.kv_cache), "ctx": Context(settings.context_tokens),
+                  "kv_layers": n.kv_layers, "layers": n.n_layers}),
         ]
         if n.decoder:
             lines.append(Line("expl.need.decoder_cpu" if n.decoder_in_ram else "expl.need.decoder",

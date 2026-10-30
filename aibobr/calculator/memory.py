@@ -46,9 +46,12 @@ def kv_bytes(model: ModelSpec, settings: RunSettings) -> tuple[int, bool, bool]:
     if model.has_architecture:
         # K i V (stąd 2) × głowice KV × wymiar głowicy × bajty na element – na warstwę i token
         per_layer_token = 2 * model.n_kv_heads * model.head_dim * element
-        swa = min(model.swa_layers or 0, model.n_layers) if model.sliding_window else 0
+        # Hybrydy: pamięć KV mają tylko warstwy uwagi; warstwy liniowe trzymają stały
+        # stan (recurrent_bytes, dodawany w memory_need) – jak llama_memory_hybrid w llama.cpp.
+        layers = model.n_layers if model.kv_layers is None else min(model.kv_layers, model.n_layers)
+        swa = min(model.swa_layers or 0, layers) if model.sliding_window else 0
         cells = swa_cells(model.sliding_window, ctx) if swa else ctx
-        total = per_layer_token * ((model.n_layers - swa) * ctx + swa * cells)
+        total = per_layer_token * ((layers - swa) * ctx + swa * cells)
         return int(total), False, bool(swa) and cells < ctx
     if model.params_total is None:
         raise MissingModelData("params_total")
@@ -84,6 +87,8 @@ def memory_need(model: ModelSpec, settings: RunSettings, quants: QuantTable,
     """gpu=False: liczy dla samego procesora (bez podziału tablicy słownika)."""
     weights, weights_estimated = weights_bytes(model, quants)
     kv, kv_estimated, sliding = kv_bytes(model, settings)
+    recurrent = model.recurrent_bytes or 0
+    hybrid = model.kv_layers is not None and model.n_layers and model.kv_layers < model.n_layers
     in_ram, copy = embd_bytes(model, quants) if gpu else (0, 0)
     decoder = model.audio.decoder_bytes if model.audio else 0
     return MemoryNeed(
@@ -92,7 +97,10 @@ def memory_need(model: ModelSpec, settings: RunSettings, quants: QuantTable,
         embd_in_ram=in_ram,
         embd_copy=copy,
         weights=weights,
-        kv_cache=kv,
+        kv_cache=kv + recurrent,
+        recurrent=recurrent,
+        kv_layers=model.kv_layers if hybrid else None,
+        n_layers=model.n_layers if hybrid else None,
         overhead=settings.overhead,
         weights_estimated=weights_estimated,
         kv_estimated=kv_estimated,

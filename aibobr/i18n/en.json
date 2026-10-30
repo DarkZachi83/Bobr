@@ -87,6 +87,8 @@
   "expl.need.embd_ram": "The vocabulary table ({size}) stays in RAM, not on the card – that is how llama.cpp, Ollama and LM Studio work.",
   "expl.need.kv": "{size} chat memory (context {ctx}),",
   "expl.need.kv_est": "{size} chat memory (context {ctx}, estimate),",
+  "expl.need.kv_hybrid": "{size} chat memory (context {ctx}; only {kv_layers} of {layers} layers keep the whole context – the rest are linear layers with fixed memory),",
+  "expl.need.kv_recurrent": "{size} chat memory (context {ctx}; no attention layers – fixed memory that does not grow with context),",
   "expl.need.kv_swa": "{size} chat memory (context {ctx}; most layers keep only the latest tokens),",
   "expl.need.overhead": "{size} overhead.",
   "expl.need.title": "The model needs {total}:",
