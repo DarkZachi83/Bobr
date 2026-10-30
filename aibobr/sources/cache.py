@@ -19,7 +19,7 @@ from aibobr.sources.base import ArchInfo, LoadedModel, Variant
 
 log = logging.getLogger(__name__)
 MAX_AGE = 7 * 24 * 3600
-FORMAT = 5              # 5: części modeli obrazów (image_parts, image_hint) – starsze pobieramy od nowa
+FORMAT = 6              # 6: hybrydy (kv_layers, recurrent_bytes) – starsze pobieramy od nowa
 
 
 def model_to_dict(m: LoadedModel) -> dict:

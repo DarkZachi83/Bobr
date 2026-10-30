@@ -164,6 +164,23 @@ false` (Qwen) i samo `sliding_window` bez informacji o warstwach są ignorowane.
 architektura = pełny kontekst we wszystkich warstwach (wynik zawyżony, czyli bezpieczny).
 Przykład: Gemma 3 12B przy 8k – 0,97 GB zamiast 3 GB.
 
+**Hybrydy i modele SSM** (v0.3.1, zgłoszenie z Reddita): Qwen 3.5 / 3.6 / 3.8 i Qwen3-Next
+(`qwen35`, `qwen35moe`, `qwen3next`), Granite 4, Nemotron-H, Jamba, LFM2 mają pamięć KV tylko
+w warstwach uwagi; pozostałe warstwy (Gated DeltaNet, Mamba, splot) trzymają **stały stan**,
+który nie rośnie z kontekstem. Mamba i RWKV nie mają KV wcale. Jak w llama.cpp
+(`llama_memory_hybrid`, `llama_hparams::n_embd_r/n_embd_s`):
+```
+KV   = per_warstwę_token × warstwy_uwagi × kontekst
+stan = warstwy_liniowe × (n_embd_r + n_embd_s) × 4 B       (F32, jedna rozmowa)
+n_embd_r = (conv_kernel − 1) × (inner_size + 2 × group_count × state_size)
+n_embd_s = state_size × inner_size
+```
+Które warstwy mają uwagę: `{arch}.full_attention_interval` (Qwen, domyślnie 4 – co czwarta),
+tablica `attention.head_count_kv` na warstwę (0 = brak uwagi), z config.json `layer_types`
+(`linear_attention`, `mamba`, `conv`), `full_attention_interval`, `hybrid_override_pattern`
+(„*” = uwaga) albo `attn_layer_period/offset`. Stan jest wliczony w „pamięć rozmowy”.
+Przykład: Qwen 3.8 27B przy 90k, KV q8_0 – 2,9 GB + 0,15 GB stanu zamiast 11,9 GB.
+
 **Aktywne parametry MoE** liczymy bez tablicy embedding, gdy model ma osobną warstwę
 wyjściową (na token czytany jest jeden wiersz tablicy) – jak OpenAI dla gpt-oss (3,6B).
 Inni producenci podają liczbę z tablicą (Mistral: Mixtral 12,9B, u nas ~12,6B).
@@ -606,6 +623,9 @@ Każdy etap zaczyna się od omówienia uwag i dopisania szczegółów do tej spe
 
 Etap 8 – kalibracja:
 - ✅ **Okno przesuwne** (Gemma 3, gpt-oss) – SPEC §5.
+- ✅ **Hybrydy i SSM** (Qwen 3.5+, Granite 4, Nemotron-H, Jamba, LFM2, Mamba, RWKV) – SPEC §5.
+- ⏳ **Narzut przy długim kontekście** (≥ 64k): bufor obliczeń rośnie z kontekstem; Swift
+  27B przy 90k – przewidywanie 16,9 GB, pomiar 18,4 GB. Kalibracja z logu llama-server.
 - ✅ **gpt-oss-20b:** 3,6B aktywnych zamiast 4,2B – SPEC §5.
 - ✅ **Repozytoria spoza zakresu:** `model_index.json` albo `pipeline_tag` z HF →
   „to model obrazów / dźwięku” zamiast „brak plików modelu”.

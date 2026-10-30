@@ -20,7 +20,7 @@ import re
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Protocol
+from typing import Any, Callable, Optional, Protocol
 
 from aibobr.domain.enums import ModelSource
 from aibobr.sources.base import (
@@ -185,6 +185,52 @@ def _int_or_max(value: Any) -> Optional[int]:
     return int(value) if isinstance(value, (int, float)) else None
 
 
+# --------------------------------------------------------------------------- hybrydy i SSM
+# Architektury bez uwagi – sam stały stan, zero pamięci KV.
+RECURRENT_ONLY = {"mamba", "mamba2", "rwkv6", "rwkv6qwen2", "rwkv7", "arwkv7"}
+# Co n-ta warstwa ma pełną uwagę, reszta to Gated DeltaNet (llama.cpp: domyślnie 4,
+# klucz {arch}.full_attention_interval – src/llama-model.cpp).
+ATTENTION_INTERVAL_DEFAULT = {"qwen3next": 4, "qwen35": 4, "qwen35moe": 4}
+# Każda warstwa ma i uwagę, i stan (równolegle), np. Falcon-H1.
+PARALLEL_HYBRID = {"falcon-h1"}
+STATE_BYTES = 4                    # llama.cpp trzyma stan warstw liniowych w F32
+
+
+def layer_kinds(arch: str, layers: int, kv_value: Any, g: Callable[[str], Any]) -> tuple[list[bool], list[bool]]:
+    """(warstwy z pamięcią KV, warstwy ze stałym stanem) – reguły z llama.cpp."""
+    if arch in RECURRENT_ONLY:
+        return [False] * layers, [True] * layers
+    interval = _int_or_max(g("full_attention_interval")) or ATTENTION_INTERVAL_DEFAULT.get(arch)
+    if interval:
+        kv = [(il + 1) % interval == 0 for il in range(layers)]
+        return kv, [not x for x in kv]
+    has_state = any(g(k) for k in ("ssm.state_size", "ssm.conv_kernel", "shortconv.l_cache",
+                                   "wkv.head_size"))
+    if isinstance(kv_value, list) and len(kv_value) >= layers:
+        # Głowice KV na warstwę; 0 = warstwa bez uwagi (Jamba, LFM2, Granite 4, Nemotron-H)
+        kv = [bool(v) for v in kv_value[:layers]]
+        return kv, [not x and has_state for x in kv]
+    if arch in PARALLEL_HYBRID and has_state:
+        return [True] * layers, [True] * layers
+    return [True] * layers, [False] * layers
+
+
+def state_elements(g: Callable[[str], Any], embed: Optional[int]) -> tuple[int, int]:
+    """Elementy stanu na warstwę (n_embd_r, n_embd_s) z llama_hparams (llama-hparams.cpp)."""
+    v = lambda k: _int_or_max(g(k)) or 0                          # noqa: E731
+    embed = embed or 0
+    wkv = v("wkv.head_size")
+    if wkv:                                                        # RWKV
+        return v("token_shift_count") * embed or 2 * embed, embed * wkv
+    l_cache = v("shortconv.l_cache")
+    if l_cache:                                                    # LFM2: tylko splot
+        return embed * (l_cache - 1), 0
+    d_conv, d_inner, d_state, groups = (v("ssm.conv_kernel"), v("ssm.inner_size"),
+                                        v("ssm.state_size"), v("ssm.group_count"))
+    r = max(d_conv - 1, 0) * (d_inner + 2 * groups * d_state)
+    return r, d_state * d_inner
+
+
 _DIGITS = re.compile(r"\d+")
 # general.architecture modeli obrazów w GGUF od city96 (ComfyUI-GGUF) – to nie są LLM-y.
 GGUF_IMAGE_ARCHS = {"flux", "sd1", "sdxl", "sd3", "aura", "hidream", "cosmos", "ltxv", "hyvid", "wan",
@@ -229,7 +275,8 @@ def arch_from_headers(headers: list[GgufHeader]) -> ArchInfo:
 
     layers = _int_or_max(g("block_count"))
     heads = _int_or_max(g("attention.head_count"))
-    kv_heads = _int_or_max(g("attention.head_count_kv")) or heads
+    kv_value = g("attention.head_count_kv")
+    kv_heads = _int_or_max(kv_value) or heads
     embed = _int_or_max(g("embedding_length"))
     k_len = _int_or_max(g("attention.key_length")) or (embed // heads if embed and heads else None)
     v_len = _int_or_max(g("attention.value_length")) or k_len
@@ -272,7 +319,18 @@ def arch_from_headers(headers: list[GgufHeader]) -> ArchInfo:
     if not swa_layers:
         window = None
 
+    kv_layers = recurrent_bytes = None
+    if layers:
+        kv_flags, state_flags = layer_kinds(arch, layers, kv_value, g)
+        if not all(kv_flags) or any(state_flags):
+            kv_layers = sum(kv_flags)
+            r, st = state_elements(g, embed)
+            recurrent_bytes = sum(state_flags) * (r + st) * STATE_BYTES
+            if kv_layers == 0:                    # sama Mamba/RWKV – „architektura” bez KV
+                kv_heads, head_dim = kv_heads or 0, head_dim or 0
+
     return ArchInfo(
+        kv_layers=kv_layers, recurrent_bytes=recurrent_bytes,
         sliding_window=window, swa_layers=swa_layers,
         params_total=total, n_layers=layers, n_kv_heads=kv_heads, head_dim=head_dim,
         max_context=_int_or_max(g("context_length")),

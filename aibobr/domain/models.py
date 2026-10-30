@@ -108,6 +108,10 @@ class ModelSpec:
     swa_layers: Optional[int] = None         # ile warstw używa okna (reszta: pełny kontekst)
     embd_params: Optional[int] = None        # tablica słownika (token_embd): słowa × wymiar
     tied_embeddings: Optional[bool] = None   # True = ta sama tablica jest też wyjściem modelu
+    # Hybrydy (Qwen 3.5+, Qwen3-Next, Granite 4, Nemotron-H, Jamba, LFM2) i modele SSM
+    # (Mamba, RWKV): tylko część warstw ma pamięć KV, reszta trzyma stały stan.
+    kv_layers: Optional[int] = None          # warstwy z pamięcią KV; None = wszystkie
+    recurrent_bytes: Optional[int] = None    # stan warstw liniowych (nie rośnie z kontekstem)
     audio: Optional[AudioInfo] = None        # model mowy / muzyki (etap 9)
     image: Optional[ImageInfo] = None        # model obrazów (etap 10)
     origin: Optional[str] = None             # link HF albo ścieżka pliku – do raportu
@@ -152,6 +156,9 @@ class MemoryNeed:
     weights_estimated: bool                  # z bitów na wagę, nie z rozmiaru pliku
     kv_estimated: bool                       # bez danych architektury
     kv_sliding: bool = False                 # część warstw pamięta tylko okno przesuwne
+    kv_layers: Optional[int] = None          # hybryda: tyle warstw pamięta cały kontekst…
+    n_layers: Optional[int] = None           # …z tylu
+    recurrent: int = 0                       # stan warstw liniowych (wliczony w kv_cache)
     # Tablica słownika (token_embd) – llama.cpp/Ollama trzyma ją w RAM, nie w karcie.
     # Gdy model ma wspólne wejście i wyjście, w karcie zostaje druga kopia (embd_copy).
     embd_in_ram: int = 0
