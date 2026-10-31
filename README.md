@@ -5,6 +5,9 @@
 **AI Hardware Checker** – will this local LLM run on my PC, and how fast?
 *Czy ten lokalny model językowy pójdzie na moim komputerze i jak szybko?*
 
+### ⬇️ [Download the latest version for Windows](https://github.com/DarkZachi83/Bobr/releases/latest) – no Python installation needed.
+*⬇️ [Pobierz najnowszą wersję dla Windows](https://github.com/DarkZachi83/Bobr/releases/latest) – bez instalowania Pythona.*
+
 **[English](#english) · [Polski](#polski)**
 
 > ⭐ **Like it? Leave a star** – it means a lot to the author and helps further work.
@@ -41,7 +44,7 @@ model from Hugging Face takes seconds. Nothing is downloaded or installed.
 
 ### Quick start
 
-**Windows:** download `AI-Bobr.exe` from [Releases](https://github.com/DarkZachi83/Bobr/releases)
+**Windows:** download `AI-Bobr.exe` from [the latest release](https://github.com/DarkZachi83/Bobr/releases/latest)
 and run it. The file isn't code-signed, so Windows SmartScreen may show
 *"Windows protected your PC"* – click **More info → Run anyway**. `AI-Bobr-cli.exe` is the
 same program for the command line.
@@ -188,7 +191,7 @@ Program czyta tylko nagłówek pliku modelu – kilka MB, nie gigabajty – wię
 
 ### Szybki start
 
-**Windows:** pobierz `AI-Bobr.exe` z [Releases](https://github.com/DarkZachi83/Bobr/releases)
+**Windows:** pobierz `AI-Bobr.exe` z [najnowszego wydania](https://github.com/DarkZachi83/Bobr/releases/latest)
 i uruchom. Plik nie ma płatnego podpisu, więc Windows SmartScreen może pokazać
 „System Windows ochronił ten komputer” – kliknij **Więcej informacji → Uruchom mimo to**.
 `AI-Bobr-cli.exe` to ten sam program do wiersza poleceń.
