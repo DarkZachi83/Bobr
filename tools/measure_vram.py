@@ -7,7 +7,8 @@
 2. Prosi: uruchom model (np. llama-server + skrypt z dekoderem), wygeneruj nagranie, naciśnij Enter.
 3. W tym czasie co pół sekundy pyta nvidia-smi o pamięć KAŻDEGO procesu – osobno widać
    serwer z modelem językowym i proces dekodera dźwięku.
-4. Pokazuje szczyty i zapisuje measure-RRRRMMDD-GGMM.json (do testu regresyjnego).
+4. Pokazuje szczyty, przebieg w czasie z etapami („płaskowyżami”, np. UNet → VAE)
+   i zapisuje measure-RRRRMMDD-GGMM.json z całym przebiegiem (do testu regresyjnego).
 
 Z --model dopisuje przewidywanie AI Bóbra dla tej samej długości kontekstu (bez narzutu –
 różnica to narzut runtime'u). Działa z każdym programem: llama.cpp, LM Studio, Python,
@@ -106,12 +107,15 @@ class Result:
 
 class Sampler:
     def __init__(self, run: Callable = CommandRunner(), interval: float = 0.5,
-                 cmdline: Callable[[int], Optional[str]] = command_line):
-        self.run, self.interval, self.cmdline = run, interval, cmdline
+                 cmdline: Callable[[int], Optional[str]] = command_line,
+                 clock: Callable[[], float] = time.monotonic):
+        self.run, self.interval, self.cmdline, self.clock = run, interval, cmdline, clock
         self.stop = threading.Event()
         self.processes: dict[int, Process] = {}
         self.total_peak: Optional[int] = None
         self.samples = 0
+        self.timeline: list[tuple[float, dict[int, int]]] = []   # (sekundy, {pid: MiB})
+        self._t0: Optional[float] = None
 
     def baseline(self) -> tuple[Optional[int], dict]:
         apps = parse_apps(self.run(QUERY_APPS))
@@ -124,12 +128,18 @@ class Sampler:
         total = parse_total(self.run(QUERY_TOTAL))
         if total is not None:
             self.total_peak = max(self.total_peak or 0, total)
+        now = self.clock()
+        if self._t0 is None:
+            self._t0 = now
+        point: dict[int, int] = {}
         for pid, (name, mem) in parse_apps(self.run(QUERY_APPS)).items():
             p = self.processes.get(pid)
             if p is None:
                 p = self.processes[pid] = Process(pid, name, self.cmdline(pid))
             if mem is not None:
                 p.peak_mib = max(p.peak_mib or 0, mem)
+                point[pid] = mem
+        self.timeline.append((round(now - self._t0, 2), point))
 
     def loop(self) -> None:
         while not self.stop.is_set():
@@ -158,11 +168,42 @@ def predict(model: str, context: int, resolution: Optional[tuple[int, int]] = No
             "audio": spec.audio.name if spec.audio else None}
 
 
+def series(timeline: list[tuple[float, dict[int, int]]], pid: int) -> list[tuple[float, int]]:
+    return [(t, pts[pid]) for t, pts in timeline if pid in pts]
+
+
+def plateaus(points: list[tuple[float, int]], tol_mib: int = 150, min_s: float = 1.0) -> list[tuple[float, float, int]]:
+    """Etapy przebiegu: odcinki o podobnym zużyciu (±tol) trwające ≥ min_s → (od, do, szczyt MiB).
+
+    Programy do obrazów pracują etapami (koder tekstu → UNet → VAE); każdy etap to
+    „płaskowyż” zużycia karty. Krótkie skoki między nimi pomijamy."""
+    out: list[list] = []
+    for t, mib in points:
+        if out and abs(mib - out[-1][3]) <= tol_mib:
+            out[-1][1], out[-1][2] = t, max(out[-1][2], mib)
+        else:
+            out.append([t, t, mib, mib])                  # od, do, szczyt, poziom odniesienia
+    return [(a, b, peak) for a, b, peak, _ in out if b - a >= min_s]
+
+
+SPARK = "▁▂▃▄▅▆▇█"
+
+
+def sparkline(points: list[tuple[float, int]], width: int = 60) -> str:
+    if not points:
+        return ""
+    values = [m for _, m in points]
+    step = max(1, -(-len(values) // width))
+    values = [max(values[i:i + step]) for i in range(0, len(values), step)]
+    lo, hi = min(values), max(values)
+    return "".join(SPARK[0 if hi == lo else int((v - lo) * (len(SPARK) - 1) / (hi - lo))] for v in values)
+
+
 def gb(mib: Optional[int]) -> str:
     return "–" if mib is None else f"{mib * MIB / GIB:.2f} GB"
 
 
-def report(r: Result, log=print) -> None:
+def report(r: Result, log=print, timeline: Optional[list] = None) -> None:
     log(f"\nPomiar: {r.label} ({r.seconds:.0f} s)")
     log(f"  karta razem: przed {gb(r.total_before_mib)}, szczyt {gb(r.total_peak_mib)}, "
         f"przyrost {gb(r.total_delta_mib)}")
@@ -173,6 +214,13 @@ def report(r: Result, log=print) -> None:
         log(f"  {gb(p.peak_mib):>9}  pid {p.pid}  {(p.command or p.name)[:90]}")
     for p in r.grown_processes():
         log(f"  {gb(p.peak_mib):>9}  pid {p.pid}  (przed {gb(p.before_mib)})  {(p.command or p.name)[:80]}")
+    main = (new or r.grown_processes())[:1]
+    if timeline and main:
+        pts = series(timeline, main[0].pid)
+        log(f"\n  przebieg pid {main[0].pid} ({gb(min(m for _, m in pts))} … {gb(max(m for _, m in pts))}):")
+        log(f"  {sparkline(pts)}")
+        for a, b, peak in plateaus(pts):
+            log(f"    {a:6.1f}–{b:6.1f} s  {gb(peak):>9}")
     pr = r.prediction
     if pr and "peak_gib" in pr:
         log(f"\nAI Bóbr dla {pr['model']} · {pr['resolution']}: szczyt {pr['peak_gib']:.2f} GB "
@@ -189,7 +237,8 @@ def main_cli(argv: Optional[list[str]] = None, stdin=sys.stdin, sampler: Optiona
     ap.add_argument("--model", help="ten sam model dla AI Bóbra (plik .gguf, link HF, ollama:NAZWA)")
     ap.add_argument("--context", type=int, default=8192)
     ap.add_argument("--resolution", help="modele obrazów: np. 1024 albo 1024x768")
-    ap.add_argument("--interval", type=float, default=0.5)
+    ap.add_argument("--interval", type=float, default=0.5,
+                    help="co ile sekund pytać kartę; dla obrazów 0.2 (krótkie dekodowanie VAE)")
     ap.add_argument("--output", type=Path)
     args = ap.parse_args(argv)
 
@@ -221,12 +270,13 @@ def main_cli(argv: Optional[list[str]] = None, stdin=sys.stdin, sampler: Optiona
     r = Result(label=args.label or "pomiar", seconds=time.time() - start,
                total_before_mib=total_before, total_peak_mib=sampler.total_peak,
                processes=list(sampler.processes.values()), prediction=prediction)
-    report(r)
+    report(r, timeline=sampler.timeline)
     out = args.output or Path(f"measure-{datetime.datetime.now():%Y%m%d-%H%M}.json")
     out.write_text(json.dumps({
         "date": datetime.datetime.now().isoformat(timespec="minutes"), "system": platform.platform(),
         **asdict(r), "total_delta_mib": r.total_delta_mib, "samples": sampler.samples,
         "grown": [p.pid for p in r.grown_processes()],
+        "timeline": [[t, {str(pid): m for pid, m in pts.items()}] for t, pts in sampler.timeline],
     }, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"Zapisano {out}")
     return 0
