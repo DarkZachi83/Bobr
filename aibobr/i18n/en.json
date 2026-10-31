@@ -63,6 +63,7 @@
   "expl.act.img_batch": "one image at a time fits {where},",
   "expl.act.img_nothing": "even smaller images won't be enough – you need a smaller model (e.g. SD 1.5 instead of SDXL) or more RAM.",
   "expl.act.img_res": "resolution {res} fits {where},",
+  "expl.act.img_res_low": "resolution {res} fits {where} – but that is below this model's native {native}×{native}, so image quality drops noticeably,",
   "expl.act.kv": "KV cache in q8_0 (a runtime option) fits {where},",
   "expl.act.model": "the model {name} in {quant} fits entirely.",
   "expl.act.moe_offload": "in LM Studio turn on \"Force Model Expert Weights onto CPU\", in llama.cpp use --cpu-moe or --n-cpu-moe – the experts stay in RAM and the rest of the model on the card, which usually speeds up answers noticeably,",

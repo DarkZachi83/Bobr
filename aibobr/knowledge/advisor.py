@@ -460,7 +460,11 @@ class Advisor:
                 continue
             r = self._image_variant(spec, hw, settings, side, n.batch)
             if r and LEVEL_RANK[r.level] >= LEVEL_RANK[target]:
-                lines.append(Line("expl.act.img_res", {"res": f"{side}×{side}", "where": where}))
+                # Poniżej natywnej rozdzielczości jakość wyraźnie spada (SDXL przy 768:
+                # model gubi kompozycję – pomiar autora 31.10.2026).
+                below = side < spec.image.native
+                lines.append(Line("expl.act.img_res_low" if below else "expl.act.img_res",
+                                  {"res": f"{side}×{side}", "where": where, "native": spec.image.native}))
                 break
         if not lines:
             lines.append(Line("expl.act.img_nothing"))

@@ -148,7 +148,9 @@ class VerdictTest(Tmp):
         self.assertEqual((v.level, v.all_at_once, v.need.peak_stage), (FitLevel.GREEN, False, "sample"))
         self.assertEqual((v.need.width, v.need.height), (1024, 1024))
         self.assertLess(v.need.peak, v.need.all_at_once)                    # szczyt, nie suma
-        big = evaluate(spec, hw, RunSettings(image_width=1536), QUANTS)
+        # 1536 mieści się etapami (pomiar 31.10: 1280 liczy się w karcie); 2560 już nie
+        self.assertEqual(evaluate(spec, hw, RunSettings(image_width=1536), QUANTS).level, FitLevel.GREEN)
+        big = evaluate(spec, hw, RunSettings(image_width=2560), QUANTS)
         self.assertEqual(big.level, FitLevel.YELLOW)                        # część główna z RAM
 
     def test_all_at_once_on_big_card(self):
@@ -187,10 +189,18 @@ class AdvisorTest(Tmp):
         return Advisor(QUANTS).explain(model, spec, hw, settings)
 
     def test_lower_resolution_suggested(self):
-        v, e = self.explain(self.spec(SDXL), pc(gpus=[gpu(vram_gb=8)]), RunSettings(image_width=1536))
+        v, e = self.explain(self.spec(SDXL), pc(gpus=[gpu(vram_gb=8)]), RunSettings(image_width=2560))
         self.assertEqual(e.summary.key, "verdict.image_yellow")
         self.assertEqual(render(e.actions[0]), "rozdzielczość 1024×1024 zmieści się w całości w karcie,")
-        self.assertIn("note.img_estimate", [n.key for n in e.notes])
+        self.assertNotIn("note.img_estimate", [n.key for n in e.notes])     # SDXL zmierzony
+
+    def test_below_native_resolution_warns_about_quality(self):
+        # karta 6 GB: 1024 się nie mieści, 768 tak – ale to poniżej natywnej rozdzielczości SDXL
+        v, e = self.explain(self.spec(SDXL), pc(gpus=[gpu(vram_gb=6.5)]), RunSettings(image_width=1280))
+        act = e.actions[0]
+        self.assertEqual(act.key, "expl.act.img_res_low", [a.key for a in e.actions])
+        self.assertIn("natywne 1024×1024", render(act))
+        self.assertIn("jakość obrazów wyraźnie spadnie", render(act))
 
     def test_stages_listed_and_largest_named(self):
         v, e = self.explain(self.spec(SDXL), pc(gpus=[gpu(vram_gb=8)]))
@@ -232,8 +242,8 @@ class CliAndBarTest(Tmp):
             self.assertIn(row, text)
         self.assertIn("Najwięcej pamięci potrzebuje rysowanie", text)
         out = io.StringIO()
-        Cli(c, out=out, palette=PLAIN).run(main.build_parser().parse_args([str(path), "--resolution", "1536"]))
-        self.assertIn("1536×1536", out.getvalue())
+        Cli(c, out=out, palette=PLAIN).run(main.build_parser().parse_args([str(path), "--resolution", "2560"]))
+        self.assertIn("2560×2560", out.getvalue())
         self.assertIn("Pójdzie, ale wolniej", out.getvalue())
 
     def test_bar_layout(self):

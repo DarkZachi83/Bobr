@@ -119,6 +119,21 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertEqual(saved["language"], "")
         self.assertEqual(w.lang_var.get(), "")
 
+    def test_fields_follow_model_kind(self):
+        from tests.test_images import SDXL, safetensors
+        w = self.window()
+        w.hardware.show_advanced()
+        self.pump(seconds=0.3)
+        self.assertIn("context", w.hardware.entries)                     # model tekstowy
+        self.assertNotIn("resolution", w.hardware.entries)
+        path = safetensors(Path(self.tmp.name) / "sdxl.safetensors", SDXL)
+        w.check(str(path))
+        self.pump(lambda: "resolution" in w.hardware.entries, 5)
+        self.assertNotIn("context", w.hardware.entries)                  # obrazy: bez kontekstu
+        w.hardware.context.set("zle")                                    # błąd w ukrytym polu…
+        self.pump(seconds=0.6)
+        self.assertNotIn("Popraw", w.verdict.cget("text"))               # …nie blokuje wyniku
+
     def test_ollama_button_only_in_advanced_mode(self):
         w = self.window()
         self.assertFalse(w.picker.ollama_button.winfo_ismapped())

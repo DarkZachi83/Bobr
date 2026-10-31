@@ -301,8 +301,31 @@ dekodowanie     = VAE + dekodowanie(rozdzielczość × obrazy) + narzut
 szczyt          = max(etapów)            całość naraz = wszystkie części + większe z obliczeń + narzut
 ```
 Obliczenia rosną z liczbą pikseli (część główna liczy na latencie 8× mniejszym, VAE w pełnej
-rozdzielczości – dlatego przy dużych obrazach szczytem bywa dekodowanie). Współczynniki
-(GB na megapiksel) i narzut: **szacunek do czasu pomiaru** w Forge-neo (`tools/measure_vram.py`).
+rozdzielczości – dlatego przy dużych obrazach szczytem bywa dekodowanie).
+
+**Współczynniki – pomiar autora 31.10.2026** (Forge-neo, RTX 5050 8 GB, `tools/measure_vram.py`
+z przebiegiem w czasie; dane: `tests/calibration/forge_rtx5050_2026-10-31.json`, test
+`tests/test_image_calibration.py`):
+
+| rodzina | obliczenia części głównej | dekodowanie VAE | narzut | |
+|---|---|---|---|---|
+| SDXL | 0,4 GB/MPx | 2,8 GB/MPx | 0,5 GB | zmierzone |
+| SD 1.5 | 0,6 GB/MPx | 2,6 GB/MPx | 0,5 GB | zmierzone |
+| SD 2.x | 0,6 | 2,6 | 0,5 | szacunek (jak SD 1.5) |
+| FLUX / SD 3 | 1,5 / 1,2 | 3,0 | 0,5 | szacunek |
+
+Obserwacje:
+- Obliczenia UNet prawie nie rosną z rozdzielczością (nowoczesna uwaga – SDPA/FlashAttention);
+  SD 1.5 liczy więcej na piksel niż SDXL, bo ma uwagę też na najwyższej rozdzielczości.
+- Narzut 0,5 GB = kontekst CUDA (0,25–0,35 GB) + VAE, które Forge trzyma w karcie.
+- Forge sam pilnuje budżetu: przed każdym etapem zwalnia tyle innych części, ile trzeba
+  (przed VAE: 0,46 GB z UNet przy 768, 2,4 GB przy 1024, cały UNet przy 1280 – stąd czasy
+  13 / 24 / 45 s). Gdy miejsca jest dość (SD 1.5), trzyma wszystko naraz – wtedy pomiar
+  ≈ „całość naraz”. Szczyt zbliżony do budżetu Forge („usable”) nie jest minimum.
+- SDXL wlicza rozmiar obrazu do warunkowania – po zmianie rozdzielczości (albo opisu) koder
+  tekstu uruchamia się od nowa i zostaje w karcie obok UNet.
+- Poniżej natywnej rozdzielczości jakość wyraźnie spada (SDXL przy 768 zgubił temat obrazu) –
+  podpowiedź „zmniejsz rozdzielczość” mówi o tym wprost.
 
 **Światła:**
 - 🟢 **całość naraz w karcie** – najszybciej,
@@ -314,7 +337,8 @@ Enkoder, który nie mieści się w karcie, a mieści w RAM (np. T5-XXL przy FLUX
 werdyktu** – dopisek „opis przetworzy procesor, kilka sekund dłużej”.
 
 **Rozdzielczość zamiast kontekstu:** tryb Automatyczny – natywna rodziny; Zaawansowany –
-własna rozdzielczość i liczba obrazów naraz. CLI: `--resolution 1024` albo `1024x768`,
+własna rozdzielczość i liczba obrazów naraz (pola widać tylko przy modelu obrazów; przy
+modelu językowym – kontekst i cache KV). CLI: `--resolution 1024` albo `1024x768`,
 `--batch 2`.
 
 **Pasek – trzy wiersze** na wspólnej skali: **System**; **Szczyt** (kolor werdyktu,

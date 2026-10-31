@@ -82,5 +82,25 @@ class SamplerTest(unittest.TestCase):
             self.assertIn('"label": "test"', out.read_text(encoding="utf-8"))
 
 
+class TimelineTest(unittest.TestCase):
+    def test_stages_of_forge_run(self):
+        # Forge na ciepło: 2,9 GB → UNet 5,6 GB (10 s) → po zwolnieniu połowy UNet VAE 5,4 GB (2 s)
+        mems = [2900] * 3 + [5600, 5650, 5620] * 7 + [3100, 5400, 5450, 5420, 5380] + [3000] * 3
+        frames = [(m + 100, [(4444, "python launch.py", m)]) for m in [2900] + mems]
+        clock = iter(i * 0.5 for i in range(1000))
+        s = mv.Sampler(run=FakeSmi(frames), cmdline=lambda pid: "python launch.py", clock=lambda: next(clock))
+        s.baseline()
+        for _ in mems:
+            s.sample()
+        stages = mv.plateaus(mv.series(s.timeline, 4444))
+        self.assertEqual([peak for _, _, peak in stages], [2900, 5650, 5450, 3000])
+        self.assertLessEqual(len(mv.sparkline(mv.series(s.timeline, 4444), width=10)), 10)
+        r = mv.Result("forge", 17, 3000, s.total_peak, list(s.processes.values()))
+        out = []
+        mv.report(r, out.append, timeline=s.timeline)
+        self.assertTrue(any("przebieg pid 4444" in x for x in out))
+        self.assertTrue(any("5.52 GB" in x for x in out))          # 5650 MiB – etap UNet
+
+
 if __name__ == "__main__":
     unittest.main()

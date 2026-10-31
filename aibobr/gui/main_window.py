@@ -168,6 +168,7 @@ class MainWindow:
 
     def set_model(self, model: LoadedModel, quant: Optional[str] = None) -> None:
         self.model = model
+        self.hardware.set_model_kind("image" if model.arch.image is not None else "text")
         names = [v.quant for v in model.variants]
         self.quant = quant if quant in names else model.default_variant().quant
         self.picker.set_model(model, self.quant)

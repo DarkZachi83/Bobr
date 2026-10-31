@@ -30,7 +30,7 @@ W linii „Model:” powinno być `model obrazów SDXL · 1024×1024` i `model o
 W terminalu z folderu AI Bóbra (Forge działa w tle):
 
 ```bash
-python tools/measure_vram.py --label "forge sdxl 1024" --resolution 1024 \
+python tools/measure_vram.py --label "forge sdxl 1024" --resolution 1024 --interval 0.2 \
     --model "/mnt/dane/ai-graphics/Data/Packages/forge-neo/models/Stable-diffusion/realismIllustriousBy_v50FP16.safetensors"
 ```
 
@@ -52,6 +52,27 @@ Narzędzie pokaże proces Forge z jego szczytem, np.:
   6.64 GB  pid 4444  (przed 2.83 GB)  python launch.py …
 AI Bóbr dla realismIllustriousBy_v50FP16 · 1024×1024: szczyt 6.43 GB (sample), wszystko naraz 9.68 GB (szacunek)
 ```
+
+## Wynik autora (31.10.2026, RTX 5050 Laptop 8 GB, Forge-neo)
+
+Szczyty etapów procesu Forge (GB), na czysto = ten sam opis i rozdzielczość co poprzedni obraz:
+
+| model | rozdzielczość | próbkowanie | dekodowanie | czas |
+|---|---|---|---|---|
+| SDXL | 768 | 5,51 / 5,57 | 6,51 / 6,60 | 13 s |
+| SDXL | 1024 | 5,69 | (UNet częściowo zwolniony) | 24 s |
+| SDXL | 1280 (z koderem tekstu) | 6,82 | 5,29 (UNet zwolniony w całości) | 45 s |
+| SD 1.5 | 512 | 2,44 | 2,97 | 6 s |
+| SD 1.5 | 768 | 2,63 | 3,82 | 8 s |
+
+Wnioski i współczynniki – SPEC §5a. Dane: `tests/calibration/forge_rtx5050_2026-10-31.json`.
+
+**Wskazówki z pomiarów:**
+- Mierz z `--interval 0.2` – dekodowanie VAE trwa ok. sekundy.
+- Po zmianie rozdzielczości albo opisu wygeneruj jeden obraz bez pomiaru – SDXL uruchamia
+  wtedy koder tekstu od nowa.
+- Po zmianie modelu w Forge sprawdź w konsoli „Requested to load KModel … MB loaded”
+  (SDXL ok. 4900 MB, SD 1.5 ok. 1640 MB) – Forge-neo potrafi wrócić do poprzedniego modelu.
 
 ## 4. Co odesłać
 

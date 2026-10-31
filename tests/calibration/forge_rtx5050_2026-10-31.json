@@ -1,0 +1,15 @@
+{
+ "_opis": "Pomiar autora 31.10.2026: Forge-neo (PyTorch 2.10 cu130, FlashAttention, --cuda-malloc), laptop RTX 5050 8 GB, Euler a, CFG 7, 1 obraz, tools/measure_vram.py --interval 0.2 (przebieg w czasie). Wartości w GiB – szczyty etapów procesu Forge. 'clean' = ten sam prompt i rozdzielczość co poprzedni obraz (koder tekstu pominięty, VAE zostaje w karcie).",
+ "parts_gib": {"sdxl": {"main": 4.78, "encoders": 2.47, "vae": 0.156},
+               "sd15": {"main": 1.60, "encoders": 0.372, "vae": 0.156}},
+ "runs": [
+  {"family": "sdxl", "side": 1024, "clean": true,  "sample": 5.69, "decode": null, "decode_unet_resident": null, "seconds": 24},
+  {"family": "sdxl", "side": 768,  "clean": true,  "sample": 5.51, "decode": 6.51, "decode_unet_resident": 4.35, "seconds": 13},
+  {"family": "sdxl", "side": 768,  "clean": true,  "sample": 5.57, "decode": 6.60, "decode_unet_resident": 4.35, "seconds": 13},
+  {"family": "sdxl", "side": 1280, "clean": false, "sample": 6.82, "decode": 5.29, "decode_unet_resident": 0.0,  "seconds": 45,
+   "_uwaga": "koder tekstu wczytany (zmiana rozdzielczości), 1,07 GB zostało przy UNet; przed VAE Forge zwolnił cały UNet (6,4 s) i ostrzegł o braku miejsca"},
+  {"family": "sd15", "side": 512,  "clean": true,  "sample": 2.44, "decode": 2.97, "all_resident": 2.29, "seconds": 6},
+  {"family": "sd15", "side": 768,  "clean": true,  "sample": 2.63, "decode": 3.82, "all_resident": 2.29, "seconds": 8}
+ ],
+ "_wnioski": "Obliczenia UNet: SDXL ≈ 0,4 GB/MPx, SD 1.5 ≈ 0,6 GB/MPx; dekodowanie VAE ≈ 2,6–2,8 GB/MPx (ta sama budowa VAE); kontekst CUDA ≈ 0,25–0,35 GB. Gdy pamięci jest dość, Forge trzyma wszystko naraz (SD 1.5); gdy brak – zwalnia części przed każdym etapem."
+}
