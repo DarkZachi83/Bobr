@@ -63,6 +63,7 @@
   "expl.act.img_batch": "jeden obraz naraz zmieści się {where},",
   "expl.act.img_nothing": "nawet mniejsze obrazy nie wystarczą – potrzebny mniejszy model (np. SD 1.5 zamiast SDXL) albo więcej RAM.",
   "expl.act.img_res": "rozdzielczość {res} zmieści się {where},",
+  "expl.act.img_res_low": "rozdzielczość {res} zmieści się {where} – ale to mniej niż natywne {native}×{native} tego modelu, więc jakość obrazów wyraźnie spadnie,",
   "expl.act.kv": "cache KV w q8_0 (opcja runtime'u) zmieści się {where},",
   "expl.act.model": "model {name} w {quant} zmieści się w całości.",
   "expl.act.moe_offload": "w LM Studio włącz „Force Model Expert Weights onto CPU”, a w llama.cpp użyj --cpu-moe albo --n-cpu-moe – eksperci zostaną w RAM, reszta modelu w karcie, co zwykle wyraźnie przyspiesza odpowiedzi,",

@@ -52,6 +52,7 @@ class HardwarePanel(ttk.Frame):
         self.platform = "linux"
         self.defaults = RunSettings()
         self.unsupported: Optional[str] = None
+        self.model_kind = "text"                  # "image": pola obrazów zamiast kontekstu i KV
         self.rows: list[GpuRow] = []
         self.ram_shown = ""
         self.ram = tk.StringVar()
@@ -133,6 +134,16 @@ class HardwarePanel(ttk.Frame):
             self.after_cancel(self._pending)
         self._pending = self.after(350, self.on_change)
 
+    def hidden_fields(self) -> set[str]:
+        return {"context"} if self.model_kind == "image" else {"resolution", "batch"}
+
+    def set_model_kind(self, kind: str) -> None:
+        """Rodzaj wczytanego modelu ("text" albo "image") – decyduje, które pola widać."""
+        if kind != self.model_kind:
+            self.model_kind = kind
+            if self.mode.get() == "advanced":
+                self.render()
+
     def render(self) -> None:
         for child in self.body.winfo_children():
             child.destroy()
@@ -206,6 +217,9 @@ class HardwarePanel(ttk.Frame):
             ("resolution", self.resolution, t("gui.resolution"), t("gui.resolution_hint")),
             ("batch", self.batch, t("gui.batch"), ""),
         ]
+        # Pokazujemy tylko pola, które coś zmieniają dla wczytanego modelu (wartości ukrytych
+        # zostają – wracają po zmianie modelu).
+        params = [p for p in params if p[0] not in self.hidden_fields()]
         for key, var, label, unit in params:
             ttk.Label(g, text=label, style="Muted.TLabel").grid(row=r, column=0, sticky="w")
             self._entry(g, var, key, r, 1)
@@ -274,6 +288,11 @@ class HardwarePanel(ttk.Frame):
                 vram = None
             base = row.gpu or GpuInfo(name=row.name, vendor=vendor, vram_total=None)
             gpus.append(replace(base, vram_total=vram, selected=row.selected.get()))
+        # Błąd w ukrytym polu nie blokuje wyniku – liczymy z wartością domyślną.
+        hidden = self.hidden_fields()
+        for key in invalid & hidden:
+            values[key] = {"context": self.defaults.context_tokens, "resolution": None, "batch": 1}[key]
+        invalid -= hidden
         self._mark(invalid)
         if invalid:
             raise ValueError(sorted(invalid))
