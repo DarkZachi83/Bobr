@@ -23,7 +23,7 @@ import platform
 import sys
 import threading
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -155,9 +155,12 @@ def predict(model: str, context: int, resolution: Optional[tuple[int, int]] = No
     c = main.build_app()
     spec = c.load_model(model).spec()
     if spec.image is not None:                                # model obrazów (etap 10)
-        from aibobr.calculator.image import image_need
+        # Jak werdykt: z kartą tego komputera (koder tekstu na procesorze, VAE kafelkami).
+        from aibobr.calculator.verdict import evaluate
         w, h = resolution or (None, None)
-        n = image_need(spec, RunSettings(image_width=w, image_height=h))
+        hw = c.scan()
+        settings = replace(c.run_settings(hw.platform), image_width=w, image_height=h)
+        n = evaluate(spec, hw, settings, c.quants).need
         return {"model": spec.name, "quant": spec.quant, "resolution": f"{n.width}×{n.height}",
                 "peak_gib": round(n.peak / GIB, 3), "all_gib": round(n.all_at_once / GIB, 3),
                 "stage": n.peak_stage, "stages_gib": {k: round(v / GIB, 3) for k, v in n.stages.items()}}

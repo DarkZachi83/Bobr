@@ -312,7 +312,22 @@ z przebiegiem w czasie; dane: `tests/calibration/forge_rtx5050_2026-10-31.json`,
 | SDXL | 0,4 GB/MPx | 2,8 GB/MPx | 0,5 GB | zmierzone |
 | SD 1.5 | 0,6 GB/MPx | 2,6 GB/MPx | 0,5 GB | zmierzone |
 | SD 2.x | 0,6 | 2,6 | 0,5 | szacunek (jak SD 1.5) |
-| FLUX / SD 3 | 1,5 / 1,2 | 3,0 | 0,5 | szacunek |
+| FLUX | 0,8 GB/MPx | 3,0 GB/MPx | 0,5 GB | szacunek (jeden pomiar przy częściowym wczytaniu) |
+| SD 3 | 1,2 | 3,0 | 0,5 | szacunek |
+
+**FLUX** (pomiar 31.10.2026, schnell Q4_K_S GGUF, 1024, RTX 5050 8 GB, 16 GB RAM z zram):
+- Domyślne kodery tekstu: **T5-XXL w FP8 + CLIP-L = 4,83 GB** (najczęstszy zestaw; uwaga
+  `note.img_flux_t5` mówi, że z FP16 dochodzi ok. 4,3 GB).
+- **RAM przy wczytywaniu:** Forge czyta wszystkie części do RAM i chwilowo trzyma więcej –
+  z T5 FP8 (11,6 GB części) system zabił Forge; z T5 GGUF Q4 też, dopóki nie dodano swapu
+  na dysku. Reguła: `części × 1,5 > RAM użytkowy` → uwaga `note.img_load_ram` (szacunek;
+  SDXL 7,4 GB – bez uwagi, zgodnie z pomiarem).
+- **VRAM przy GGUF:** przy częściowym wczytaniu Forge-neo nie wlicza pamięci na rozpakowywanie
+  wag – bez `--reserve-vram 2` brak pamięci karty (uwaga `note.img_gguf_reserve`). Z rezerwą:
+  część główna 3,8–4,4 GB z 6,3 w karcie, 7 s/krok, szczyt procesu 5,14 GB.
+- Podpowiedź przy żółtym werdykcie, gdy rozdzielczość nie pomaga: mniejsza kwantyzacja
+  (GGUF) albo wersja FP8/GGUF (pliki FP16).
+- Czarny obraz (NaN) z T5 w GGUF w Forge-neo to sprawa jakości, nie pamięci – poza programem.
 
 Obserwacje:
 - Obliczenia UNet prawie nie rosną z rozdzielczością (nowoczesna uwaga – SDPA/FlashAttention);

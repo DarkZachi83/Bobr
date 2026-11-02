@@ -108,13 +108,20 @@ KV cache = 2 × layers × KV heads × head size × context × bytes per element
   cards that depend on the runtime get a warning next to the bar.
 - Windows: the current VRAM usage of AMD/Intel cards isn't shown (it doesn't affect the verdict).
 
-### Image models (preview)
+### Image models
 
 Single-file checkpoints (`.safetensors` – SD 1.5, SDXL, Illustrious, Pony), diffusers folders
 and repositories, and FLUX/SD 3 (also as GGUF) are checked by **the peak of the heaviest stage**
 (prompt encoding → drawing → decoding), because Forge, ComfyUI and SD.Next move parts between RAM
 and the card. Native resolution by default, `--resolution 1024x768` / `--batch 2` to change.
-The compute memory per megapixel is still an **estimate** until it's measured.
+The bar has three rows: **System**, **Peak** and **All at once**.
+
+- **SDXL and SD 1.5 – measured** in Forge-neo (RTX 5050 8 GB, 512–1280 px): predictions within ~0.1 GB.
+- **FLUX and SD 3 – still an estimate.** FLUX assumes the T5 text encoder in FP8. The tool warns
+  when RAM may run out while loading (Forge reads all parts into RAM first) and when a GGUF model
+  needs `--reserve-vram 2` in Forge-neo.
+- Below the model's native resolution quality drops noticeably – the tool says so when it
+  suggests a smaller image.
 
 ### Models on your disk
 
@@ -155,7 +162,7 @@ AI Bóbr was designed by Rafał (idea, decisions, testing on real hardware) toge
 ### Like it?
 
 If AI BEAVER saved you a download that would never have fit – **leave a ⭐ star** at the top of this
-page. It means a lot to the author and helps decide what comes next (speech, image and music models
+page. It means a lot to the author and helps decide what comes next (music models and more measurements
 are on the way). Found a wrong verdict? [Open an issue](https://github.com/DarkZachi83/Bobr/issues)
 with the model link and what your program really used – real measurements make the tool better for everyone.
 
@@ -249,13 +256,20 @@ cache KV = 2 × warstwy × głowice KV × wymiar głowicy × kontekst × bajty n
   i karty AMD/Intel zależne od runtime'u dostają ostrzeżenie obok paska.
 - Windows: bieżące zajęcie VRAM kart AMD/Intel nie jest pokazywane (nie wpływa na werdykt).
 
-### Modele obrazów (wersja wstępna)
+### Modele obrazów
 
 Pliki „wszystko w jednym” (`.safetensors` – SD 1.5, SDXL, Illustrious, Pony), foldery i repozytoria
 diffusers oraz FLUX/SD 3 (także w GGUF) program ocenia po **szczycie najcięższego etapu**
 (kodowanie opisu → rysowanie → dekodowanie), bo Forge, ComfyUI i SD.Next przenoszą części między RAM
-a kartą. Domyślnie rozdzielczość natywna, zmiana: `--resolution 1024x768`, `--batch 2`. Pamięć
-obliczeń na megapiksel to na razie **szacunek** – do czasu pomiaru.
+a kartą. Domyślnie rozdzielczość natywna, zmiana: `--resolution 1024x768`, `--batch 2`. Pasek ma
+trzy wiersze: **System**, **Szczyt** i **Naraz**.
+
+- **SDXL i SD 1.5 – zmierzone** w Forge-neo (RTX 5050 8 GB, 512–1280 px): przewidywania z dokładnością ok. 0,1 GB.
+- **FLUX i SD 3 – na razie szacunek.** Dla FLUX przyjmujemy koder tekstu T5 w FP8. Program ostrzega,
+  gdy przy wczytywaniu może zabraknąć RAM (Forge najpierw czyta wszystkie części do RAM) i gdy model
+  GGUF wymaga w Forge-neo `--reserve-vram 2`.
+- Poniżej natywnej rozdzielczości modelu jakość wyraźnie spada – program mówi o tym, gdy podpowiada
+  mniejszy obraz.
 
 ### Modele na dysku
 
@@ -287,8 +301,8 @@ AI Bobra zaprojektował Rafał (pomysł, decyzje, testy na prawdziwym sprzęcie)
 ### Podoba się?
 
 Jeśli AI Bóbr oszczędził Ci pobierania modelu, który i tak by się nie zmieścił – **zostaw ⭐ gwiazdkę**
-u góry tej strony. To dla autora dużo znaczy i pomaga zdecydować, co dalej (w drodze są modele mowy,
-obrazów i muzyki). Werdykt się nie sprawdził? [Zgłoś to](https://github.com/DarkZachi83/Bobr/issues)
+u góry tej strony. To dla autora dużo znaczy i pomaga zdecydować, co dalej (w drodze są modele muzyki
+i kolejne pomiary). Werdykt się nie sprawdził? [Zgłoś to](https://github.com/DarkZachi83/Bobr/issues)
 z linkiem do modelu i tym, ile pamięci naprawdę zajął – prawdziwe pomiary ulepszają program dla wszystkich.
 
 ### Licencja

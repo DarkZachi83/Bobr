@@ -65,6 +65,11 @@ Szczyty etapów procesu Forge (GB), na czysto = ten sam opis i rozdzielczość c
 | SD 1.5 | 512 | 2,44 | 2,97 | 6 s |
 | SD 1.5 | 768 | 2,63 | 3,82 | 8 s |
 
+| FLUX schnell Q4_K_S (GGUF) + T5 Q4_K_M | 1024 | 5,14 (część główna 3,8 GB w karcie) | 4,33 | 28 s (7 s/krok) |
+
+FLUX na laptopie z 16 GB RAM wymagał: T5 w GGUF zamiast FP8, swapu na dysku (zram nie
+wystarcza), wyłączenia `--pin-shared-memory` i `--cuda-stream` oraz `--reserve-vram 2`.
+
 Wnioski i współczynniki – SPEC §5a. Dane: `tests/calibration/forge_rtx5050_2026-10-31.json`.
 
 **Wskazówki z pomiarów:**
