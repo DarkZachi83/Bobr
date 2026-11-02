@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Iterable, Optional, Sequence
 
+from aibobr.calculator.image import load_ram_short
 from aibobr.calculator.memory import MissingModelData, mtp_extra_bytes
 from aibobr.calculator.quants import QuantTable
 from aibobr.calculator.verdict import evaluate
@@ -187,6 +188,11 @@ def _where(level: FitLevel, cpu_only: bool = False) -> Text:
     if level == FitLevel.GREEN:
         return Text("expl.where.vram")
     return Text("expl.where.ram_only" if cpu_only else "expl.where.ram")
+
+
+def _is_gguf(spec: ModelSpec) -> bool:
+    """Kwantyzacja GGUF (Q4_K_S, IQ3_M…) – w odróżnieniu od FP16/BF16/FP8."""
+    return spec.quant.upper().startswith(("Q", "IQ", "TQ"))
 
 
 class Advisor:
@@ -467,7 +473,13 @@ class Advisor:
                                   {"res": f"{side}×{side}", "where": where, "native": spec.image.native}))
                 break
         if not lines:
-            lines.append(Line("expl.act.img_nothing"))
+            if v.level == FitLevel.YELLOW and not cpu:
+                # Działa, tylko wolno: część główna nie mieści się w karcie niezależnie
+                # od rozdzielczości – pomaga mniejszy plik, nie mniejszy obraz.
+                lines.append(Line("expl.act.img_smaller_quant" if _is_gguf(spec)
+                                  else "expl.act.img_smaller_format"))
+            else:
+                lines.append(Line("expl.act.img_nothing"))
         return lines
 
     def _image_spare(self, spec: ModelSpec, v: Verdict, hw: HardwareProfile,
@@ -498,6 +510,12 @@ class Advisor:
             notes.append(Line("note.img_encoders_cpu", {"size": Size(n.encoders)}))
         if n.vae_tiled:
             notes.append(Line("note.img_tiled"))
+        if info.family == "flux" and "encoders" in (info.assumed or ()):
+            notes.append(Line("note.img_flux_t5"))
+        if not v.capacity.cpu_only and load_ram_short(n, v.capacity.ram_usable):
+            notes.append(Line("note.img_load_ram", {"size": Size(n.weights)}))
+        if _is_gguf(spec) and v.level == FitLevel.YELLOW and not v.capacity.cpu_only:
+            notes.append(Line("note.img_gguf_reserve"))
         if not info.measured:
             notes.append(Line("note.img_estimate"))
         notes += [Line(w) for w in v.warnings]

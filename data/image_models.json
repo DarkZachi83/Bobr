@@ -35,8 +35,10 @@
       "diffusers": ["FluxPipeline", "FluxImg2ImgPipeline", "FluxFillPipeline", "FluxKontextPipeline"],
       "gguf": ["flux"],
       "native": 1024,
-      "parts_gb": {"encoders": 9.1, "vae": 0.16},
-      "main_gb_per_mpx": 1.5, "vae_gb_per_mpx": 3.0, "overhead_gb": 0.5, "measured": false
+      "parts_gb": {"encoders": 4.83, "vae": 0.16},
+      "_parts": "T5-XXL w FP8 (4,6 GB) + CLIP-L (0,23 GB) – najczęstszy zestaw; z T5 w FP16 dochodzi ok. 4,3 GB",
+      "main_gb_per_mpx": 0.8, "vae_gb_per_mpx": 3.0, "overhead_gb": 0.5, "measured": false,
+      "_pomiar": "31.10.2026 Forge-neo, schnell Q4_K_S, 1024, RTX 5050 8 GB: obliczenia ok. 0,85 GB, VAE 3,0 GB/MPx – jeden pomiar przy częściowym wczytaniu, więc dalej szacunek"
     },
     {
       "id": "sd3", "name": "SD 3",

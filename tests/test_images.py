@@ -158,10 +158,10 @@ class VerdictTest(Tmp):
         self.assertTrue(v.all_at_once)
 
     def test_flux_encoder_on_cpu_and_tiled_vae(self):
-        hw = pc(ram_gb=32, gpus=[gpu(vram_gb=8)])                           # 7 GB użytkowe
-        spec = self.spec([("double_blocks.0.x", 5.5 * G)], "flux-small")
+        hw = pc(ram_gb=32, gpus=[gpu(vram_gb=6)])                           # 5 GB użytkowe
+        spec = self.spec([("double_blocks.0.x", 4.5 * G)], "flux-small")
         v = evaluate(spec, hw, RunSettings(image_width=2048), QUANTS)
-        self.assertTrue(v.need.encoders_on_cpu)                             # T5 9 GB > karta
+        self.assertTrue(v.need.encoders_on_cpu)                             # T5 FP8 4,8 GB + narzut > 5 GB
         self.assertTrue(v.need.vae_tiled)                                   # 4 MPx – kafelkami
         self.assertNotIn("encode", v.need.gpu_stages)
 
@@ -213,10 +213,45 @@ class AdvisorTest(Tmp):
         self.assertEqual(e.actions[0].key, "expl.spare.img_res")
 
     def test_flux_notes(self):
-        v, e = self.explain(self.spec(FLUX, "flux"), pc(ram_gb=64, gpus=[gpu(vram_gb=10)]))   # T5 9,1 GB > 9 GB
+        v, e = self.explain(self.spec(FLUX, "flux"), pc(ram_gb=64, gpus=[gpu(vram_gb=6)]))    # T5 FP8 > 5 GB
         keys = [n.key for n in e.notes]
         self.assertIn("note.img_assumed", keys)
+        self.assertIn("note.img_flux_t5", keys)                             # założony T5 w FP8
         self.assertIn("note.img_encoders_cpu", keys)
+        self.assertNotIn("note.img_load_ram", keys)                         # 64 GB RAM wystarczy
+
+    def flux_gguf(self, size_gb=6.3):
+        """FLUX schnell Q4_K_S w GGUF (city96) – części poza plikiem z tabeli rodziny."""
+        from aibobr.domain.enums import ModelSource
+        from aibobr.sources.base import ArchInfo, LoadedModel, Variant
+        m = LoadedModel("flux1-schnell-Q4_K_S", ModelSource.GGUF_FILE,
+                        ArchInfo(architecture="flux", image_hint="gguf:flux"),
+                        (Variant("Q4_K_S", int(size_gb * G)),))
+        return IMAGES.annotate(m).spec()
+
+    def test_flux_gguf_on_authors_laptop(self):
+        # Pomiar 31.10.2026: 8 GB VRAM, 16 GB RAM – Forge zginął przy wczytywaniu (RAM),
+        # a z mniejszym T5 i --reserve-vram 2 liczył wolno (7 s/krok, model częściowo w karcie).
+        from aibobr.detection.profiles import load_profile
+        v, e = self.explain(self.flux_gguf(), load_profile(LAPTOP))
+        keys = [n.key for n in e.notes]
+        self.assertEqual(v.level, FitLevel.YELLOW)
+        self.assertIn("note.img_load_ram", keys)
+        self.assertIn("note.img_gguf_reserve", keys)
+        self.assertEqual([a.key for a in e.actions], ["expl.act.img_smaller_quant"])
+        self.assertIn("Q3_K_S", render(e.actions[0]))
+
+    def test_sdxl_loads_fine_on_authors_laptop(self):
+        from aibobr.detection.profiles import load_profile
+        v, e = self.explain(self.spec(SDXL), load_profile(LAPTOP))
+        keys = [n.key for n in e.notes]
+        self.assertNotIn("note.img_load_ram", keys)                         # SDXL działał
+        self.assertNotIn("note.img_gguf_reserve", keys)
+
+    def test_fp16_too_big_suggests_fp8_or_gguf(self):
+        v, e = self.explain(self.spec(FLUX, "flux"), pc(ram_gb=64, gpus=[gpu(vram_gb=12)]))
+        self.assertEqual(v.level, FitLevel.YELLOW)
+        self.assertEqual([a.key for a in e.actions], ["expl.act.img_smaller_format"])
 
     def test_label(self):
         self.assertEqual(image_label(self.spec(SDXL), RunSettings(image_width=1280, image_height=768, image_batch=2)),

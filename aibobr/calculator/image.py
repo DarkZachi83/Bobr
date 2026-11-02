@@ -39,3 +39,15 @@ def tiled(spec: ModelSpec, need: ImageNeed) -> ImageNeed:
     if per_image <= TILE_MPX:
         return need
     return replace(need, vae_compute=gib(spec.image.vae_gb_per_mpx * TILE_MPX), vae_tiled=True)
+
+
+# Wczytywanie: Forge (i ComfyUI) najpierw czyta wszystkie części do RAM, a przez chwilę
+# trzyma nawet więcej (kopia pliku + tensory). Pomiar autora 31.10.2026, laptop 16 GB RAM
+# z zram: FLUX Q4 + T5 FP8 (11,6 GB części) – system zabił Forge przy wczytywaniu; SDXL
+# (7,4 GB) – bez problemu. Współczynnik 1,5 oddziela oba przypadki – szacunek.
+LOAD_RAM_FACTOR = 1.5
+
+
+def load_ram_short(need: ImageNeed, ram_usable: int) -> bool:
+    """Czy przy wczytywaniu może zabraknąć RAM (wszystkie części naraz w pamięci)."""
+    return bool(ram_usable) and need.weights * LOAD_RAM_FACTOR > ram_usable
