@@ -67,7 +67,8 @@ class MainWindow:
         self.tabs.pack(fill="both", expand=True)
         page = ttk.Frame(self.tabs, padding=(0, 8, 0, 0))
         self.tabs.add(page, text=t("gui.tab.check"))
-        self.stats = StatsPanel(self.tabs, self.c.saved, self.open_saved) if self.c.saved else None
+        self.stats = StatsPanel(self.tabs, self.c.saved, self.open_saved, self.compare_saved) \
+            if self.c.saved else None
         if self.stats:
             self.tabs.add(self.stats, text=t("gui.tab.stats"))
         self.tabs.select(self.tab)
@@ -306,6 +307,22 @@ class MainWindow:
         self.tab = self.tabs.index(self.tabs.select())
         if self.stats and self.tab == 1:
             self.stats.refresh()
+            self.compare_saved()
+
+    def compare_saved(self) -> None:
+        """Kolumny porównania (etap 11b) – w tle: modele z HF wczytują się z pamięci podręcznej."""
+        if not self.stats or not self.c.saved.items:
+            return
+        try:
+            hw, settings = self.hardware.current()
+        except ValueError:
+            self.stats.set_status(t("stats.need_hw"))
+            return
+        items = list(self.c.saved.items)
+        self.stats.set_status(t("stats.computing", total=len(items)))
+        self.worker.run("compare", lambda: self.c.compare_saved(items, hw, settings),
+                        lambda comps: self.stats.show(comps, self.c.hardware_text(hw)),
+                        lambda e: self.stats.set_status(t("stats.error_other")))
 
     def save_compare(self) -> None:
         if not self.last or not self.c.saved:
