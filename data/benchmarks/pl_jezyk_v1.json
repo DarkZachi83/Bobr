@@ -1,0 +1,75 @@
+{
+  "suite_info": {
+    "id": "pl_jezyk_v1",
+    "name": "Testy Zacharskiego – polszczyzna",
+    "version": "1.0",
+    "author": "Rafał Zacharski (AI Bóbr)",
+    "language": "pl",
+    "description": "Czy kwantyzacja nie psuje polszczyzny: znaki diakrytyczne, odmiana, składnia. Jeden test wiedzy (Księga henrykowska) – osobna kategoria."
+  },
+  "default_generation_config": {
+    "temperature": 0,
+    "seed": 42,
+    "max_tokens": 256,
+    "think": false
+  },
+  "tests": [
+    {
+      "id": "pl_diacritics_restore",
+      "title": "Polskie znaki – przywrócenie",
+      "category": "language_integrity",
+      "prompt": "Dodaj polskie znaki diakrytyczne i odpowiedz samym poprawionym zdaniem: \"Zazolc gesla jazn\"",
+      "evaluator": {"type": "regex", "pattern": "(?i)zażółć\\s+gęślą\\s+jaźń"}
+    },
+    {
+      "id": "pl_chrzaszcz_plural_past",
+      "title": "Chrząszcz – czas przeszły, liczba mnoga",
+      "category": "language_integrity",
+      "prompt": "Zamień na czas przeszły i liczbę mnogą. Odpowiedz samym zdaniem: \"Chrząszcz brzmi w trzcinie.\"",
+      "evaluator": {"type": "regex", "pattern": "(?i)chrząszcze\\s+brzmiały\\s+w\\s+trzcin(ie|ach)"}
+    },
+    {
+      "id": "pl_masculine_personal",
+      "title": "Rodzaj męskoosobowy",
+      "category": "language_integrity",
+      "prompt": "Zamień na liczbę mnogą. Odpowiedz samym zdaniem: \"Ten dobry lekarz przyszedł.\"",
+      "evaluator": {"type": "regex", "pattern": "(?i)ci\\s+dobrzy\\s+lekarze\\s+przyszli"}
+    },
+    {
+      "id": "pl_numeral_words",
+      "title": "Liczebnik słownie",
+      "category": "language_integrity",
+      "prompt": "Przepisz zdanie, zapisując liczbę słownie (bez cyfr). Odpowiedz samym zdaniem: \"22 koty siedzą na płocie.\"",
+      "evaluator": {"type": "regex", "pattern": "(?i)dwadzieścia\\s+dwa\\s+koty"}
+    },
+    {
+      "id": "pl_vocative",
+      "title": "Wołacz",
+      "category": "language_integrity",
+      "prompt": "Podaj wołacz imienia \"Tomasz\". Odpowiedz jednym słowem.",
+      "evaluator": {"type": "regex", "pattern": "(?i)\\btomaszu\\b"}
+    },
+    {
+      "id": "pl_perfective_aspect",
+      "title": "Aspekt dokonany",
+      "category": "language_integrity",
+      "prompt": "Podaj czasownik dokonany od \"pisać\" (znaczenie: ukończyć pisanie). Odpowiedz jednym słowem.",
+      "evaluator": {"type": "regex", "pattern": "(?i)\\bnapisać\\b"}
+    },
+    {
+      "id": "pl_genitive_plural",
+      "title": "Dopełniacz liczby mnogiej",
+      "category": "language_integrity",
+      "prompt": "Uzupełnij jednym słowem w poprawnej formie: \"Na stole leży pięć ... (jabłko).\" Odpowiedz samym słowem.",
+      "evaluator": {"type": "regex", "pattern": "(?i)\\bjabłek\\b"}
+    },
+    {
+      "id": "pl_henrykowska",
+      "title": "Księga henrykowska – znaczenie zdania",
+      "category": "knowledge",
+      "prompt": "Wyjaśnij jednym zdaniem współczesną polszczyzną, co znaczy zdanie z Księgi henrykowskiej: \"Day, ut ia pobrusa, a ti poziwai\".",
+      "evaluator": {"type": "contains_all", "patterns": ["miel|mlić|mleni", "odpocz|poczyw"], "case_sensitive": false},
+      "notes": "Pisownia potwierdzona: tablica pamiątkowa w Henrykowie (1970) – „DAY UT IA POBRUSA A TI POZIWAI”."
+    }
+  ]
+}
