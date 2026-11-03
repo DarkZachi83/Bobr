@@ -376,6 +376,14 @@ swojego komputera w zakładce **Statystyka**.
   się od domyślnych, okno przechodzi w tryb Zaawansowany.
 - Porównujemy **w obrębie grupy** – tokeny na sekundę i sekundy na obraz to różne miary.
 
+**11b – kolumny porównania** (liczone w tle przy otwarciu zakładki i przyciskiem „Przelicz”;
+modele z HF z pamięci podręcznej, pliki z nagłówka): Dziś (werdykt teraz, „•” = inny niż w dniu zapisu),
+Szybkość (klasa + miejsce w grupie: ★ najszybszy, ▼ najwolniejszy; modele, które nie pójdą, bez miejsca),
+Max kontekst (wielokrotność 1024, zielony werdykt; obrazy: bok 512–2048 co 64 px), Najlepsza
+kwantyzacja w karcie (najwięcej bitów na wagę; przy jednym wariancie „–”), Zapas (GB i % pamięci karty),
+Rozmiar, Na dysku (ten plik / Ollama / – po „Modele na dysku…” – program, w którym leży plik o tym samym
+rozmiarze). Pod tabelą: podsumowanie grupy i szczegóły zaznaczonego modelu z dnia zapisu.
+
 Etapy: **11a** zapis, zakładka, listy (v0.5.0) · **11b** porównanie liczone na bieżąco dla obecnego
 komputera: klasa szybkości (względna – całość w karcie › prawie całość › podział › procesor, w klasie
 mniej czytanych danych na token = szybciej), największy kontekst / rozdzielczość w całości w karcie,

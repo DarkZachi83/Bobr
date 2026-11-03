@@ -162,6 +162,18 @@ class GuiSmokeTest(unittest.TestCase):
         w.stats.remove(saved)
         self.assertEqual(len(section.items), 0)
 
+    def test_stats_tab_compares_on_this_computer(self):
+        w = self.window()
+        w.save_compare()
+        w.tabs.select(1)
+        self.pump(lambda: "Porównanie dla" in w.stats.status.cget("text"), 5)
+        section = w.stats.sections["text"]
+        row = section.tree.item(section.tree.get_children()[0], "values")
+        self.assertEqual(row[3], "zmieści się")                          # Dziś
+        self.assertEqual(row[4], "1. w karcie")                          # jeden model – bez ★
+        self.assertEqual(row[9], "ten plik")
+        self.assertIn("zielone: 1", section.summary.cget("text"))
+
     def test_save_disabled_without_result(self):
         w = self.window()
         w.check(str(Path(self.tmp.name) / "nie-ma.gguf"))

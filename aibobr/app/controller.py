@@ -48,6 +48,7 @@ class AppController:
         self.images = images or ImageCatalog()
         self.set_catalog(catalog or Catalog(updated="", models=()))
         self.saved = saved                     # SavedStore – modele do porównania (etap 11a)
+        self.last_scan = None                  # ostatnie „Modele na dysku…” w tej sesji
 
     def set_catalog(self, catalog: Catalog) -> None:
         self.catalog = catalog
@@ -94,7 +95,10 @@ class AppController:
         import sys
         from aibobr.scan.scanner import Scanner
         scanner = Scanner(stop, progress, audio=self.audio)
-        return scanner.scan_folder(Path(folder)) if folder else scanner.scan_known(sys.platform)
+        if folder:
+            return scanner.scan_folder(Path(folder))
+        self.last_scan = scanner.scan_known(sys.platform)   # do porównania: „masz już na dysku”
+        return self.last_scan
 
     # ------------------------------------------------------------------ sprzęt
     def scan(self) -> HardwareProfile:
@@ -138,10 +142,6 @@ class AppController:
         kind = "audio" if spec.audio else "image" if spec.image else "text"
         need = verdict.need
         peak = need.peak if kind == "image" else need.vram_part
-        gpus = [g for g in hw.gpus if g.selected and not g.integrated]
-        parts = [f"{_short_gpu(g.name)} {to_gib(g.vram_total or 0):.0f} GB" for g in gpus] or ["CPU"]
-        if hw.ram_total:
-            parts.append(f"RAM {to_gib(hw.ram_total):.0f} GB")
         image = kind == "image"
         return SavedModel(
             kind=kind, name=spec.name, target=target, quant=spec.quant,
@@ -152,7 +152,70 @@ class AppController:
             resolution=(need.width, need.height) if image else None,
             native_resolution=not settings.image_width,
             batch=need.batch if image else 1,
-            hardware=" · ".join(parts))
+            hardware=AppController.hardware_text(hw))
+
+
+    @staticmethod
+    def hardware_text(hw: HardwareProfile) -> str:
+        """„RTX 5050 Laptop 8 GB · RAM 15 GB” – krótki opis sprzętu do tabeli."""
+        gpus = [g for g in hw.gpus if g.selected and not g.integrated]
+        parts = [f"{_short_gpu(g.name)} {to_gib(g.vram_total or 0):.0f} GB" for g in gpus] or ["CPU"]
+        if hw.ram_total:
+            parts.append(f"RAM {to_gib(hw.ram_total):.0f} GB")
+        return " · ".join(parts)
+
+    @staticmethod
+    def item_settings(item, base: RunSettings) -> RunSettings:
+        """Ustawienia zapisanego modelu na tle bieżących (rezerwy, próg zapasu – z okna)."""
+        s = base
+        if item.context:
+            s = replace(s, context_tokens=item.context)
+        if item.kv_cache:
+            s = replace(s, kv_cache_type=KvCacheType(item.kv_cache))
+        if item.kind == "image":
+            custom = item.resolution if not item.native_resolution else None
+            s = replace(s, image_width=custom[0] if custom else None,
+                        image_height=custom[1] if custom else None, image_batch=item.batch or 1)
+        return s
+
+    def _on_disk(self, target: str, size: Optional[int]) -> Optional[str]:
+        """Gdzie model już leży: plik wskazany wprost, Ollama, albo – po „Modele na dysku…” –
+        plik o tym samym rozmiarze co wariant (rozmiar z HF = rozmiar pobranego pliku)."""
+        from aibobr.sources.factory import source_kind
+        kind = source_kind(target)
+        if kind == "ollama":
+            return "Ollama"
+        if kind == "file":
+            return "file"
+        if size and self.last_scan:
+            for m in self.last_scan.models:
+                if m.size == size:
+                    return m.app
+        return None
+
+    def compare_saved(self, items, hw: HardwareProfile, base: RunSettings, progress=None) -> dict:
+        """Porównanie zapisanych modeli na tym komputerze: {klucz wpisu: Comparison}.
+        Modele z Hugging Face idą z pamięci podręcznej (7 dni), pliki – z nagłówka."""
+        from aibobr.calculator.compare import Comparison, compare, rank
+        from aibobr.sources.base import SourceError
+        out = {}
+        for n, item in enumerate(items):
+            if progress:
+                progress(n, len(items), item.name)
+            try:
+                model = self.load_model(item.target)
+                names = [v.quant for v in model.variants]
+                quant = item.quant if item.quant in names else model.default_variant().quant
+                c = compare(model, quant, hw, self.item_settings(item, base), self.quants)
+                out[item.key] = replace(c, on_disk=self._on_disk(item.target, c.download))
+            except SourceError as e:
+                out[item.key] = Comparison(error=e.code)
+            except Exception as e:                   # jeden zepsuty wpis nie psuje porównania
+                out[item.key] = Comparison(error="stats.error_other")
+        ranked = {}
+        for kind in {i.kind for i in items}:
+            ranked.update(rank({i.key: out[i.key] for i in items if i.kind == kind}))
+        return ranked
 
 
 def _short_gpu(name: str) -> str:
