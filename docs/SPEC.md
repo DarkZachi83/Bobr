@@ -400,6 +400,37 @@ najlepsza kwantyzacja w karcie, zapas GB i %, rozmiar i „masz już na dysku”
 **11c** dane z Hugging Face przyciskiem (pobrania z 30 dni, polubienia, data, licencja i dostęp) ·
 później: „co da ulepszenie sprzętu”, eksport, tokeny na sekundę (po kalibracji).
 
+## 5c. Benchmark na tym komputerze – „Testy Zachara” (etap 12, plan 3.11.2026)
+
+**Cel:** zmierzyć to, czego AI Bóbr dziś tylko szacuje – na domowym sprzęcie, gdzie o szybkości
+decyduje przepustowość pamięci, podział warstw VRAM/RAM i długi kontekst, a nie moc karty.
+
+**Zasady:**
+- Bez własnego silnika: Bóbr jest klientem programu, który użytkownik już ma – najpierw **Ollama**
+  (czasy w odpowiedzi API), potem llama-server i LM Studio. Testuje modele już zainstalowane – nic
+  sam nie pobiera.
+- Powtarzalność: rozgrzewka + 3 przebiegi, mediana; temperatura 0, stałe ziarno; zapis wersji programu,
+  warstw w karcie, kontekstu, typu KV, flash attention i zasilania (laptop na baterii zwalnia).
+- Modele „myślące”: myślenie wyłączone (`think: false`), a `<think>…</think>` wycinane przed oceną.
+- Wymuszony format JSON w programie (constrained decoding) – wyłączony: mierzymy model, nie Ollamę.
+- **Kod jest tylko parsowany, nigdy uruchamiany** (bezpieczeństwo).
+- Testy funkcjonalne to **sprawdzian** (czy kwantyzacja psuje polszczyznę, format, pamięć długiego
+  kontekstu), nie ocena jakości modelu. Wynik jako „8/10” – co najmniej kilka zadań na kategorię.
+- Wyniki w **SQLite** (biblioteka standardowa) razem z zapisanymi modelami; w Statystyce zestawienie
+  „przewidywanie AI Bóbra ↔ pomiar” – to także kalibracja obliczeń.
+
+**Pakiety** (`data/benchmarks/`): `perf_v1` (prompt 1k/8k/32k → prompt processing i TTFT, generowanie
+256 tokenów → tokeny/s, szczyt VRAM/RAM), `pl_jezyk_v1` (polskie znaki, odmiana, rodzaj męskoosobowy,
+liczebniki, wołacz, aspekt; Księga henrykowska jako test wiedzy), `en_format_v1` (JSON ścisły i łagodny –
+bez/po zdjęciu bloku ```json, klucze, typy, wartości, znaki ucieczki; składnia Pythona, nazwy funkcji
+i metod). Oceniający: `regex`, `contains_all` (rdzenie słów – polska odmiana), `json`, `python_syntax`.
+Passkey (igła w stogu siana) – pakiet przy 12b: kilka długości × pozycje 10/50/90%.
+
+**Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
+12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.
+Sprzęt testowy autora: laptop i5-13450HX + RTX 5050 8 GB + DDR5 oraz Ryzen 7 5700X + RTX 2060 SUPER 8 GB
++ 32 GB DDR4 – dwie generacje kart, DDR4 i DDR5 (kluczowe przy podziale VRAM/RAM), CPU AMD i Intel.
+
 ## 6. Werdykt: pasek pamięci
 
 Zamiast samych świateł: **dwie warstwy na wspólnej skali w GB**.

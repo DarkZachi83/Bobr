@@ -1,0 +1,73 @@
+{
+  "suite_info": {
+    "id": "en_format_v1",
+    "name": "Testy Zachara – JSON and code format",
+    "version": "1.0",
+    "author": "Rafał Zacharski (AI Bóbr)",
+    "language": "en",
+    "description": "Does quantization break structured output? Strict and lenient JSON, value checks, Python syntax. Generated code is parsed, never executed."
+  },
+  "default_generation_config": {
+    "temperature": 0,
+    "seed": 42,
+    "max_tokens": 512,
+    "think": false,
+    "constrained_json": false
+  },
+  "tests": [
+    {
+      "id": "json_hardware",
+      "title": "Extract hardware specs",
+      "category": "format_adherence",
+      "prompt": "Extract the hardware specs into a JSON object with keys \"cpu\" (string), \"ram_gb\" (number) and \"vram_gb\" (number): \"System has a Ryzen 7 5700X, 32 GB of RAM and an RTX 2060 SUPER with 8 GB of VRAM.\" Return ONLY the JSON.",
+      "evaluator": {"type": "json", "expect": "object", "required_keys": ["cpu", "ram_gb", "vram_gb"],
+                    "checks": [{"path": "cpu", "contains": "Ryzen 7"}, {"path": "ram_gb", "equals": 32},
+                               {"path": "vram_gb", "equals": 8}]}
+    },
+    {
+      "id": "json_primes",
+      "title": "Array of numbers",
+      "category": "format_adherence",
+      "prompt": "Return a JSON array with the first five prime numbers. Return ONLY the JSON.",
+      "evaluator": {"type": "json", "expect": "array", "checks": [{"path": "", "equals": [2, 3, 5, 7, 11]}]}
+    },
+    {
+      "id": "json_nested",
+      "title": "Typed fields and a nested list",
+      "category": "format_adherence",
+      "prompt": "Convert to a JSON object with keys \"name\" (string), \"age\" (number) and \"skills\" (array of strings): \"Anna is 34 and knows Python and SQL.\" Return ONLY the JSON.",
+      "evaluator": {"type": "json", "expect": "object", "required_keys": ["name", "age", "skills"],
+                    "checks": [{"path": "name", "equals": "Anna"}, {"path": "age", "equals": 34},
+                               {"path": "skills", "contains_all": ["python", "sql"], "case_sensitive": false}]}
+    },
+    {
+      "id": "json_escaping",
+      "title": "Quotes and backslash escaping",
+      "category": "format_adherence",
+      "prompt": "Return a JSON object with a single key \"quote\" whose value is exactly this text: She said \"hi\" and left \\ fast. Return ONLY the JSON.",
+      "evaluator": {"type": "json", "expect": "object", "required_keys": ["quote"],
+                    "checks": [{"path": "quote", "equals": "She said \"hi\" and left \\ fast."}]}
+    },
+    {
+      "id": "py_palindrome",
+      "title": "Python function – palindrome",
+      "category": "code_syntax",
+      "prompt": "Write a Python function is_palindrome(s) that returns True if the string s reads the same backwards, ignoring case and spaces. Return only the code.",
+      "evaluator": {"type": "python_syntax", "function": "is_palindrome"}
+    },
+    {
+      "id": "py_fibonacci",
+      "title": "Python function – Fibonacci list",
+      "category": "code_syntax",
+      "prompt": "Write a Python function fibonacci(n) that returns a list with the first n Fibonacci numbers, starting with 0 and 1. Return only the code.",
+      "evaluator": {"type": "python_syntax", "function": "fibonacci"}
+    },
+    {
+      "id": "py_class",
+      "title": "Python class with a method",
+      "category": "code_syntax",
+      "prompt": "Write a Python class Stack with methods push(item), pop() and is_empty(). Return only the code.",
+      "evaluator": {"type": "python_syntax", "class": "Stack", "methods": ["push", "pop", "is_empty"]}
+    }
+  ]
+}
