@@ -69,7 +69,7 @@
       "category": "knowledge",
       "prompt": "Wyjaśnij jednym zdaniem współczesną polszczyzną, co znaczy zdanie z Księgi henrykowskiej: \"Day, ut ia pobrusa, a ti poziwai\".",
       "evaluator": {"type": "contains_all", "patterns": ["miel|mlić|mleni", "odpocz|poczyw"], "case_sensitive": false},
-      "notes": "Pisownia transkrypcji do potwierdzenia w źródle (pobrusa / pobrusę)."
+      "notes": "Pisownia potwierdzona: tablica pamiątkowa w Henrykowie (1970) – „DAY UT IA POBRUSA A TI POZIWAI”."
     }
   ]
 }
