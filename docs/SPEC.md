@@ -426,6 +426,13 @@ bez/po zdjęciu bloku ```json, klucze, typy, wartości, znaki ucieczki; składni
 i metod). Oceniający: `regex`, `contains_all` (rdzenie słów – polska odmiana), `json`, `python_syntax`.
 Passkey (igła w stogu siana) – pakiet przy 12b: kilka długości × pozycje 10/50/90%.
 
+**12a – zrobione:** okno „Benchmark…” z trzech miejsc (Modele na dysku – kilka zaznaczonych naraz,
+Sprawdź – gdy model jest z Ollamy, Statystyka – zaznaczony albo wszystkie z Ollamy w grupie). Przed
+startem werdykt dla każdej pary model × kontekst (1k i 8k zaznaczone, 32k na życzenie): czerwone
+pomijane, szacunek czasu; przy kilku modelach ostrzeżenie i potwierdzenie (decyzja autora: długo,
+obciążenie, ryzyko zawieszenia przy braku pamięci), na baterii – ostrzeżenie. Każdy przebieg ma inny
+początek promptu (Ollama pamięta przetworzony prompt). Wyniki: `benchmarks.sqlite` (tabela `perf`).
+
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.
 Sprzęt testowy autora: laptop i5-13450HX + RTX 5050 8 GB + DDR5 oraz Ryzen 7 5700X + RTX 2060 SUPER 8 GB

@@ -72,7 +72,7 @@ class MainWindow:
         page = ttk.Frame(self.tabs, padding=(0, 8, 0, 0))
         self.tabs.add(page, text=t("gui.tab.check"))
         self.stats = StatsPanel(self.tabs, self.c.saved, self.open_saved, self.compare_saved,
-                                self.fetch_hf) if self.c.saved else None
+                                self.fetch_hf, self.open_benchmark) if self.c.saved else None
         if self.stats:
             self.tabs.add(self.stats, text=t("gui.tab.stats"))
         self.tabs.select(self.tab)
@@ -101,6 +101,8 @@ class MainWindow:
         self.save_button = ttk.Button(save_row, text="💾 " + t("gui.save_compare"), command=self.save_compare)
         self.save_button.state(["disabled"])
         self.save_button.pack(side="left")
+        self.bench_button = ttk.Button(save_row, text="⏱ " + t("bench.button"),
+                                       command=lambda: self.open_benchmark([self.model_text]))
         self.save_status = ttk.Label(save_row, text="", style="Muted.TLabel", wraplength=600)
         self.save_status.pack(side="left", padx=8)
         self.explanation = ExplanationPanel(result)
@@ -253,9 +255,21 @@ class MainWindow:
         dialog = FoundModelsDialog(self.root, self.worker, self.c.find_models,
                                    self.c.scan_consent, self.c.set_scan_consent)
         self.root.wait_window(dialog)
-        if dialog.result:
+        if dialog.bench_result:
+            self.open_benchmark(dialog.bench_result)
+        elif dialog.result:
             self.picker.text.set(dialog.result)
             self.check(dialog.result)
+
+    def open_benchmark(self, targets: list[str]) -> None:
+        """Okno benchmarku (etap 12a) – z listy modeli na dysku, z zakładki Sprawdź albo Statystyka."""
+        from aibobr.gui.dialogs.benchmark import BenchmarkDialog
+        try:
+            hw, settings = self.hardware.current()
+        except ValueError:
+            messagebox.showinfo(t("bench.title"), t("stats.need_hw"), parent=self.root)
+            return
+        BenchmarkDialog(self.root, self.c, self.worker, targets, hw, settings)
 
     def recompute(self) -> None:
         if not hasattr(self, "bar"):
@@ -306,6 +320,10 @@ class MainWindow:
         self.explanation.set_explanation(expl)
         self.last = (spec, v, hw, settings)
         self.save_button.state(["!disabled"])
+        if self.model_text.startswith(OLLAMA_PREFIX) and not spec.image and not spec.audio:
+            self.bench_button.pack(side="left", padx=(6, 0), before=self.save_status)
+        else:
+            self.bench_button.pack_forget()
         self.save_status.configure(text="")
 
     # ------------------------------------------------------------------ porównanie (etap 11a)

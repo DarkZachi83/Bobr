@@ -49,6 +49,7 @@ class AppController:
         self.set_catalog(catalog or Catalog(updated="", models=()))
         self.saved = saved                     # SavedStore – modele do porównania (etap 11a)
         self.last_scan = None                  # ostatnie „Modele na dysku…” w tej sesji
+        self._bench_db = None
 
     def set_catalog(self, catalog: Catalog) -> None:
         self.catalog = catalog
@@ -243,6 +244,78 @@ class AppController:
         return out
 
 
+    # ------------------------------------------------------------------ benchmark (etap 12a)
+    @property
+    def bench_db(self):
+        """benchmarks.sqlite obok zapisanych modeli (tworzony przy pierwszym pomiarze)."""
+        if self._bench_db is None and self.saved is not None:
+            from aibobr.app.bench_db import BenchDb
+            self._bench_db = BenchDb(self.saved.path.parent / "benchmarks.sqlite")
+        return self._bench_db
+
+    def bench_suite(self) -> dict:
+        import json
+        from pathlib import Path as _P
+        path = _P(__file__).resolve().parents[2] / "data" / "benchmarks" / "perf_v1.json"
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def bench_predict(self, targets, contexts, hw: HardwareProfile, base: RunSettings) -> dict:
+        """Werdykt AI Bóbra dla każdej pary (model, kontekst) – czerwone pomijamy przed startem.
+        {(target, ctx): "green"/"yellow"/"red"} albo None, gdy modelu nie dało się policzyć."""
+        from aibobr.calculator.verdict import evaluate
+        out = {}
+        for target in targets:
+            try:
+                model = self.load_model(target)
+                spec = model.spec()
+            except Exception:
+                spec = None
+            for ctx in contexts:
+                level = None
+                if spec is not None:
+                    try:
+                        level = evaluate(spec, hw, replace(base, context_tokens=ctx), self.quants).level.value
+                    except Exception:
+                        level = None
+                out[(target, ctx)] = level
+        return out
+
+    def run_benchmark(self, targets, contexts, predicted: dict, hw: HardwareProfile, report, stop,
+                      db=None, now=None, bench=None) -> list:
+        """Pomiar wydajności modeli z Ollamy po kolei (nigdy kilku naraz). report(dict) – postęp."""
+        import datetime
+        from dataclasses import replace as _r
+        from aibobr.bench.ollama import OllamaBench
+        from aibobr.bench.runner import PerfResult, PerfRunner, Stopped
+        from aibobr.sources.factory import OLLAMA_PREFIX
+        suite = self.bench_suite()
+        bench = bench or OllamaBench(self.ollama_host())
+        version = bench.version()
+        runner = PerfRunner(bench, suite)
+        hardware, power = self.hardware_text(hw), power_source()
+        stamp = (now or datetime.datetime.now()).strftime("%Y-%m-%d %H:%M")
+        results = []
+        jobs = [(t, c) for t in targets for c in contexts]
+        for n, (target, ctx) in enumerate(jobs, 1):
+            model = target[len(OLLAMA_PREFIX):] if target.startswith(OLLAMA_PREFIX) else target
+            level = predicted.get((target, ctx))
+            if level == "red":
+                results.append(PerfResult(model, ctx, predicted=level, skipped="bench.skip_red"))
+                continue
+            try:
+                r = runner.run(model, ctx, lambda step: report({"n": n, "total": len(jobs), "model": model,
+                                                                "context": ctx, "step": step}), stop)
+            except Stopped:
+                results.append(PerfResult(model, ctx, predicted=level, stopped=True))
+                break
+            r = _r(r, predicted=level)
+            results.append(r)
+            if db is not None:
+                db.add_perf(r, measured_at=stamp, runtime="ollama", runtime_version=version,
+                            hardware=hardware, power=power, suite=suite["suite_info"]["id"])
+        return results
+
+
 def _short_gpu(name: str) -> str:
     """„NVIDIA GeForce RTX 5050 Laptop GPU” → „RTX 5050 Laptop” – do wąskiej kolumny tabeli."""
     for prefix in ("NVIDIA GeForce ", "NVIDIA ", "AMD ", "Intel(R) ", "Intel "):
@@ -250,3 +323,15 @@ def _short_gpu(name: str) -> str:
             name = name[len(prefix):]
             break
     return name.replace(" Laptop GPU", " Laptop").replace(" GPU", "").strip()
+
+
+def power_source() -> Optional[str]:
+    """„ac” / „battery” – laptop na baterii zwalnia kartę; None: komputer bez baterii albo nie wiadomo."""
+    try:
+        import psutil
+        battery = psutil.sensors_battery()
+    except Exception:
+        return None
+    if battery is None:
+        return None
+    return "ac" if battery.power_plugged else "battery"
