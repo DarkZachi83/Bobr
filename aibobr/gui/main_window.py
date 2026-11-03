@@ -34,6 +34,7 @@ class MainWindow:
         self.root, self.c = root, controller
         self.worker = Worker(root)
         self.model: Optional[LoadedModel] = None
+        self.loading: Optional[str] = None       # komunikat wczytywania nowego modelu
         self.quant: Optional[str] = initial_quant
         self.model_text = initial_model or ""
         self.hw = None
@@ -148,21 +149,29 @@ class MainWindow:
     # ------------------------------------------------------------------ model
     def check(self, text: str) -> None:
         self.model_text = text
+        first = self.model is None                   # kwantyzacja z zapisanego stanu – tylko za 1. razem
+        loading = {"remote": t("cli.loading_remote"), "file": t("gui.reading_file"),
+                   "ollama": t("gui.reading_ollama")}[source_kind(text)]
+        # Stary wynik znika od razu – inaczej do końca wczytywania wygląda jak wynik nowego modelu.
+        self.model = None
+        self.picker.set_model(None, None)
+        self.loading = loading
+        self._clear_result()
         self.picker.set_busy(True)
-        self.picker.set_status({"remote": t("cli.loading_remote"), "file": t("gui.reading_file"),
-                                "ollama": t("gui.reading_ollama")}[source_kind(text)])
+        self.picker.set_status(loading)
 
         def done(model):
+            self.loading = None
             self.picker.set_busy(False)
             self.picker.set_status()
-            self.set_model(model, self.quant if self.model is None else None)
+            self.set_model(model, self.quant if first else None)
 
         def failed(e):
             self.picker.set_busy(False)
-            if isinstance(e, SourceError):
-                self.picker.set_status(t(e.code), "Error")
-            else:
-                self.picker.set_status(t("gui.unexpected", error=repr(e)), "Error")
+            message = t(e.code) if isinstance(e, SourceError) else t("gui.unexpected", error=repr(e))
+            self.loading = None
+            self.picker.set_status(message, "Error")
+            self._clear_result(message, color=COLORS["error"])
 
         self.worker.run("model", lambda: self.c.load_model(text), done, failed)
 
@@ -189,7 +198,9 @@ class MainWindow:
 
     # ------------------------------------------------------------------ wynik
     def _clear_result(self, message: str = "", style: str = "Verdict.TLabel", color=None) -> None:
-        self.bar.set_verdict(None, hint=self.model is None)
+        if not message and self.loading:     # trwa wczytywanie nowego modelu
+            message, color = self.loading, COLORS["muted"]
+        self.bar.set_verdict(None, hint=self.model is None and not self.loading)
         self.header.configure(text="")
         self.verdict.configure(text=message, style=style, foreground=color or COLORS["text"])
         for child in self.notes.winfo_children():
