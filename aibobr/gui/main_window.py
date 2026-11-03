@@ -29,6 +29,10 @@ from aibobr.knowledge.advisor import audio_label, image_label, render
 from aibobr.sources.base import LoadedModel, SourceError
 from aibobr.sources.factory import OLLAMA_PREFIX, source_kind
 
+# Błędy, przy których szczegół techniczny pomaga w zgłoszeniu (np. „no general.architecture”).
+DETAIL_CODES = {"source.bad_file", "source.gguf_version", "source.no_model_gguf", "source.http_error"}
+
+
 class MainWindow:
     def __init__(self, root: tk.Tk, controller: AppController,
                  initial_model: Optional[str] = None, initial_quant: Optional[str] = None):
@@ -67,8 +71,8 @@ class MainWindow:
         self.tabs.pack(fill="both", expand=True)
         page = ttk.Frame(self.tabs, padding=(0, 8, 0, 0))
         self.tabs.add(page, text=t("gui.tab.check"))
-        self.stats = StatsPanel(self.tabs, self.c.saved, self.open_saved, self.compare_saved) \
-            if self.c.saved else None
+        self.stats = StatsPanel(self.tabs, self.c.saved, self.open_saved, self.compare_saved,
+                                self.fetch_hf) if self.c.saved else None
         if self.stats:
             self.tabs.add(self.stats, text=t("gui.tab.stats"))
         self.tabs.select(self.tab)
@@ -191,6 +195,8 @@ class MainWindow:
         def failed(e):
             self.picker.set_busy(False)
             message = t(e.code) if isinstance(e, SourceError) else t("gui.unexpected", error=repr(e))
+            if isinstance(e, SourceError) and e.detail and e.code in DETAIL_CODES:
+                message += f"\n({e.detail})"         # szczegół techniczny – do zgłoszenia błędu
             self.loading = None
             self.picker.set_status(message, "Error")
             self._clear_result(message, color=COLORS["error"])
@@ -323,6 +329,23 @@ class MainWindow:
         self.worker.run("compare", lambda: self.c.compare_saved(items, hw, settings),
                         lambda comps: self.stats.show(comps, self.c.hardware_text(hw)),
                         lambda e: self.stats.set_status(t("stats.error_other")))
+
+    def fetch_hf(self) -> None:
+        """Etap 11c: dane z Hugging Face – tylko na żądanie (przycisk), bo to połączenie z siecią."""
+        if not self.stats or not self.c.saved.items:
+            return
+        items = list(self.c.saved.items)
+        self.stats.set_status(t("stats.hf.fetching"))
+
+        def done(out):
+            errors = sum(1 for v in out.values() if "error" in v)
+            self.stats.set_status(t("stats.hf.none") if not out else
+                                  t("stats.hf.done", n=len(out) - errors) +
+                                  (" " + t("stats.hf.errors", n=errors) if errors else ""))
+            self.stats.refresh()
+
+        self.worker.run("hf", lambda: self.c.fetch_hf_stats(items), done,
+                        lambda e: self.stats.set_status(t("source.network")))
 
     def save_compare(self) -> None:
         if not self.last or not self.c.saved:

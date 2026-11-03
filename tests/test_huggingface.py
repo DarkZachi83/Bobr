@@ -230,3 +230,36 @@ class HttpPiecesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HelperFilesTest(unittest.TestCase):
+    """Repozytorium z plikami GGUF, które nie są modelem (zgłoszenie autora: DeepSeek V4.1 GSQ-RCO)."""
+    REPO = "someone/DeepSeek-V4.1-Flash-GSQ-RCO-IQ2_XXS-GGUF"
+
+    def load(self, tree, headers):
+        from tests.gguf_writer import gguf_bytes
+        tree_url = f"{HF}/api/models/{self.REPO}/tree/main?recursive=true"
+        files = {resolve(path, self.REPO): data for path, data in headers.items()}
+        http = FakeHttp(json={tree_url: tree}, files=files)
+        return HuggingFaceSource(http).load(HfRef(self.REPO)), http
+
+    def test_file_without_architecture_is_skipped(self):
+        from tests.gguf_writer import gguf_bytes
+        no_arch = gguf_bytes([("general.type", "extras", "str"), ("general.name", "dodatki", "str")])
+        tree = [lfs("DeepSeek-V4.1-Flash-extras.gguf", 90_000_000_000),          # największy – sprawdzany 1.
+                lfs("DeepSeek-V4.1-Flash-IQ2_XXS.gguf", 60_000_000_000),
+                lfs("imatrix.gguf", 95_000_000_000)]                             # pomijany po nazwie
+        model, http = self.load(tree, {"DeepSeek-V4.1-Flash-extras.gguf": no_arch,
+                                       "DeepSeek-V4.1-Flash-IQ2_XXS.gguf": llama_like(name="DeepSeek V4.1")})
+        self.assertEqual([v.quant for v in model.variants], ["IQ2_XXS"])
+        self.assertEqual(model.spec().quant, "IQ2_XXS")
+        self.assertFalse(any("imatrix" in url for url in http.calls))
+
+    def test_no_model_file_at_all(self):
+        from tests.gguf_writer import gguf_bytes
+        no_arch = gguf_bytes([("general.type", "imatrix", "str")])
+        tree = [lfs("a-IQ2_XXS.gguf", 10), lfs("b-IQ1_S.gguf", 9)]
+        with self.assertRaises(SourceError) as ctx:
+            self.load(tree, {"a-IQ2_XXS.gguf": no_arch, "b-IQ1_S.gguf": no_arch})
+        self.assertEqual(ctx.exception.code, "source.no_model_gguf")
+        self.assertIn("a-IQ2_XXS.gguf", ctx.exception.detail)

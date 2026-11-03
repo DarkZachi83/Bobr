@@ -38,6 +38,11 @@ IMAGE_TAGS = {"text-to-image", "image-to-image", "unconditional-image-generation
               "text-to-video", "image-to-video", "image-text-to-image", "text-to-3d", "image-to-3d"}
 AUDIO_TAGS = {"text-to-audio", "text-to-speech", "audio-to-audio", "text-to-music"}
 
+# Pliki GGUF, które nie są modelem: projektor obrazu (mmproj) i macierz ważności (imatrix).
+AUX_GGUF = ("mmproj", "imatrix")
+# Ile wariantów sprawdzić, zanim uznamy, że w repozytorium nie ma pliku z modelem.
+PROBE_TRIES = 3
+
 # Warianty pokazywane dla repozytoriów bez plików GGUF (rozmiary z tabeli kwantyzacji).
 ESTIMATED_QUANTS = ("F16", "Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M", "Q3_K_M", "Q2_K")
 _DTYPE_BYTES = {"bfloat16": 2, "float16": 2, "float32": 4}
@@ -127,7 +132,7 @@ class HuggingFaceSource:
         ]
         try:
             gguf = [f for f in files if f.path.lower().endswith(".gguf")
-                    and "mmproj" not in PurePosixPath(f.path).name.lower()
+                    and not any(x in PurePosixPath(f.path).name.lower() for x in AUX_GGUF)
                     and not OBSOLETE_QUANT_RE.search(PurePosixPath(f.path).name)]
             if any(f.path == "model_index.json" for f in files):        # diffusers (etap 10)
                 return self._load_diffusers_repo(ref, files)
@@ -227,14 +232,28 @@ class HuggingFaceSource:
                             preferred_quant=preferred)
 
         # Architektura jest wspólna dla wszystkich kwantyzacji – czytamy nagłówek jednej.
-        probe = model.default_variant()
-        headers = [read_header(self.client.open_remote(self._file_url(ref, path)))
-                   for path in probe.files]
-        return LoadedModel(
-            name=display_name(headers[0], PurePosixPath(probe.files[0]).name),
-            source=model.source, arch=arch_from_headers(headers), variants=model.variants,
-            origin=model.origin, preferred_quant=preferred,
-        )
+        # Plik bez general.architecture to nie model (imatrix, dodatki autora kwantyzacji) –
+        # usuwamy go z wariantów i próbujemy następnego (zgłoszenie autora: repozytorium
+        # DeepSeek V4.1 GSQ-RCO – „no general.architecture”).
+        first = model.default_variant()
+        order = [first] + [v for v in model.variants if v != first]
+        skipped = []
+        for probe in order[:PROBE_TRIES]:
+            headers = [read_header(self.client.open_remote(self._file_url(ref, path)))
+                       for path in probe.files[:1]]
+            if not isinstance(headers[0].metadata.get("general.architecture"), str):
+                skipped.append(probe)
+                continue
+            headers += [read_header(self.client.open_remote(self._file_url(ref, path)))
+                        for path in probe.files[1:]]
+            variants = tuple(v for v in model.variants if v not in skipped)
+            return LoadedModel(
+                name=display_name(headers[0], PurePosixPath(probe.files[0]).name),
+                source=model.source, arch=arch_from_headers(headers), variants=variants,
+                origin=model.origin,
+                preferred_quant=preferred if any(v.quant == preferred for v in variants) else probe.quant,
+            )
+        raise SourceError("source.no_model_gguf", ", ".join(PurePosixPath(v.files[0]).name for v in skipped))
 
     # ------------------------------------------------------------------ repo transformers
     def _load_transformers_repo(self, ref: HfRef, files: list[_File]) -> LoadedModel:
@@ -403,3 +422,39 @@ def load_transformers_folder(path) -> LoadedModel:
     return LoadedModel(name=name, source=ModelSource.GGUF_FILE, arch=arch_from_config(config, files),
                        variants=tuple(Variant(q, None) for q in ESTIMATED_QUANTS),
                        origin=str(folder))
+
+
+# --------------------------------------------------------------------------- statystyki (etap 11c)
+# Licencje, przy których warto ostrzec przed pobraniem: niekomercyjne (np. FLUX.1-dev, CC BY-NC).
+NONCOMMERCIAL = ("-nc", "non-commercial", "noncommercial", "flux-1-dev")
+
+
+def hf_stats(client, repo_id: str) -> dict:
+    """Publiczne dane repozytorium z API Hugging Face: pobrania z ostatnich 30 dni, polubienia,
+    data ostatniej zmiany, licencja, czy wymaga akceptacji warunków, model bazowy."""
+    info = client.get_json(f"{HF}/api/models/{repo_id}")
+    if not isinstance(info, dict):
+        raise SourceError("source.http_error", "bad model info")
+    card = info.get("cardData") if isinstance(info.get("cardData"), dict) else {}
+    license_ = card.get("license") or next(
+        (tag.split(":", 1)[1] for tag in info.get("tags") or [] if str(tag).startswith("license:")), None)
+    base = card.get("base_model")
+    if isinstance(base, list):
+        base = base[0] if base else None
+    # Licencja spoza listy HF: license = "other", a nazwa i link w osobnych polach karty.
+    name, link = card.get("license_name"), card.get("license_link")
+    other = not license_ or str(license_).lower() == "other"
+    if other and isinstance(name, str) and name.strip():
+        license_ = name.strip()
+    lic = " ".join(str(x).lower() for x in (license_, name) if x)
+    return {
+        "license_other": other,
+        "license_link": link if isinstance(link, str) and link.startswith("http") else None,
+        "downloads": info.get("downloads") if isinstance(info.get("downloads"), int) else None,
+        "likes": info.get("likes") if isinstance(info.get("likes"), int) else None,
+        "updated": str(info.get("lastModified") or "")[:10] or None,
+        "license": None if other and license_ in (None, "other") else str(license_),
+        "noncommercial": any(mark in lic for mark in NONCOMMERCIAL),
+        "gated": info.get("gated") not in (None, False, "false"),
+        "base_model": str(base) if base else None,
+    }

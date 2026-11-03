@@ -120,3 +120,15 @@ def fmt_params(count: Optional[int], lang: Optional[str] = None) -> str:
     if count >= 1e9:
         return f"{fmt_number(count / 1e9, 1, lang)}B"
     return f"{fmt_number(count / 1e6, 0, lang)}M"
+
+
+def fmt_count(n: Optional[int]) -> str:
+    """Dokładna liczba z odstępami tysięcy: „97 982” / „97,982” – np. pobrania z Hugging Face
+    (zaokrąglenie „98 tys.” myliło przy porównaniu ze stroną modelu)."""
+    if n is None:
+        return ""
+    # polski: twarda spacja (liczba nie rozpadnie się na dwie linie), angielski: przecinek
+    return f"{n:,}".replace(",", THOUSANDS_SEP.get(current_language(), ","))
+
+
+THOUSANDS_SEP = {"pl": "\u00a0", "en": ","}

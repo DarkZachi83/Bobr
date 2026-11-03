@@ -16,11 +16,12 @@ from aibobr.app.saved import KINDS, MAX_PER_KIND, SavedModel, SavedStore
 from aibobr.calculator.compare import Comparison
 from aibobr.domain.units import gib
 from aibobr.gui.theme import COLORS, VERDICT_COLORS
-from aibobr.i18n import fmt_context, fmt_gb, t
+from aibobr.i18n import fmt_context, fmt_count, fmt_gb, t
 
-COLUMNS = ("model", "quant", "settings", "today", "speed", "maxfit", "bestq", "margin", "size", "disk")
-WIDTHS = {"model": 170, "quant": 75, "settings": 115, "today": 115, "speed": 120, "maxfit": 100,
-          "bestq": 85, "margin": 95, "size": 70, "disk": 85}
+COLUMNS = ("model", "quant", "settings", "today", "speed", "maxfit", "bestq", "margin", "size", "disk",
+           "downloads")
+WIDTHS = {"model": 150, "quant": 75, "settings": 105, "today": 110, "speed": 115, "maxfit": 95,
+          "bestq": 80, "margin": 95, "size": 70, "disk": 80, "downloads": 85}
 DASH = "–"
 
 
@@ -54,17 +55,46 @@ def maxfit_text(item: SavedModel, c: Comparison) -> str:
     return f"{c.max_fit} px" if item.kind == "image" else fmt_context(c.max_fit)
 
 
+def hf_text(item: SavedModel) -> str:
+    hf = item.hf or {}
+    if not hf:
+        return ""
+    parts = []
+    if hf.get("downloads") is not None:
+        parts.append(t("stats.hf.downloads", n=fmt_count(hf["downloads"])))
+    if hf.get("likes") is not None:
+        parts.append(t("stats.hf.likes", n=fmt_count(hf["likes"])))
+    if hf.get("updated"):
+        parts.append(t("stats.hf.updated", date=hf["updated"]))
+    if hf.get("license"):
+        text = t("stats.hf.license", license=hf["license"])
+        if hf.get("license_link"):
+            text += f" ({hf['license_link']})"
+        parts.append(text)
+    elif hf.get("license_other"):
+        parts.append(t("stats.hf.license_other"))
+    if hf.get("base_model"):
+        parts.append(t("stats.hf.base", base=hf["base_model"]))
+    text = "Hugging Face: " + " · ".join(parts) + "."
+    if hf.get("noncommercial"):
+        text += " ⚠ " + t("stats.hf.noncommercial")
+    if hf.get("gated"):
+        text += " ⚠ " + t("stats.hf.gated")
+    return text
+
+
 def row_values(item: SavedModel, c: Optional[Comparison], ranked: int) -> tuple:
     base = (item.name, item.quant, settings_text(item))
+    downloads = fmt_count((item.hf or {}).get("downloads"))
     if c is None:                                         # porównanie jeszcze się liczy
-        return base + ("…",) + ("",) * 6
+        return base + ("…",) + ("",) * 6 + (downloads,)
     if c.error:
-        return base + (t("stats.error"),) + ("",) * 6
+        return base + (t("stats.error"),) + ("",) * 6 + (downloads,)
     today = t(f"stats.level.{c.level.value}") + (" •" if c.level.value != item.level else "")
     margin = DASH if c.margin is None else f"{fmt_gb(c.margin)} ({c.margin_pct * 100:.0f}%)"
     disk = {None: "", "file": t("stats.disk.file")}.get(c.on_disk, c.on_disk)
     return base + (today, speed_text(c, ranked), maxfit_text(item, c), c.best_quant or DASH,
-                   margin, fmt_gb(c.download) if c.download else DASH, disk)
+                   margin, fmt_gb(c.download) if c.download else DASH, disk, downloads)
 
 
 class Section(ttk.Frame):
@@ -148,10 +178,18 @@ class Section(ttk.Frame):
         parts = [t("stats.sum.levels", **count)]
         if total:
             parts.append(t("stats.sum.size", size=fmt_gb(total)))
-        ranked = sorted((c.rank, i.name) for i, c in comps if c.rank)
+        ranked = sorted(((c.rank, i) for i, c in comps if c.rank), key=lambda x: x[0])
         if len(ranked) >= 2:
-            parts.append(t("stats.sum.fastest", name=ranked[0][1]))
-            parts.append(t("stats.sum.slowest", name=ranked[-1][1]))
+            fastest = ranked[0][1]
+            text = t("stats.sum.fastest", name=fastest.name)
+            if fastest.hf and fastest.hf.get("downloads") is not None:
+                text += " (" + t("stats.hf.downloads", n=fmt_count(fastest.hf["downloads"])) + ")"
+            parts.append(text)
+            parts.append(t("stats.sum.slowest", name=ranked[-1][1].name))
+        popular = [i for i in items if i.hf and i.hf.get("downloads")]
+        if len(popular) >= 2:
+            top = max(popular, key=lambda i: i.hf["downloads"])
+            parts.append(t("stats.sum.popular", name=top.name))
         return " · ".join(parts)
 
     def _details(self) -> None:
@@ -165,6 +203,9 @@ class Section(ttk.Frame):
             text += " " + t(c.error)
         elif c and c.level and c.level.value != item.level:
             text += " " + t("stats.detail_changed")
+        hf = hf_text(item)
+        if hf:
+            text += "\n" + hf
         self.detail.configure(text=text)
 
     def selected(self):
@@ -184,7 +225,8 @@ class Section(ttk.Frame):
 
 class StatsPanel(ttk.Frame):
     def __init__(self, master, store: SavedStore, on_open: Callable[[SavedModel], None],
-                 on_compare: Optional[Callable[[], None]] = None):
+                 on_compare: Optional[Callable[[], None]] = None,
+                 on_hf: Optional[Callable[[], None]] = None):
         super().__init__(master, padding=4)
         self.store, self.on_open, self.on_compare = store, on_open, on_compare
         self.comparisons: dict = {}
@@ -193,6 +235,9 @@ class StatsPanel(ttk.Frame):
         ttk.Label(top, text=t("stats.title"), font=("TkDefaultFont", 11, "bold")).pack(side="left")
         if on_compare:
             ttk.Button(top, text=t("stats.recompute"), command=on_compare).pack(side="right")
+        if on_hf:
+            self.hf_button = ttk.Button(top, text=t("stats.hf.button"), command=on_hf)
+            self.hf_button.pack(side="right", padx=6)
         self.status = ttk.Label(self, text="", foreground=COLORS["muted"], wraplength=960)
         self.status.pack(anchor="w")
         ttk.Label(self, text=t("stats.hint", max=MAX_PER_KIND), foreground=COLORS["muted"],
