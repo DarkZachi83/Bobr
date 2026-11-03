@@ -67,7 +67,14 @@ def hf_text(item: SavedModel) -> str:
     if hf.get("updated"):
         parts.append(t("stats.hf.updated", date=hf["updated"]))
     if hf.get("license"):
-        parts.append(t("stats.hf.license", license=hf["license"]))
+        text = t("stats.hf.license", license=hf["license"])
+        if hf.get("license_link"):
+            text += f" ({hf['license_link']})"
+        parts.append(text)
+    elif hf.get("license_other"):
+        parts.append(t("stats.hf.license_other"))
+    if hf.get("base_model"):
+        parts.append(t("stats.hf.base", base=hf["base_model"]))
     text = "Hugging Face: " + " · ".join(parts) + "."
     if hf.get("noncommercial"):
         text += " ⚠ " + t("stats.hf.noncommercial")

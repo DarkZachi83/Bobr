@@ -386,7 +386,8 @@ rozmiarze). Pod tabelą: podsumowanie grupy i szczegóły zaznaczonego modelu z 
 
 **11c – dane z Hugging Face** tylko przyciskiem („Dane z Hugging Face” – połączenie z siecią na
 żądanie): `GET /api/models/<repo>` → pobrania z ostatnich 30 dni, polubienia, data ostatniej zmiany,
-licencja (`cardData.license` albo znacznik `license:`), `gated`, model bazowy. Dotyczy linków HF
+licencja (`cardData.license` albo znacznik `license:`; przy `other` – `license_name` i `license_link`, bez nich
+„inna niż standardowe”), `gated`, model bazowy. Pobrania pokazujemy dokładnie („97 982”), jak strona HF. Dotyczy linków HF
 i `ollama:hf.co/…`; pliki z dysku i modele Ollamy – pomijane. Dane zapisujemy przy modelu (widać je
 bez sieci, ponowny zapis ich nie gubi). Tabela: kolumna Pobrania; szczegóły: polubienia, data,
 licencja, ⚠ licencja niekomercyjna (`-nc`, `non-commercial`, FLUX.1-dev), ⚠ wymaga akceptacji

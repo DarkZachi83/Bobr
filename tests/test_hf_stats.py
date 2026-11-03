@@ -37,6 +37,25 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(s["gated"])
 
 
+class OtherLicenseTest(unittest.TestCase):
+    def test_license_other_takes_name_and_link(self):
+        # Nemotron (zgłoszenie autora): license "other", nazwa i link w osobnych polach karty
+        info = {"downloads": 97982, "likes": 351, "lastModified": "2026-10-23T00:00:00Z",
+                "cardData": {"license": "other", "license_name": "OpenMDW",
+                             "license_link": "https://example.com/openmdw-1.1",
+                             "base_model": "google/gemma-4-8b-it"}}
+        http = FakeHttp(json={f"{HF}/api/models/x/nemotron": info})
+        s = hf_stats(http, "x/nemotron")
+        self.assertEqual((s["license"], s["license_link"], s["base_model"]),
+                         ("OpenMDW", "https://example.com/openmdw-1.1", "google/gemma-4-8b-it"))
+
+    def test_license_other_without_name(self):
+        http = FakeHttp(json={f"{HF}/api/models/x/y": {"cardData": {"license": "other"}}})
+        s = hf_stats(http, "x/y")
+        self.assertIsNone(s["license"])
+        self.assertTrue(s["license_other"])
+
+
 class FetchTest(unittest.TestCase):
     def test_only_hf_models_are_fetched_and_saved(self):
         import main
@@ -70,10 +89,10 @@ class FormatTest(unittest.TestCase):
     def test_counts(self):
         from aibobr.i18n import fmt_count
         set_language("pl")
-        self.assertEqual([fmt_count(n) for n in (999, 12_345, 1_543_210, None)],
-                         ["999", "12,3 tys.", "1,5 mln", ""])
+        self.assertEqual([fmt_count(n) for n in (999, 97_982, 1_543_210, None)],
+                         ["999", "97\u00a0982", "1\u00a0543\u00a0210", ""])    # dokładnie, jak na stronie HF
         set_language("en")
-        self.assertEqual(fmt_count(12_000), "12k")
+        self.assertEqual(fmt_count(97_982), "97,982")
 
 
 if __name__ == "__main__":

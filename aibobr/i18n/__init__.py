@@ -123,11 +123,12 @@ def fmt_params(count: Optional[int], lang: Optional[str] = None) -> str:
 
 
 def fmt_count(n: Optional[int]) -> str:
-    """12345 → „12,3 tys.” / „12.3k” – np. liczba pobrań z Hugging Face."""
+    """Dokładna liczba z odstępami tysięcy: „97 982” / „97,982” – np. pobrania z Hugging Face
+    (zaokrąglenie „98 tys.” myliło przy porównaniu ze stroną modelu)."""
     if n is None:
         return ""
-    if n < 1000:
-        return str(n)
-    value, unit = (n / 1e6, "stats.mln") if n >= 1_000_000 else (n / 1e3, "stats.thousand")
-    text = f"{value:.1f}".rstrip("0").rstrip(".").replace(".", t("stats.decimal"))
-    return t(unit, n=text)
+    # polski: twarda spacja (liczba nie rozpadnie się na dwie linie), angielski: przecinek
+    return f"{n:,}".replace(",", THOUSANDS_SEP.get(current_language(), ","))
+
+
+THOUSANDS_SEP = {"pl": "\u00a0", "en": ","}

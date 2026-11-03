@@ -422,12 +422,19 @@ def hf_stats(client, repo_id: str) -> dict:
     base = card.get("base_model")
     if isinstance(base, list):
         base = base[0] if base else None
-    lic = str(license_).lower() if license_ else ""
+    # Licencja spoza listy HF: license = "other", a nazwa i link w osobnych polach karty.
+    name, link = card.get("license_name"), card.get("license_link")
+    other = not license_ or str(license_).lower() == "other"
+    if other and isinstance(name, str) and name.strip():
+        license_ = name.strip()
+    lic = " ".join(str(x).lower() for x in (license_, name) if x)
     return {
+        "license_other": other,
+        "license_link": link if isinstance(link, str) and link.startswith("http") else None,
         "downloads": info.get("downloads") if isinstance(info.get("downloads"), int) else None,
         "likes": info.get("likes") if isinstance(info.get("likes"), int) else None,
         "updated": str(info.get("lastModified") or "")[:10] or None,
-        "license": str(license_) if license_ else None,
+        "license": None if other and license_ in (None, "other") else str(license_),
         "noncommercial": any(mark in lic for mark in NONCOMMERCIAL),
         "gated": info.get("gated") not in (None, False, "false"),
         "base_model": str(base) if base else None,
