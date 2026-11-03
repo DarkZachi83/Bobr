@@ -29,6 +29,10 @@ from aibobr.knowledge.advisor import audio_label, image_label, render
 from aibobr.sources.base import LoadedModel, SourceError
 from aibobr.sources.factory import OLLAMA_PREFIX, source_kind
 
+# Błędy, przy których szczegół techniczny pomaga w zgłoszeniu (np. „no general.architecture”).
+DETAIL_CODES = {"source.bad_file", "source.gguf_version", "source.no_model_gguf", "source.http_error"}
+
+
 class MainWindow:
     def __init__(self, root: tk.Tk, controller: AppController,
                  initial_model: Optional[str] = None, initial_quant: Optional[str] = None):
@@ -191,6 +195,8 @@ class MainWindow:
         def failed(e):
             self.picker.set_busy(False)
             message = t(e.code) if isinstance(e, SourceError) else t("gui.unexpected", error=repr(e))
+            if isinstance(e, SourceError) and e.detail and e.code in DETAIL_CODES:
+                message += f"\n({e.detail})"         # szczegół techniczny – do zgłoszenia błędu
             self.loading = None
             self.picker.set_status(message, "Error")
             self._clear_result(message, color=COLORS["error"])

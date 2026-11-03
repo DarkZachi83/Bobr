@@ -38,6 +38,11 @@ IMAGE_TAGS = {"text-to-image", "image-to-image", "unconditional-image-generation
               "text-to-video", "image-to-video", "image-text-to-image", "text-to-3d", "image-to-3d"}
 AUDIO_TAGS = {"text-to-audio", "text-to-speech", "audio-to-audio", "text-to-music"}
 
+# Pliki GGUF, które nie są modelem: projektor obrazu (mmproj) i macierz ważności (imatrix).
+AUX_GGUF = ("mmproj", "imatrix")
+# Ile wariantów sprawdzić, zanim uznamy, że w repozytorium nie ma pliku z modelem.
+PROBE_TRIES = 3
+
 # Warianty pokazywane dla repozytoriów bez plików GGUF (rozmiary z tabeli kwantyzacji).
 ESTIMATED_QUANTS = ("F16", "Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M", "Q3_K_M", "Q2_K")
 _DTYPE_BYTES = {"bfloat16": 2, "float16": 2, "float32": 4}
@@ -127,7 +132,7 @@ class HuggingFaceSource:
         ]
         try:
             gguf = [f for f in files if f.path.lower().endswith(".gguf")
-                    and "mmproj" not in PurePosixPath(f.path).name.lower()
+                    and not any(x in PurePosixPath(f.path).name.lower() for x in AUX_GGUF)
                     and not OBSOLETE_QUANT_RE.search(PurePosixPath(f.path).name)]
             if any(f.path == "model_index.json" for f in files):        # diffusers (etap 10)
                 return self._load_diffusers_repo(ref, files)
@@ -227,14 +232,28 @@ class HuggingFaceSource:
                             preferred_quant=preferred)
 
         # Architektura jest wspólna dla wszystkich kwantyzacji – czytamy nagłówek jednej.
-        probe = model.default_variant()
-        headers = [read_header(self.client.open_remote(self._file_url(ref, path)))
-                   for path in probe.files]
-        return LoadedModel(
-            name=display_name(headers[0], PurePosixPath(probe.files[0]).name),
-            source=model.source, arch=arch_from_headers(headers), variants=model.variants,
-            origin=model.origin, preferred_quant=preferred,
-        )
+        # Plik bez general.architecture to nie model (imatrix, dodatki autora kwantyzacji) –
+        # usuwamy go z wariantów i próbujemy następnego (zgłoszenie autora: repozytorium
+        # DeepSeek V4.1 GSQ-RCO – „no general.architecture”).
+        first = model.default_variant()
+        order = [first] + [v for v in model.variants if v != first]
+        skipped = []
+        for probe in order[:PROBE_TRIES]:
+            headers = [read_header(self.client.open_remote(self._file_url(ref, path)))
+                       for path in probe.files[:1]]
+            if not isinstance(headers[0].metadata.get("general.architecture"), str):
+                skipped.append(probe)
+                continue
+            headers += [read_header(self.client.open_remote(self._file_url(ref, path)))
+                        for path in probe.files[1:]]
+            variants = tuple(v for v in model.variants if v not in skipped)
+            return LoadedModel(
+                name=display_name(headers[0], PurePosixPath(probe.files[0]).name),
+                source=model.source, arch=arch_from_headers(headers), variants=variants,
+                origin=model.origin,
+                preferred_quant=preferred if any(v.quant == preferred for v in variants) else probe.quant,
+            )
+        raise SourceError("source.no_model_gguf", ", ".join(PurePosixPath(v.files[0]).name for v in skipped))
 
     # ------------------------------------------------------------------ repo transformers
     def _load_transformers_repo(self, ref: HfRef, files: list[_File]) -> LoadedModel:
