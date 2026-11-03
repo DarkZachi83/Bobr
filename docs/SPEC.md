@@ -400,7 +400,7 @@ najlepsza kwantyzacja w karcie, zapas GB i %, rozmiar i „masz już na dysku”
 **11c** dane z Hugging Face przyciskiem (pobrania z 30 dni, polubienia, data, licencja i dostęp) ·
 później: „co da ulepszenie sprzętu”, eksport, tokeny na sekundę (po kalibracji).
 
-## 5c. Benchmark na tym komputerze – „Testy Zachara” (etap 12, plan 3.11.2026)
+## 5c. Benchmark na tym komputerze – „Testy Zacharskiego” (etap 12, plan 3.11.2026)
 
 **Cel:** zmierzyć to, czego AI Bóbr dziś tylko szacuje – na domowym sprzęcie, gdzie o szybkości
 decyduje przepustowość pamięci, podział warstw VRAM/RAM i długi kontekst, a nie moc karty.

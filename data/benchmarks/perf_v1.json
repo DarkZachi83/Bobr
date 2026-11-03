@@ -1,7 +1,7 @@
 {
   "suite_info": {
     "id": "perf_v1",
-    "name": "Testy Zachara – wydajność",
+    "name": "Testy Zacharskiego – wydajność",
     "version": "1.0",
     "author": "Rafał Zacharski (AI Bóbr)",
     "description": "Prompt processing (TTFT) przy stałych długościach promptu i szybkość generowania przy stałej liczbie tokenów. Rozgrzewka + 3 przebiegi, mediana."
