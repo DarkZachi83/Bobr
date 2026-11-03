@@ -22,6 +22,7 @@ from aibobr.gui.widgets.explanation import ExplanationPanel
 from aibobr.gui.widgets.hardware_panel import HardwarePanel
 from aibobr.gui.widgets.memory_bar import MemoryBar
 from aibobr.gui.widgets.model_picker import ModelPicker
+from aibobr.gui.widgets.stats_panel import StatsPanel
 from aibobr.gui.worker import Worker
 from aibobr.i18n import LANGUAGES, fmt_context, fmt_params, set_language, system_language, t
 from aibobr.knowledge.advisor import audio_label, image_label, render
@@ -35,6 +36,8 @@ class MainWindow:
         self.worker = Worker(root)
         self.model: Optional[LoadedModel] = None
         self.loading: Optional[str] = None       # komunikat wczytywania nowego modelu
+        self.last = None                         # (spec, werdykt, sprzęt, ustawienia) – do zapisu
+        self.tab = 0                             # otwarta zakładka (zachowana przy zmianie języka)
         self.quant: Optional[str] = initial_quant
         self.model_text = initial_model or ""
         self.hw = None
@@ -60,15 +63,25 @@ class MainWindow:
         ttk.Label(head, text=t("gui.app_name"), font=("TkDefaultFont", 16, "bold")).pack(side="left")
         ttk.Label(head, text="  AI Hardware Checker", foreground=COLORS["muted"]).pack(side="left", pady=(6, 0))
 
-        self.picker = ModelPicker(outer, self.check, self.manual, self.select_quant, self.from_ollama,
+        self.tabs = ttk.Notebook(outer)
+        self.tabs.pack(fill="both", expand=True)
+        page = ttk.Frame(self.tabs, padding=(0, 8, 0, 0))
+        self.tabs.add(page, text=t("gui.tab.check"))
+        self.stats = StatsPanel(self.tabs, self.c.saved, self.open_saved) if self.c.saved else None
+        if self.stats:
+            self.tabs.add(self.stats, text=t("gui.tab.stats"))
+        self.tabs.select(self.tab)
+        self.tabs.bind("<<NotebookTabChanged>>", lambda e: self._tab_changed())
+
+        self.picker = ModelPicker(page, self.check, self.manual, self.select_quant, self.from_ollama,
                                   self.from_disk)
         self.picker.pack(fill="x", pady=(0, 8))
         self.picker.text.set(self.model_text)
 
-        self.hardware = HardwarePanel(outer, self.recompute, self.save_defaults)
+        self.hardware = HardwarePanel(page, self.recompute, self.save_defaults)
         self.hardware.pack(fill="x", pady=(0, 8))
 
-        result = ttk.Frame(outer, style="Panel.TFrame")
+        result = ttk.Frame(page, style="Panel.TFrame")
         result.pack(fill="x")
         self.header = ttk.Label(result, text="", style="Title.TLabel")
         self.header.pack(anchor="w", padx=10, pady=(8, 0))
@@ -78,6 +91,13 @@ class MainWindow:
         self.verdict.pack(anchor="w", padx=10)
         self.notes = ttk.Frame(result, style="Inner.TFrame")
         self.notes.pack(fill="x", padx=10, pady=(2, 0))
+        save_row = ttk.Frame(result, style="Inner.TFrame")
+        save_row.pack(fill="x", padx=10, pady=(6, 0))
+        self.save_button = ttk.Button(save_row, text="💾 " + t("gui.save_compare"), command=self.save_compare)
+        self.save_button.state(["disabled"])
+        self.save_button.pack(side="left")
+        self.save_status = ttk.Label(save_row, text="", style="Muted.TLabel", wraplength=600)
+        self.save_status.pack(side="left", padx=8)
         self.explanation = ExplanationPanel(result)
         self.explanation.pack(fill="x", padx=1, pady=(4, 1))
 
@@ -147,9 +167,10 @@ class MainWindow:
         messagebox.showinfo(t("gui.app_name"), t("gui.saved"), parent=self.root)
 
     # ------------------------------------------------------------------ model
-    def check(self, text: str) -> None:
+    def check(self, text: str, quant: Optional[str] = None) -> None:
         self.model_text = text
-        first = self.model is None                   # kwantyzacja z zapisanego stanu – tylko za 1. razem
+        # kwantyzacja: wskazana (zapisany model) albo z zapisanego stanu – tylko za 1. razem
+        keep = quant or (self.quant if self.model is None else None)
         loading = {"remote": t("cli.loading_remote"), "file": t("gui.reading_file"),
                    "ollama": t("gui.reading_ollama")}[source_kind(text)]
         # Stary wynik znika od razu – inaczej do końca wczytywania wygląda jak wynik nowego modelu.
@@ -164,7 +185,7 @@ class MainWindow:
             self.loading = None
             self.picker.set_busy(False)
             self.picker.set_status()
-            self.set_model(model, self.quant if first else None)
+            self.set_model(model, keep)
 
         def failed(e):
             self.picker.set_busy(False)
@@ -198,6 +219,10 @@ class MainWindow:
 
     # ------------------------------------------------------------------ wynik
     def _clear_result(self, message: str = "", style: str = "Verdict.TLabel", color=None) -> None:
+        self.last = None
+        if hasattr(self, "save_button"):
+            self.save_button.state(["disabled"])
+            self.save_status.configure(text="")
         if not message and self.loading:     # trwa wczytywanie nowego modelu
             message, color = self.loading, COLORS["muted"]
         self.bar.set_verdict(None, hint=self.model is None and not self.loading)
@@ -272,6 +297,40 @@ class MainWindow:
             ttk.Label(self.notes, text="⚠ " + render(note), style="Note.TLabel",
                       wraplength=820).pack(anchor="w")
         self.explanation.set_explanation(expl)
+        self.last = (spec, v, hw, settings)
+        self.save_button.state(["!disabled"])
+        self.save_status.configure(text="")
+
+    # ------------------------------------------------------------------ porównanie (etap 11a)
+    def _tab_changed(self) -> None:
+        self.tab = self.tabs.index(self.tabs.select())
+        if self.stats and self.tab == 1:
+            self.stats.refresh()
+
+    def save_compare(self) -> None:
+        if not self.last or not self.c.saved:
+            return
+        if not self.model_text:
+            self.save_status.configure(text=t("gui.saved_manual"))
+            return
+        from aibobr.app.saved import MAX_PER_KIND, ListFull
+        item = self.c.saved_entry(self.model_text, *self.last)
+        try:
+            new = self.c.saved.add(item)
+        except ListFull as e:
+            self.save_status.configure(text=t("gui.saved_full", group=t(f"stats.kind.{e.kind}"),
+                                              max=MAX_PER_KIND))
+            return
+        self.save_status.configure(text=t("gui.saved_new" if new else "gui.saved_updated"))
+        if self.stats:
+            self.stats.refresh()
+
+    def open_saved(self, item) -> None:
+        """Zakładka Statystyka → Otwórz: model z zapisanymi ustawieniami w zakładce Sprawdź."""
+        self.tabs.select(0)
+        self.hardware.apply_saved(item)
+        self.picker.text.set(item.target)
+        self.check(item.target, quant=item.quant)
 
     # ------------------------------------------------------------------ menu
     def change_language(self, code: str) -> None:

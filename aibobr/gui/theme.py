@@ -66,3 +66,4 @@ def apply_style(root) -> None:
     style.configure("Error.TLabel", foreground=COLORS["error"], background=COLORS["bg"])
     style.configure("Invalid.TEntry", fieldbackground="#fde2e1")
     style.configure("Accent.TButton", font=("TkDefaultFont", 10, "bold"))
+    style.configure("Toggle.TButton", font=("TkDefaultFont", 10, "bold"), anchor="w")

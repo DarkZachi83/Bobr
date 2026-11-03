@@ -326,6 +326,22 @@ class HardwarePanel(ttk.Frame):
             "margin_ratio": round(s.margin_ratio, 3),
         })
 
+    def apply_saved(self, item) -> None:
+        """Ustawienia zapisanego modelu (zakładka Statystyka → Otwórz). Gdy różnią się od
+        domyślnych, przełączamy na Zaawansowany – w Automatycznym liczą się tylko domyślne."""
+        d = self.defaults
+        context = item.context or d.context_tokens
+        kv = item.kv_cache or d.kv_cache_type.value
+        self.context.set(str(context))
+        self.kv.set(kv)
+        custom = not item.native_resolution and item.resolution
+        self.resolution.set(f"{item.resolution[0]}x{item.resolution[1]}" if custom else "")
+        self.batch.set(str(item.batch or 1))
+        differs = context != d.context_tokens or kv != d.kv_cache_type.value or custom or item.batch > 1
+        if differs and self.mode.get() != "advanced":
+            self.mode.set("advanced")
+            self.render()
+
     def show_advanced(self) -> None:
         self.mode.set("advanced")
         self._mode_changed()

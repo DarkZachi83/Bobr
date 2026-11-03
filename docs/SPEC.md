@@ -360,6 +360,29 @@ modelu językowym – kontekst i cache KV). CLI: `--resolution 1024` albo `1024x
 z nazwą największego etapu); **Całość naraz** (jaśniejszy, informacyjnie – czy wszystko
 zmieściłoby się jednocześnie). Wyjaśnienie wymienia każdy etap z jego szczytem.
 
+## 5b. Porównanie zapisanych modeli (etap 11, decyzje autora 3.11.2026)
+
+**Cel:** użytkownik zwykle wybiera spośród kilku modeli – zapisuje je i porównuje z możliwościami
+swojego komputera w zakładce **Statystyka**.
+
+- **Zapis tylko przyciskiem** „Zapisz do porównania” przy wyniku (bez automatycznej historii – przy
+  limicie wypychałaby modele zapisane celowo). Model wpisany ręcznie nie ma źródła – nie da się go zapisać.
+- **Do 10 modeli w każdej grupie**: tekst, obraz, dźwięk (mowa i muzyka). Więcej – gdy użytkownicy poproszą.
+- Zapisujemy **model z ustawieniami** (link/ścieżka/ollama:, kwantyzacja, kontekst i typ KV albo
+  rozdzielczość i liczba obrazów) + werdykt, potrzebną pamięć i sprzęt z dnia zapisu. Ten sam model
+  z tymi samymi ustawieniami = jeden wpis (ponowny zapis go odświeża). Plik `saved_models.json` obok
+  ustawień użytkownika, zapis atomowy; uszkodzony plik = pusta lista.
+- **Otwórz** (albo dwuklik) wczytuje model w zakładce Sprawdź z zapisanymi ustawieniami; gdy różnią
+  się od domyślnych, okno przechodzi w tryb Zaawansowany.
+- Porównujemy **w obrębie grupy** – tokeny na sekundę i sekundy na obraz to różne miary.
+
+Etapy: **11a** zapis, zakładka, listy (v0.5.0) · **11b** porównanie liczone na bieżąco dla obecnego
+komputera: klasa szybkości (względna – całość w karcie › prawie całość › podział › procesor, w klasie
+mniej czytanych danych na token = szybciej), największy kontekst / rozdzielczość w całości w karcie,
+najlepsza kwantyzacja w karcie, zapas GB i %, rozmiar i „masz już na dysku”, podsumowanie ·
+**11c** dane z Hugging Face przyciskiem (pobrania z 30 dni, polubienia, data, licencja i dostęp) ·
+później: „co da ulepszenie sprzętu”, eksport, tokeny na sekundę (po kalibracji).
+
 ## 6. Werdykt: pasek pamięci
 
 Zamiast samych świateł: **dwie warstwy na wspólnej skali w GB**.

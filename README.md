@@ -123,6 +123,13 @@ The bar has three rows: **System**, **Peak** and **All at once**.
 - Below the model's native resolution quality drops noticeably – the tool says so when it
   suggests a smaller image.
 
+### Compare models
+
+Click **Save for comparison** under a result to keep the model with its settings. The **Statistics**
+tab lists up to 10 saved models per group (language, image, speech/music) with the date checked,
+the verdict and the hardware; double-click opens a model again with the same settings.
+Everything stays in a file on your computer.
+
 ### Models on your disk
 
 **Models on disk…** (or `--scan [FOLDER]`) lists the models you already have – from Ollama,
@@ -270,6 +277,13 @@ trzy wiersze: **System**, **Szczyt** i **Naraz**.
   GGUF wymaga w Forge-neo `--reserve-vram 2`.
 - Poniżej natywnej rozdzielczości modelu jakość wyraźnie spada – program mówi o tym, gdy podpowiada
   mniejszy obraz.
+
+### Porównanie modeli
+
+Przycisk **Zapisz do porównania** pod wynikiem zapamiętuje model razem z ustawieniami. Zakładka
+**Statystyka** pokazuje do 10 zapisanych modeli w każdej grupie (językowe, obrazów, mowy i muzyki)
+z datą sprawdzenia, werdyktem i sprzętem; dwuklik otwiera model ponownie z tymi samymi ustawieniami.
+Wszystko zostaje w pliku na Twoim komputerze.
 
 ### Modele na dysku
 
