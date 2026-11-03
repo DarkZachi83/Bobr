@@ -119,6 +119,26 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertEqual(saved["language"], "")
         self.assertEqual(w.lang_var.get(), "")
 
+    def test_new_check_clears_old_result(self):
+        from aibobr.i18n import t
+        w = self.window()
+        self.assertTrue(w.header.cget("text"))                           # wynik pierwszego modelu
+        w.check(str(self.gguf))
+        # Od razu, zanim nowy model się wczyta: bez starego wyniku, z komunikatem wczytywania.
+        self.assertEqual(w.header.cget("text"), "")
+        self.assertEqual(w.verdict.cget("text"), t("gui.reading_file"))
+        self.assertIsNone(w.bar.verdict)
+        self.pump(lambda: w.model is not None and w.verdict.cget("text") != t("gui.reading_file"), 5)
+        self.assertIn("Pójdzie", w.verdict.cget("text"))
+
+    def test_failed_check_does_not_leave_old_result(self):
+        w = self.window()
+        w.check(str(Path(self.tmp.name) / "nie-ma-takiego.gguf"))
+        self.pump(lambda: w.loading is None, 5)
+        self.assertEqual(w.header.cget("text"), "")
+        self.assertIsNone(w.bar.verdict)
+        self.assertNotIn("Pójdzie", w.verdict.cget("text"))
+
     def test_fields_follow_model_kind(self):
         from tests.test_images import SDXL, safetensors
         w = self.window()
