@@ -120,3 +120,14 @@ def fmt_params(count: Optional[int], lang: Optional[str] = None) -> str:
     if count >= 1e9:
         return f"{fmt_number(count / 1e9, 1, lang)}B"
     return f"{fmt_number(count / 1e6, 0, lang)}M"
+
+
+def fmt_count(n: Optional[int]) -> str:
+    """12345 → „12,3 tys.” / „12.3k” – np. liczba pobrań z Hugging Face."""
+    if n is None:
+        return ""
+    if n < 1000:
+        return str(n)
+    value, unit = (n / 1e6, "stats.mln") if n >= 1_000_000 else (n / 1e3, "stats.thousand")
+    text = f"{value:.1f}".rstrip("0").rstrip(".").replace(".", t("stats.decimal"))
+    return t(unit, n=text)

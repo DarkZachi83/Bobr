@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Optional
 
@@ -43,6 +43,7 @@ class SavedModel:
     native_resolution: bool = True                 # …natywna rodziny (nie wpisana ręcznie)
     batch: int = 1
     hardware: str = ""                # krótki opis sprzętu z dnia zapisu („RTX 5050 8 GB · RAM 16 GB”)
+    hf: Optional[dict] = None         # dane z Hugging Face (etap 11c) + "fetched": data pobrania
 
     @property
     def key(self) -> tuple:
@@ -93,7 +94,7 @@ class SavedStore:
         """True = nowy wpis, False = odświeżony istniejący. ListFull, gdy grupa jest pełna."""
         for n, old in enumerate(self.items):
             if old.key == item.key:
-                self.items[n] = item
+                self.items[n] = item if item.hf or not old.hf else replace(item, hf=old.hf)
                 self._write()
                 return False
         if len(self.of_kind(item.kind)) >= MAX_PER_KIND:
@@ -101,6 +102,11 @@ class SavedStore:
         self.items.append(item)
         self._write()
         return True
+
+    def set_hf(self, stats: dict) -> None:
+        """{klucz wpisu: dane z HF} – zapisujemy, żeby były widoczne bez sieci przy kolejnym otwarciu."""
+        self.items = [replace(i, hf=stats[i.key]) if i.key in stats else i for i in self.items]
+        self._write()
 
     def remove(self, item: SavedModel) -> None:
         self.items = [i for i in self.items if i.key != item.key]

@@ -218,6 +218,31 @@ class AppController:
         return ranked
 
 
+    def fetch_hf_stats(self, items, today=None) -> dict:
+        """Dane z Hugging Face dla zapisanych modeli z HF (inne – pomijamy). Zapisuje je w liście.
+        {klucz: dane} albo {klucz: {"error": kod}} dla repozytorium, którego nie dało się odczytać."""
+        import datetime
+        from aibobr.sources.base import SourceError
+        from aibobr.sources.huggingface import hf_stats, parse_reference
+        from aibobr.sources.factory import OLLAMA_PREFIX
+        client, out = self.http(), {}
+        day = (today or datetime.date.today()).isoformat()
+        for item in items:
+            target = item.target
+            if target.startswith(OLLAMA_PREFIX + "hf.co/"):          # ollama:hf.co/<repo>:Q4_K_M
+                target = target[len(OLLAMA_PREFIX):]
+            ref = parse_reference(target) if not target.startswith(OLLAMA_PREFIX) else None
+            if ref is None or Path(item.target).exists():
+                continue
+            try:
+                out[item.key] = {**hf_stats(client, ref.repo_id), "fetched": day}
+            except SourceError as e:
+                out[item.key] = {"error": e.code, "fetched": day}
+        if self.saved and out:
+            self.saved.set_hf({k: v for k, v in out.items() if "error" not in v})
+        return out
+
+
 def _short_gpu(name: str) -> str:
     """„NVIDIA GeForce RTX 5050 Laptop GPU” → „RTX 5050 Laptop” – do wąskiej kolumny tabeli."""
     for prefix in ("NVIDIA GeForce ", "NVIDIA ", "AMD ", "Intel(R) ", "Intel "):

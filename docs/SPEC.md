@@ -384,6 +384,14 @@ kwantyzacja w karcie (najwięcej bitów na wagę; przy jednym wariancie „–�
 Rozmiar, Na dysku (ten plik / Ollama / – po „Modele na dysku…” – program, w którym leży plik o tym samym
 rozmiarze). Pod tabelą: podsumowanie grupy i szczegóły zaznaczonego modelu z dnia zapisu.
 
+**11c – dane z Hugging Face** tylko przyciskiem („Dane z Hugging Face” – połączenie z siecią na
+żądanie): `GET /api/models/<repo>` → pobrania z ostatnich 30 dni, polubienia, data ostatniej zmiany,
+licencja (`cardData.license` albo znacznik `license:`), `gated`, model bazowy. Dotyczy linków HF
+i `ollama:hf.co/…`; pliki z dysku i modele Ollamy – pomijane. Dane zapisujemy przy modelu (widać je
+bez sieci, ponowny zapis ich nie gubi). Tabela: kolumna Pobrania; szczegóły: polubienia, data,
+licencja, ⚠ licencja niekomercyjna (`-nc`, `non-commercial`, FLUX.1-dev), ⚠ wymaga akceptacji
+warunków; podsumowanie: pobrania najszybszego i najpopularniejszy model grupy.
+
 Etapy: **11a** zapis, zakładka, listy (v0.5.0) · **11b** porównanie liczone na bieżąco dla obecnego
 komputera: klasa szybkości (względna – całość w karcie › prawie całość › podział › procesor, w klasie
 mniej czytanych danych na token = szybciej), największy kontekst / rozdzielczość w całości w karcie,

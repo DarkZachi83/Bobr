@@ -403,3 +403,32 @@ def load_transformers_folder(path) -> LoadedModel:
     return LoadedModel(name=name, source=ModelSource.GGUF_FILE, arch=arch_from_config(config, files),
                        variants=tuple(Variant(q, None) for q in ESTIMATED_QUANTS),
                        origin=str(folder))
+
+
+# --------------------------------------------------------------------------- statystyki (etap 11c)
+# Licencje, przy których warto ostrzec przed pobraniem: niekomercyjne (np. FLUX.1-dev, CC BY-NC).
+NONCOMMERCIAL = ("-nc", "non-commercial", "noncommercial", "flux-1-dev")
+
+
+def hf_stats(client, repo_id: str) -> dict:
+    """Publiczne dane repozytorium z API Hugging Face: pobrania z ostatnich 30 dni, polubienia,
+    data ostatniej zmiany, licencja, czy wymaga akceptacji warunków, model bazowy."""
+    info = client.get_json(f"{HF}/api/models/{repo_id}")
+    if not isinstance(info, dict):
+        raise SourceError("source.http_error", "bad model info")
+    card = info.get("cardData") if isinstance(info.get("cardData"), dict) else {}
+    license_ = card.get("license") or next(
+        (tag.split(":", 1)[1] for tag in info.get("tags") or [] if str(tag).startswith("license:")), None)
+    base = card.get("base_model")
+    if isinstance(base, list):
+        base = base[0] if base else None
+    lic = str(license_).lower() if license_ else ""
+    return {
+        "downloads": info.get("downloads") if isinstance(info.get("downloads"), int) else None,
+        "likes": info.get("likes") if isinstance(info.get("likes"), int) else None,
+        "updated": str(info.get("lastModified") or "")[:10] or None,
+        "license": str(license_) if license_ else None,
+        "noncommercial": any(mark in lic for mark in NONCOMMERCIAL),
+        "gated": info.get("gated") not in (None, False, "false"),
+        "base_model": str(base) if base else None,
+    }

@@ -129,7 +129,9 @@ Click **Save for comparison** under a result to keep the model with its settings
 tab lists up to 10 saved models per group (language, image, speech/music) with the date checked,
 compared live on this computer: today's verdict, relative speed (★ fastest, ▼ slowest), the largest
 context or image that fits entirely on the card, the best quantization that fits, headroom, size and
-whether you already have it on disk. Double-click opens a model again with the same settings.
+whether you already have it on disk. **Hugging Face data** (on request): downloads in the last 30 days,
+likes, last update and license – with a warning for non-commercial or gated models.
+Double-click opens a model again with the same settings.
 Everything stays in a file on your computer.
 
 ### Models on your disk
@@ -286,7 +288,9 @@ Przycisk **Zapisz do porównania** pod wynikiem zapamiętuje model razem z ustaw
 **Statystyka** pokazuje do 10 zapisanych modeli w każdej grupie (językowe, obrazów, mowy i muzyki)
 porównanych na bieżąco na tym komputerze: werdykt dziś, szybkość względna (★ najszybszy, ▼ najwolniejszy),
 największy kontekst albo obraz w całości w karcie, najlepsza kwantyzacja w karcie, zapas, rozmiar i to,
-czy model już masz na dysku. Dwuklik otwiera model ponownie z tymi samymi ustawieniami.
+czy model już masz na dysku. **Dane z Hugging Face** (na żądanie): pobrania z ostatnich 30 dni,
+polubienia, data aktualizacji i licencja – z ostrzeżeniem przy licencji niekomercyjnej albo wymaganej
+akceptacji warunków. Dwuklik otwiera model ponownie z tymi samymi ustawieniami.
 Wszystko zostaje w pliku na Twoim komputerze.
 
 ### Modele na dysku
