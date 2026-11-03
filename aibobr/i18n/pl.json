@@ -58,6 +58,7 @@
   "bench.stopped_note": "Zatrzymano – zapisane są tylko ukończone pomiary.",
   "bench.suites": "Polszczyzna i JSON/kod – w kolejnej wersji.",
   "bench.title": "Benchmark – Testy Zacharskiego",
+  "bench.took": "Trwało {min} min {sec} s (szacunek: ok. {est} min).",
   "bench.warn_battery": "Laptop na baterii – karta pracuje wolniej, wyniki będą niższe. Podłącz zasilacz.",
   "bench.warn_many": "Kilka modeli: test potrwa długo (ok. {minutes} min) i przez cały czas mocno obciąża kartę i pamięć – komputer może zwalniać, a przy braku pamięci przestać odpowiadać. Zapisz pracę w innych programach.",
   "bench.what": "Mierzymy przez Ollamę: przetwarzanie promptu (tokeny/s i czas do pierwszego tokenu) i generowanie (tokeny/s). Rozgrzewka + 3 przebiegi, mediana. Modele po kolei – nigdy kilka naraz.",

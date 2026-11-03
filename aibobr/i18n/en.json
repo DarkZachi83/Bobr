@@ -58,6 +58,7 @@
   "bench.stopped_note": "Stopped – only finished measurements are saved.",
   "bench.suites": "Polish and JSON/code tests – in the next version.",
   "bench.title": "Benchmark – Zacharski Tests",
+  "bench.took": "Took {min} min {sec} s (estimate: about {est} min).",
   "bench.warn_battery": "Laptop on battery – the card runs slower and results will be lower. Plug in the charger.",
   "bench.warn_many": "Several models: the test takes long (about {minutes} min) and loads the card and memory heavily the whole time – the computer may slow down, and if memory runs out it may stop responding. Save your work in other programs.",
   "bench.what": "Measured through Ollama: prompt processing (tokens/s and time to first token) and generation (tokens/s). Warm-up + 3 runs, median. Models one after another – never several at once.",

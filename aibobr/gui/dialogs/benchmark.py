@@ -8,6 +8,7 @@ na końcu: tabela wyników zapisanych w benchmarks.sqlite i najszybszy model na 
 from __future__ import annotations
 
 import threading
+import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Callable, Optional
@@ -37,6 +38,7 @@ class BenchmarkDialog(tk.Toplevel):
         self.minsize(820, 480)
         self.stop = threading.Event()
         self.predicted: dict = {}
+        self._minutes = 0
         self.results: list = []
         self.running = False
         body = ttk.Frame(self, padding=12)
@@ -122,6 +124,7 @@ class BenchmarkDialog(tk.Toplevel):
             values = (name, fmt_context(ctx), t(f"bench.pred.{level}") if level else "?", "", "", "", "")
             self.tree.insert("", "end", values=values, tags=(level,) if level else ())
         minutes = max(1, round(seconds / 60))
+        self._minutes = minutes
         text = t("bench.plan", jobs=len(jobs) - skipped, minutes=minutes)
         if skipped:
             text += " " + t("bench.plan_skipped", n=skipped)
@@ -143,6 +146,8 @@ class BenchmarkDialog(tk.Toplevel):
         if len(self.targets) > 1 and not self.confirm(t("bench.title"), t("bench.confirm_many")):
             return
         self.running = True
+        self.started = time.monotonic()
+        self.estimated_min = self._minutes
         self.stop.clear()
         self.start_button.state(["disabled"])
         self.stop_button.state(["!disabled"])
@@ -179,8 +184,11 @@ class BenchmarkDialog(tk.Toplevel):
                 r.model, fmt_context(r.context), pred, _num(r.pp_tps, 0), _num(r.ttft_ms, 0),
                 _num(r.tg_tps), gpu), tags=(r.predicted,) if r.predicted else ())
         done = [r for r in results if r.tg_tps]
-        self.progress.configure(text=t("bench.stopped_note") if any(r.stopped for r in results)
-                                else t("bench.saved"))
+        elapsed = time.monotonic() - getattr(self, "started", time.monotonic())
+        took = t("bench.took", min=int(elapsed // 60), sec=int(elapsed % 60),
+                 est=getattr(self, "estimated_min", 0))
+        self.progress.configure(text=(t("bench.stopped_note") if any(r.stopped for r in results)
+                                      else t("bench.saved")) + " " + took)
         if len({r.model for r in done}) >= 2:
             best = max(done, key=lambda r: r.tg_tps)
             self.summary.configure(text=t("bench.fastest", model=best.model, tps=_num(best.tg_tps),
