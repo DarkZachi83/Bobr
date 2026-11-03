@@ -57,12 +57,30 @@ class Worker:
             self._polling = True
             self.root.after(self.poll_ms, self._poll)
 
+    def run_with_progress(self, kind: str, fn: Callable[[Callable[[Any], None]], Any],
+                          on_progress: Callable[[Any], None], on_done: Callable[[Any], None],
+                          on_error: Callable[[BaseException], None]) -> None:
+        """Jak run(), ale fn(report) może wysyłać postęp – on_progress wywołamy w wątku okna."""
+        ticket_box = {}
+
+        def report(payload):
+            self.results.put(("__progress__", kind, ticket_box.get("t"), payload, on_progress, None))
+
+        self.run(kind, lambda: fn(report), on_done, on_error)
+        ticket_box["t"] = self.latest[kind]
+
     def _poll(self) -> None:
         while True:
             try:
-                kind, ticket, ok, value, on_done, on_error = self.results.get_nowait()
+                item = self.results.get_nowait()
             except queue.Empty:
                 break
+            if item[0] == "__progress__":                 # postęp – wątek dalej pracuje
+                _, kind, ticket, payload, on_progress, _ = item
+                if ticket is None or self.latest.get(kind) == ticket:
+                    on_progress(payload)
+                continue
+            kind, ticket, ok, value, on_done, on_error = item
             self.running -= 1
             if self.running == 0:
                 gc.enable()

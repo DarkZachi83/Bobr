@@ -174,6 +174,43 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertEqual(row[9], "ten plik")
         self.assertIn("zielone: 1", section.summary.cget("text"))
 
+    def test_benchmark_dialog_plan_run_and_results(self):
+        from aibobr.bench.runner import PerfResult
+        from aibobr.gui.dialogs.benchmark import BenchmarkDialog
+        w = self.window()
+        self.assertFalse(w.bench_button.winfo_ismapped())                # plik .gguf – bez benchmarku
+        targets = ["ollama:llama3.1:8b", "ollama:qwen3:8b"]
+        w.c.bench_predict = lambda tg, ctxs, hw, s: {(t_, c): ("red" if c == 32768 else "green")
+                                                     for t_ in tg for c in ctxs}
+
+        def fake_run(tg, ctxs, predicted, hw, report, stop, db=None):
+            out = []
+            for n, t_ in enumerate(tg):
+                report({"n": n + 1, "total": len(tg), "model": t_[7:], "context": ctxs[0], "step": "warmup"})
+                out.append(PerfResult(t_[7:], ctxs[0], pp_tps=800, ttft_ms=1200, tg_tps=30 + n * 10,
+                                      gpu_share=1.0, predicted="green"))
+            return out
+
+        w.c.run_benchmark = fake_run
+        asked = []
+        hw, settings = w.hardware.current()
+        d = BenchmarkDialog(self.root, w.c, w.worker, targets, hw, settings,
+                            confirm=lambda title, text: asked.append(text) or True)
+        self.pump(lambda: "Do zmierzenia" in d.plan.cget("text"), 3)
+        self.assertIn("ok.", d.plan.cget("text"))
+        self.assertIn("Kilka modeli", d.warning.cget("text"))               # ostrzeżenie autora
+        d.ctx_vars[32768].set(True)
+        d._update_plan()
+        self.assertIn("Pominięte: 2", d.plan.cget("text"))                  # 32k nie zmieści się
+        d.ctx_vars[32768].set(False)
+        d.start()
+        self.assertEqual(len(asked), 1)                                     # potwierdzenie przy kilku modelach
+        self.pump(lambda: d.summary.cget("text"), 3)
+        rows = [d.tree.item(i, "values") for i in d.tree.get_children()]
+        self.assertEqual(rows[1][5], "40,0")                                # generowanie tok/s
+        self.assertIn("qwen3:8b", d.summary.cget("text"))                   # najszybszy u Ciebie
+        d.close()
+
     def test_save_disabled_without_result(self):
         w = self.window()
         w.check(str(Path(self.tmp.name) / "nie-ma.gguf"))

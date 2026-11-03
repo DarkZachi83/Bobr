@@ -25,6 +25,7 @@ class FoundModelsDialog(tk.Toplevel):
         self.transient(master)
         self.worker, self.find, self.save_consent = worker, find, save_consent
         self.result: Optional[str] = None
+        self.bench_result: Optional[list[str]] = None   # modele z Ollamy do benchmarku (etap 12a)
         self.report = ScanReport()
         self.rows: dict[str, FoundModel] = {}
         self.stop = threading.Event()
@@ -68,7 +69,7 @@ class FoundModelsDialog(tk.Toplevel):
         frame = ttk.Frame(self.body)
         frame.pack(fill="both", expand=True)
         cols = ("kind", "size", "app")
-        self.tree = ttk.Treeview(frame, columns=cols, height=14, selectmode="browse")
+        self.tree = ttk.Treeview(frame, columns=cols, height=14, selectmode="extended")
         self.tree.heading("#0", text=t("gui.scan_col.name"))
         self.tree.column("#0", width=330)
         for col, width, anchor in (("kind", 190, "w"), ("size", 80, "e"), ("app", 110, "w")):
@@ -93,6 +94,9 @@ class FoundModelsDialog(tk.Toplevel):
         self.ok = ttk.Button(buttons, text=t("gui.choose"), style="Accent.TButton", command=self._ok)
         self.ok.pack(side="right", padx=6)
         self.ok.state(["disabled"])
+        self.bench_button = ttk.Button(buttons, text=t("bench.button"), command=self._bench)
+        self.bench_button.pack(side="right")
+        self.bench_button.state(["disabled"])
 
     # ------------------------------------------------------------------ szukanie
     def search(self, folder: Optional[Path] = None) -> None:
@@ -160,14 +164,29 @@ class FoundModelsDialog(tk.Toplevel):
             self.tree.see(first)
             self.tree.focus_set()
 
+    def _benchable(self) -> list[FoundModel]:
+        """Zaznaczone modele, które benchmark umie uruchomić: tekstowe z Ollamy."""
+        picked = [self.rows[i] for i in self.tree.selection() if i in self.rows]
+        return [m for m in picked if m.kind == Kind.TEXT and (m.target or "").startswith("ollama:")]
+
     def _selected(self) -> Optional[FoundModel]:
         sel = self.tree.selection()
         m = self.rows.get(sel[0]) if sel else None
-        self.ok.state(["!disabled"] if m and m.checkable else ["disabled"])
+        self.ok.state(["!disabled"] if m and m.checkable and len(sel) == 1 else ["disabled"])
+        bench = self._benchable()
+        self.bench_button.state(["!disabled"] if bench and len(bench) == len(sel) else ["disabled"])
         if m:
-            self.path_label.configure(text=m.place if m.checkable
-                                      else f"{m.place}\n{t('gui.scan_not_checkable')}")
+            text = m.place if m.checkable else f"{m.place}\n{t('gui.scan_not_checkable')}"
+            if sel and not bench:
+                text += "\n" + t("bench.only_ollama")
+            self.path_label.configure(text=text)
         return m
+
+    def _bench(self) -> None:
+        models = self._benchable()
+        if models:
+            self.bench_result = [m.target for m in models]
+            self.close()
 
     def pick_folder(self) -> None:
         folder = filedialog.askdirectory(parent=self, title=t("gui.scan_folder_title"), mustexist=True)
