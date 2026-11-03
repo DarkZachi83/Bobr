@@ -139,6 +139,35 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertIsNone(w.bar.verdict)
         self.assertNotIn("Pójdzie", w.verdict.cget("text"))
 
+    def test_save_for_comparison_and_open_from_stats(self):
+        w = self.window()
+        self.assertFalse(w.save_button.instate(["disabled"]))
+        w.save_compare()
+        self.assertIn("Statystyka", w.save_status.cget("text"))
+        section = w.stats.sections["text"]
+        self.assertEqual(len(section.items), 1)
+        saved = next(iter(section.items.values()))
+        self.assertEqual(saved.target, str(self.gguf))
+        self.assertIn("(1/10)", section.toggle.cget("text"))
+        w.save_compare()                                                 # ten sam model – odświeżenie
+        self.assertIn("odświeżyłem", w.save_status.cget("text"))
+        self.assertEqual(len(section.items), 1)
+        # Otwórz z innymi ustawieniami: kontekst 32k → tryb Zaawansowany i nowy wynik
+        from dataclasses import replace
+        w.open_saved(replace(saved, context=32768))
+        self.assertEqual(w.tabs.index(w.tabs.select()), 0)
+        self.assertEqual(w.hardware.mode.get(), "advanced")
+        self.pump(lambda: w.model is not None and w.verdict.cget("text") and w.loading is None, 5)
+        self.assertIn("32k", w.header.cget("text").replace(" ", ""))
+        w.stats.remove(saved)
+        self.assertEqual(len(section.items), 0)
+
+    def test_save_disabled_without_result(self):
+        w = self.window()
+        w.check(str(Path(self.tmp.name) / "nie-ma.gguf"))
+        self.pump(lambda: w.loading is None, 5)
+        self.assertTrue(w.save_button.instate(["disabled"]))
+
     def test_fields_follow_model_kind(self):
         from tests.test_images import SDXL, safetensors
         w = self.window()

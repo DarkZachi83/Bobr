@@ -14,7 +14,7 @@ from aibobr.calculator.quants import QuantTable
 from aibobr.detection.base import Detector
 from aibobr.domain.enums import GpuVendor, KvCacheType
 from aibobr.domain.models import GpuInfo, HardwareProfile, ModelSpec, RunSettings, Verdict
-from aibobr.domain.units import gib
+from aibobr.domain.units import gib, to_gib
 from aibobr.knowledge import catalog as catalog_mod
 from aibobr.knowledge.advisor import Advisor, Explanation
 from aibobr.knowledge.catalog import Catalog
@@ -35,7 +35,7 @@ class Overrides:
 class AppController:
     def __init__(self, config: ConfigStore, quants: QuantTable, detector: Detector,
                  cache: Optional[ModelCache] = None, catalog: Optional[Catalog] = None,
-                 catalog_download: Optional[Path] = None, audio=None, images=None):
+                 catalog_download: Optional[Path] = None, audio=None, images=None, saved=None):
         self.config = config
         self.settings = config.load()
         self.quants = quants
@@ -47,6 +47,7 @@ class AppController:
         from aibobr.knowledge.images import ImageCatalog
         self.images = images or ImageCatalog()
         self.set_catalog(catalog or Catalog(updated="", models=()))
+        self.saved = saved                     # SavedStore – modele do porównania (etap 11a)
 
     def set_catalog(self, catalog: Catalog) -> None:
         self.catalog = catalog
@@ -126,3 +127,38 @@ class AppController:
     def explain(self, model: LoadedModel, spec: ModelSpec, hw: HardwareProfile,
                 settings: RunSettings) -> tuple[Verdict, Explanation]:
         return self.advisor.explain(model, spec, hw, settings)
+
+    # ------------------------------------------------------------------ porównanie (etap 11a)
+    @staticmethod
+    def saved_entry(target: str, spec: ModelSpec, verdict: Verdict, hw: HardwareProfile,
+                    settings: RunSettings, now=None):
+        """Wpis do zapisanych modeli z bieżącego wyniku."""
+        import datetime
+        from aibobr.app.saved import SavedModel
+        kind = "audio" if spec.audio else "image" if spec.image else "text"
+        need = verdict.need
+        peak = need.peak if kind == "image" else need.vram_part
+        gpus = [g for g in hw.gpus if g.selected and not g.integrated]
+        parts = [f"{_short_gpu(g.name)} {to_gib(g.vram_total or 0):.0f} GB" for g in gpus] or ["CPU"]
+        if hw.ram_total:
+            parts.append(f"RAM {to_gib(hw.ram_total):.0f} GB")
+        image = kind == "image"
+        return SavedModel(
+            kind=kind, name=spec.name, target=target, quant=spec.quant,
+            saved_at=(now or datetime.datetime.now()).strftime("%Y-%m-%d %H:%M"),
+            level=verdict.level.value, need_gib=round(to_gib(peak), 2),
+            context=None if image else settings.context_tokens,
+            kv_cache=None if image else settings.kv_cache_type.value,
+            resolution=(need.width, need.height) if image else None,
+            native_resolution=not settings.image_width,
+            batch=need.batch if image else 1,
+            hardware=" · ".join(parts))
+
+
+def _short_gpu(name: str) -> str:
+    """„NVIDIA GeForce RTX 5050 Laptop GPU” → „RTX 5050 Laptop” – do wąskiej kolumny tabeli."""
+    for prefix in ("NVIDIA GeForce ", "NVIDIA ", "AMD ", "Intel(R) ", "Intel "):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
+    return name.replace(" Laptop GPU", " Laptop").replace(" GPU", "").strip()

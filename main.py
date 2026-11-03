@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 from aibobr import resources
+from aibobr.app.saved import SavedStore
 from aibobr.app.config import ConfigStore, user_cache_dir, user_config_dir
 from aibobr.app.controller import AppController
 from aibobr.calculator.quants import QuantTable
@@ -49,6 +50,7 @@ def build_app(fake_hw: Optional[Path] = None, user_dir: Optional[Path] = None,
         catalog_download=downloaded,
         audio=AudioCatalog.load(PATHS["audio"]),
         images=ImageCatalog.load(PATHS["images"]),
+        saved=SavedStore((user_dir or user_config_dir()) / "saved_models.json"),
     )
 
 
