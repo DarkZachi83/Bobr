@@ -426,7 +426,7 @@ bez/po zdjęciu bloku ```json, klucze, typy, wartości, znaki ucieczki; składni
 i metod). Oceniający: `regex`, `contains_all` (rdzenie słów – polska odmiana), `json`, `python_syntax`.
 Passkey (igła w stogu siana) – pakiet przy 12b: kilka długości × pozycje 10/50/90%.
 
-**12a – zrobione:** okno „Benchmark…” z trzech miejsc (Modele na dysku – kilka zaznaczonych naraz,
+**12a – zrobione (v0.6.0):** okno „Benchmark…” z trzech miejsc (Modele na dysku – kilka zaznaczonych naraz,
 Sprawdź – gdy model jest z Ollamy, Statystyka – zaznaczony albo wszystkie z Ollamy w grupie). Przed
 startem werdykt dla każdej pary model × kontekst (1k i 8k zaznaczone, 32k na życzenie): czerwone
 pomijane, szacunek czasu; przy kilku modelach ostrzeżenie i potwierdzenie (decyzja autora: długo,
