@@ -134,6 +134,15 @@ likes, last update and license – with a warning for non-commercial or gated mo
 Double-click opens a model again with the same settings.
 Everything stays in a file on your computer.
 
+### Benchmark – Zacharski tests
+
+For models installed in **Ollama**, the **Benchmark…** button measures real speed on your computer:
+prompt processing (tokens/s, time to first token) and generation (tokens/s) at 1k and 8k context
+(32k on request), with a warm-up and the median of 3 runs. AI Bóbr shows its prediction next to each
+measurement, skips models that won't fit, measures one model at a time and warns that testing several
+models takes long and loads the computer. It also notices a laptop card held at a low power limit and
+a card that shares its memory with the monitor. Results are saved on your computer (`benchmarks.sqlite`).
+
 ### Models on your disk
 
 **Models on disk…** (or `--scan [FOLDER]`) lists the models you already have – from Ollama,
@@ -292,6 +301,15 @@ czy model już masz na dysku. **Dane z Hugging Face** (na żądanie): pobrania z
 polubienia, data aktualizacji i licencja – z ostrzeżeniem przy licencji niekomercyjnej albo wymaganej
 akceptacji warunków. Dwuklik otwiera model ponownie z tymi samymi ustawieniami.
 Wszystko zostaje w pliku na Twoim komputerze.
+
+### Benchmark – testy Zacharskiego
+
+Dla modeli zainstalowanych w **Ollamie** przycisk **Benchmark…** mierzy prawdziwą szybkość na Twoim
+komputerze: przetwarzanie promptu (tokeny/s, czas do pierwszego tokenu) i generowanie (tokeny/s) przy
+kontekście 1k i 8k (32k na życzenie), z rozgrzewką i medianą z 3 przebiegów. Obok pomiaru AI Bóbr pokazuje
+swoje przewidywanie, pomija modele, które się nie zmieszczą, mierzy modele po kolei i ostrzega, że test
+kilku modeli trwa długo i obciąża komputer. Zauważa też kartę w laptopie na niskim limicie mocy i kartę,
+która dzieli pamięć z monitorem. Wyniki zostają na Twoim komputerze (`benchmarks.sqlite`).
 
 ### Modele na dysku
 
