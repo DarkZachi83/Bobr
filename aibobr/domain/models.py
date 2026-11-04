@@ -31,6 +31,17 @@ class GpuInfo:
     compute_capability: Optional[tuple[int, int]] = None  # tylko NVIDIA
     driver_version: Optional[str] = None     # tylko NVIDIA, np. "570.86.16"
     pci_bus: Optional[str] = None            # np. "0000:01:00.0" – do łączenia wyników
+    # Limit mocy (tylko NVIDIA). Laptopy: bieżący limit bywa dużo niższy niż maksymalny –
+    # na Linuksie bez usługi nvidia-powerd (Dynamic Boost) karta zostaje na najniższym.
+    power_limit_w: Optional[float] = None
+    power_max_w: Optional[float] = None
+    dynamic_boost: Optional[bool] = None     # Linux: czy działa nvidia-powerd; None – nie wiadomo
+
+    @property
+    def power_capped(self) -> bool:
+        """Bieżący limit mocy ≤ 60% maksymalnego (pomiar autora: laptop RTX 5050 – 35 z 100 W)."""
+        return bool(self.power_limit_w and self.power_max_w
+                    and self.power_limit_w <= 0.6 * self.power_max_w)
 
 
 @dataclass(frozen=True)

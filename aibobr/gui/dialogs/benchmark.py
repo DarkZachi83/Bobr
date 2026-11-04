@@ -8,6 +8,7 @@ na końcu: tabela wyników zapisanych w benchmarks.sqlite i najszybszy model na 
 from __future__ import annotations
 
 import threading
+import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Callable, Optional
@@ -37,6 +38,7 @@ class BenchmarkDialog(tk.Toplevel):
         self.minsize(820, 480)
         self.stop = threading.Event()
         self.predicted: dict = {}
+        self._minutes = 0
         self.results: list = []
         self.running = False
         body = ttk.Frame(self, padding=12)
@@ -118,10 +120,11 @@ class BenchmarkDialog(tk.Toplevel):
                 values = (name, fmt_context(ctx), t("bench.pred.red"), t("bench.skip_red"), "", "", "")
                 self.tree.insert("", "end", values=values, tags=("skip",))
                 continue
-            seconds += estimate_seconds(ctx, level)
+            seconds += estimate_seconds(ctx, level, measured=self._measured(name, ctx))
             values = (name, fmt_context(ctx), t(f"bench.pred.{level}") if level else "?", "", "", "", "")
             self.tree.insert("", "end", values=values, tags=(level,) if level else ())
         minutes = max(1, round(seconds / 60))
+        self._minutes = minutes
         text = t("bench.plan", jobs=len(jobs) - skipped, minutes=minutes)
         if skipped:
             text += " " + t("bench.plan_skipped", n=skipped)
@@ -135,6 +138,18 @@ class BenchmarkDialog(tk.Toplevel):
         self.warning.configure(text="\n".join("⚠ " + w for w in warnings))
         self.start_button.state(["!disabled"] if len(jobs) > skipped else ["disabled"])
 
+    def _measured(self, model: str, ctx: int):
+        """Prędkości z ostatniego pomiaru tego modelu na tym sprzęcie – lepszy szacunek czasu."""
+        db = getattr(self.c, "bench_db", None)
+        if db is None:
+            return None
+        try:
+            rows = db.latest(model, self.c.hardware_text(self.hw))
+        except Exception:
+            return None
+        row = next((r for r in rows if r["context"] == ctx), None) or (rows[-1] if rows else None)
+        return (row["pp_tps"], row["tg_tps"]) if row else None
+
     # ------------------------------------------------------------------ pomiar
     def start(self) -> None:
         contexts = self.contexts()
@@ -143,6 +158,8 @@ class BenchmarkDialog(tk.Toplevel):
         if len(self.targets) > 1 and not self.confirm(t("bench.title"), t("bench.confirm_many")):
             return
         self.running = True
+        self.started = time.monotonic()
+        self.estimated_min = self._minutes
         self.stop.clear()
         self.start_button.state(["disabled"])
         self.stop_button.state(["!disabled"])
@@ -179,12 +196,27 @@ class BenchmarkDialog(tk.Toplevel):
                 r.model, fmt_context(r.context), pred, _num(r.pp_tps, 0), _num(r.ttft_ms, 0),
                 _num(r.tg_tps), gpu), tags=(r.predicted,) if r.predicted else ())
         done = [r for r in results if r.tg_tps]
-        self.progress.configure(text=t("bench.stopped_note") if any(r.stopped for r in results)
-                                else t("bench.saved"))
+        self._power_warning(done)
+        elapsed = time.monotonic() - getattr(self, "started", time.monotonic())
+        took = t("bench.took", min=int(elapsed // 60), sec=int(elapsed % 60),
+                 est=getattr(self, "estimated_min", 0))
+        self.progress.configure(text=(t("bench.stopped_note") if any(r.stopped for r in results)
+                                      else t("bench.saved")) + " " + took)
         if len({r.model for r in done}) >= 2:
             best = max(done, key=lambda r: r.tg_tps)
             self.summary.configure(text=t("bench.fastest", model=best.model, tps=_num(best.tg_tps),
                                           context=fmt_context(best.context)))
+
+    def _power_warning(self, done: list) -> None:
+        """Karta przez test „na ścianie” limitu mocy (pobór ≥ 90% limitu, limit ≤ 60% maksimum)."""
+        gpu = next((g for g in self.hw.gpus if g.selected and g.power_capped), None)
+        peaks = [r.power_draw_w for r in done if r.power_draw_w]
+        if gpu is None or not peaks or max(peaks) < 0.9 * gpu.power_limit_w:
+            return
+        import sys
+        key = "bench.power_capped_linux" if sys.platform.startswith("linux") else "bench.power_capped_other"
+        text = "⚠ " + t(key, draw=f"{max(peaks):.0f}", limit=f"{gpu.power_limit_w:.0f}", max=f"{gpu.power_max_w:.0f}")
+        self.warning.configure(text=text)
 
     def _failed(self, e: BaseException) -> None:
         self.running = False

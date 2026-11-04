@@ -72,6 +72,17 @@ class RunnerTest(unittest.TestCase):
         self.assertLess(estimate_seconds(1024, "green"), estimate_seconds(8192, "green"))
         self.assertLess(estimate_seconds(8192, "green"), estimate_seconds(8192, "yellow"))
 
+    def test_estimate_matches_authors_measurements(self):
+        # gemma2:9b na RTX 5050 Laptop (4.11.2026): 1k – 46 s, 8k – 62 s
+        self.assertAlmostEqual(estimate_seconds(1024, "green", measured=(1000, 21.6)), 46, delta=10)
+        self.assertAlmostEqual(estimate_seconds(8192, "yellow", measured=(896, 23.5)), 62, delta=12)
+
+    def test_prompt_differs_between_sessions(self):
+        import importlib
+        first = prompts.prompt_processing(1024, 1)
+        importlib.reload(prompts)                                  # nowa sesja programu
+        self.assertNotEqual(first[:30], prompts.prompt_processing(1024, 1)[:30])
+
 
 class ControllerTest(unittest.TestCase):
     def test_runs_models_one_by_one_skips_red_and_saves(self):
