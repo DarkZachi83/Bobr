@@ -107,6 +107,26 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertIn("a bit slower", w.verdict.cget("text"))
         self.assertTrue(w.explanation.expanded)
 
+    def test_vram_busy_shown_and_noted(self):
+        import json
+        profile = json.loads((PROFILES / "desktop_rtx3060_linux.json").read_text(encoding="utf-8"))
+        profile["gpus"][0]["vram_used_gb"] = 1.12                # pulpit na karcie (pomiar autora)
+        path = Path(self.tmp.name) / "busy.json"
+        path.write_text(json.dumps(profile), encoding="utf-8")
+        w = self.window(path)
+        texts = []
+        stack = [w.hardware.body]
+        while stack:
+            widget = stack.pop()
+            stack += widget.winfo_children()
+            if widget.winfo_class() == "TLabel":
+                texts.append(str(widget.cget("text")))
+        self.assertTrue(any("zajęte teraz" in x and "VRAM" in x for x in texts))
+        w.explanation.toggle()
+        self.assertIn("10,8 GB użytkowe", w.explanation.text.get("1.0", "end"))   # 12 − 1,25 zajęte
+        notes = [str(x.cget("text")) for x in w.notes.winfo_children() if x.winfo_class() == "TLabel"]
+        self.assertTrue(any("system i otwarte programy" in x for x in notes), notes)
+
     def test_language_back_to_system(self):
         import json
         w = self.window()

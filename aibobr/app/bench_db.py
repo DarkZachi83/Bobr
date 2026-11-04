@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS perf (
 CREATE INDEX IF NOT EXISTS perf_model ON perf(model, context);
 """
 # Kolumny dodane później – starsze bazy dostają je przy otwarciu (ALTER TABLE).
-EXTRA_COLUMNS = {"power_draw_w": "REAL", "power_limit_w": "REAL", "power_max_w": "REAL"}
+EXTRA_COLUMNS = {"power_draw_w": "REAL", "power_limit_w": "REAL", "power_max_w": "REAL",
+                 "vram_busy_mb": "REAL"}       # zajęte przez system przed testem (np. pulpit)
 
 
 class BenchDb:
@@ -48,16 +49,17 @@ class BenchDb:
 
     def add_perf(self, r, *, measured_at: str, runtime: str, runtime_version: Optional[str],
                  hardware: str, power: Optional[str], suite: str,
-                 power_limit_w: Optional[float] = None, power_max_w: Optional[float] = None) -> None:
+                 power_limit_w: Optional[float] = None, power_max_w: Optional[float] = None,
+                 vram_busy_mb: Optional[float] = None) -> None:
         with closing(self._connect()) as db, db:
             db.execute(
                 "INSERT INTO perf (measured_at, model, runtime, runtime_version, hardware, power, context,"
                 " pp_tps, ttft_ms, tg_tps, prompt_tokens, gen_tokens, gpu_share, predicted, suite,"
-                " power_draw_w, power_limit_w, power_max_w)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " power_draw_w, power_limit_w, power_max_w, vram_busy_mb)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (measured_at, r.model, runtime, runtime_version, hardware, power, r.context, r.pp_tps,
                  r.ttft_ms, r.tg_tps, r.prompt_tokens, r.gen_tokens, r.gpu_share, r.predicted, suite,
-                 getattr(r, "power_draw_w", None), power_limit_w, power_max_w))
+                 getattr(r, "power_draw_w", None), power_limit_w, power_max_w, vram_busy_mb))
 
     def latest(self, model: str, hardware: str) -> list[dict]:
         """Ostatni pomiar każdej długości kontekstu dla modelu na tym sprzęcie."""

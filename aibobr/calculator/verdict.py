@@ -1,6 +1,7 @@
 """Werdykt: gdzie kończy się pasek modelu na pasku systemu (SPEC §6, §10)."""
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from dataclasses import replace
 
@@ -29,8 +30,22 @@ class IncompleteProfileError(ValueError):
         self.missing = missing
 
 
-def _usable(gpu: GpuInfo, settings: RunSettings) -> int:
-    return max(0, (gpu.vram_total or 0) - settings.vram_reserve)
+BUSY_MIN = 300 * 1024**2          # mniej to zwykły szum sterownika
+BUSY_STEP = 1024**3 // 4          # zajętość zmienia się w czasie – zaokrąglamy w górę do 0,25 GB
+
+
+def busy_vram(gpu: GpuInfo) -> int:
+    """Pamięć karty zajęta teraz przez system i programy (np. pulpit, gdy karta obsługuje monitor).
+
+    Pomiar autora 4.11.2026: RTX 2060 SUPER z monitorem – pulpit Windows 1151 MiB; Ollama dała
+    gemma2:9b przy 8k tylko 72% w karcie, laptop z monitorem na grafice Intela – 87%."""
+    busy = gpu.vram_busy or 0
+    return 0 if busy < BUSY_MIN else math.ceil(busy / BUSY_STEP) * BUSY_STEP
+
+
+def usable_vram(gpu: GpuInfo, settings: RunSettings) -> int:
+    """Rezerwa na system albo to, co system zajmuje już teraz – co większe."""
+    return max(0, (gpu.vram_total or 0) - max(settings.vram_reserve, busy_vram(gpu)))
 
 
 def capacity(hw: HardwareProfile, settings: RunSettings) -> tuple[Capacity, tuple[str, ...]]:
@@ -54,18 +69,21 @@ def capacity(hw: HardwareProfile, settings: RunSettings) -> tuple[Capacity, tupl
             groups[g.vendor].append(g)
     used: list[GpuInfo] = []
     if groups:
-        used = max(groups.values(), key=lambda gs: sum(_usable(g, settings) for g in gs))
+        used = max(groups.values(), key=lambda gs: sum(usable_vram(g, settings) for g in gs))
         if len(groups) > 1:
             warnings.append("warn.mixed_gpu_vendors")
     for g in used:
         warnings += [w for w in gpu_warnings(g) if w not in warnings]
 
     cap = Capacity(
-        vram_usable=sum(_usable(g, settings) for g in used),
+        vram_usable=sum(usable_vram(g, settings) for g in used),
         ram_usable=max(0, (hw.ram_total or 0) - settings.ram_reserve),
         gpus_used=tuple(used),
         cpu_only=not used,
         missing=tuple(missing),
+        busy=tuple((g.name, busy_vram(g), usable_vram(g, settings)) for g in used
+                   if busy_vram(g) > settings.vram_reserve),
+        igpu=any(g.integrated for g in hw.gpus),
     )
     return cap, tuple(warnings)
 

@@ -16,7 +16,7 @@ from typing import Iterable, Optional, Sequence
 from aibobr.calculator.image import load_ram_short
 from aibobr.calculator.memory import MissingModelData, mtp_extra_bytes
 from aibobr.calculator.quants import QuantTable
-from aibobr.calculator.verdict import evaluate
+from aibobr.calculator.verdict import evaluate, usable_vram
 from aibobr.domain.enums import FitLevel, KvCacheType
 from aibobr.domain.models import HardwareProfile, ModelSpec, RunSettings, Verdict
 from aibobr.i18n import fmt_context, fmt_gb, fmt_number, fmt_params, t
@@ -199,6 +199,15 @@ def power_notes(v: Verdict) -> list[Line]:
             for g in v.capacity.gpus_used if g.power_capped and g.dynamic_boost is False]
 
 
+def busy_notes(v: Verdict) -> list[Line]:
+    """System i programy zajmują na karcie więcej niż rezerwa – model dostanie mniej."""
+    notes = [Line("note.vram_busy", {"name": name, "busy": Size(busy), "usable": Size(usable)})
+             for name, busy, usable in v.capacity.busy]
+    if notes and v.capacity.igpu:
+        notes.append(Line("note.vram_busy_igpu"))
+    return notes
+
+
 def _is_gguf(spec: ModelSpec) -> bool:
     """Kwantyzacja GGUF (Q4_K_S, IQ3_M…) – w odróżnieniu od FP16/BF16/FP8."""
     return spec.quant.upper().startswith(("Q", "IQ", "TQ"))
@@ -271,7 +280,7 @@ class Advisor:
             lines.append(Line("expl.pc.no_gpu"))
         for g in cap.gpus_used:
             lines.append(Line("expl.pc.gpu", {
-                "name": g.name, "usable": Size(max(0, (g.vram_total or 0) - settings.vram_reserve))}))
+                "name": g.name, "usable": Size(usable_vram(g, settings))}))
         image = spec.image is not None
         if v.level == FitLevel.GREEN:
             lines.append(Line("expl.pc.img_fits" if image else "expl.pc.fits", {"margin": Size(v.margin or 0)}))
@@ -417,7 +426,7 @@ class Advisor:
                 "ctx": Context(settings.context_tokens), "max": Context(spec.max_context or 0)}))
         if v.need.is_estimate:
             notes.append(Line("note.estimate"))
-        notes += power_notes(v)
+        notes += power_notes(v) + busy_notes(v)
         mtp = mtp_extra_bytes(spec, settings)
         if mtp:
             notes.append(Line("note.mtp", {"size": Size(mtp)}))
@@ -526,7 +535,7 @@ class Advisor:
             notes.append(Line("note.img_load_ram", {"size": Size(n.weights)}))
         if _is_gguf(spec) and v.level == FitLevel.YELLOW and not v.capacity.cpu_only:
             notes.append(Line("note.img_gguf_reserve"))
-        notes += power_notes(v)
+        notes += power_notes(v) + busy_notes(v)
         if not info.measured:
             notes.append(Line("note.img_estimate"))
         notes += [Line(w) for w in v.warnings]
