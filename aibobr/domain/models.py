@@ -25,7 +25,7 @@ class GpuInfo:
     name: str
     vendor: GpuVendor
     vram_total: Optional[int]
-    vram_used: Optional[int] = None          # tylko informacyjnie, nie wpływa na werdykt
+    vram_used: Optional[int] = None          # zajęte w chwili skanu (system, pulpit, programy)
     integrated: bool = False                 # grafika zintegrowana: pamięć = RAM, nie liczymy
     selected: bool = True                    # odznaczenie w trybie Zaawansowanym
     compute_capability: Optional[tuple[int, int]] = None  # tylko NVIDIA
@@ -36,6 +36,12 @@ class GpuInfo:
     power_limit_w: Optional[float] = None
     power_max_w: Optional[float] = None
     dynamic_boost: Optional[bool] = None     # Linux: czy działa nvidia-powerd; None – nie wiadomo
+    vram_loaded: int = 0                     # z zajętej: modele wczytane teraz w Ollamie (zwolnią się)
+
+    @property
+    def vram_busy(self) -> Optional[int]:
+        """Pamięć karty zajęta przez system i programy – bez modeli wczytanych w Ollamie."""
+        return None if self.vram_used is None else max(0, self.vram_used - self.vram_loaded)
 
     @property
     def power_capped(self) -> bool:
@@ -212,6 +218,9 @@ class Capacity:
     gpus_used: tuple[GpuInfo, ...]
     cpu_only: bool                           # brak osobnej karty branej pod uwagę
     missing: tuple[str, ...] = ()            # pola, których nie udało się odczytać
+    # Karty, na których system i programy zajmują więcej niż rezerwa: (nazwa, zajęte, użytkowe).
+    busy: tuple[tuple[str, int, int], ...] = ()
+    igpu: bool = False                       # jest grafika zintegrowana (monitor można przełączyć)
 
     @property
     def total(self) -> int:

@@ -12,6 +12,7 @@ from dataclasses import replace
 from tkinter import ttk
 from typing import Callable, Optional
 
+from aibobr.calculator.verdict import BUSY_MIN
 from aibobr.cli.cli import parse_context, parse_resolution
 from aibobr.domain.enums import GpuVendor, KvCacheType
 from aibobr.domain.models import GpuInfo, HardwareProfile, RunSettings
@@ -180,6 +181,11 @@ class HardwarePanel(ttk.Frame):
                 value = f"{g.name}  —  {t('gui.integrated')}"
             else:
                 value = f"{g.name}  ·  VRAM {fmt_gb(g.vram_total)}"
+                if (g.vram_used or 0) >= BUSY_MIN:
+                    used = fmt_gb(g.vram_used)
+                    if g.vram_loaded:
+                        used += "; " + t("gui.vram_loaded", size=fmt_gb(g.vram_loaded))
+                    value += "  " + t("gui.used_now", size=used)
             self._line(grid, t("gui.gpu") if i == 0 else "", value, 2 + i)
 
     def _entry(self, parent, var, key, row, col, width=8):

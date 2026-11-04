@@ -103,7 +103,30 @@ class AppController:
 
     # ------------------------------------------------------------------ sprzęt
     def scan(self) -> HardwareProfile:
-        return self.detector.detect()          # PlatformUnsupported leci wyżej
+        return self.with_ollama_loaded(self.detector.detect())   # PlatformUnsupported leci wyżej
+
+    def ollama_loaded_vram(self) -> int:
+        """Ile pamięci kart zajmują modele wczytane teraz w Ollamie (np. 5 minut po benchmarku)."""
+        from aibobr.sources.ollama import OllamaSource
+        try:
+            running = OllamaSource(HttpClient(timeout=2), self.ollama_host()).running()
+        except Exception:                          # Ollama nie działa – nic nie jest wczytane
+            return 0
+        return sum(int(m.get("size_vram") or 0) for m in running)
+
+    def with_ollama_loaded(self, hw: HardwareProfile, loaded: Optional[int] = None) -> HardwareProfile:
+        """Odróżnia pamięć zajętą przez system od modelu z Ollamy, który się zwolni.
+
+        Tylko przy jednej karcie z odczytem zajętości – przy kilku nie wiadomo, gdzie leży model."""
+        cards = [g for g in hw.gpus if not g.integrated and g.vram_used]
+        if len(cards) != 1:
+            return hw
+        loaded = self.ollama_loaded_vram() if loaded is None else loaded
+        if not loaded:
+            return hw
+        card = cards[0]
+        return replace(hw, gpus=tuple(replace(g, vram_loaded=min(loaded, g.vram_used)) if g is card else g
+                                      for g in hw.gpus))
 
     @staticmethod
     def apply_overrides(hw: Optional[HardwareProfile], o: Overrides, platform: str) -> HardwareProfile:
@@ -281,7 +304,7 @@ class AppController:
         return out
 
     def run_benchmark(self, targets, contexts, predicted: dict, hw: HardwareProfile, report, stop,
-                      db=None, now=None, bench=None, power_sampler=None) -> list:
+                      db=None, now=None, bench=None, power_sampler=None, vram_busy=None) -> list:
         """Pomiar wydajności modeli z Ollamy po kolei (nigdy kilku naraz). report(dict) – postęp."""
         import datetime
         from dataclasses import replace as _r
@@ -294,6 +317,7 @@ class AppController:
             from aibobr.bench.power import PowerSampler
             power_sampler = PowerSampler
         version = bench.version()
+        busy = self.vram_busy_now(hw, bench) if vram_busy is None else vram_busy
         runner = PerfRunner(bench, suite)
         hardware, supply = self.hardware_text(hw), power_source()
         stamp = (now or datetime.datetime.now()).strftime("%Y-%m-%d %H:%M")
@@ -320,8 +344,32 @@ class AppController:
                 db.add_perf(r, measured_at=stamp, runtime="ollama", runtime_version=version,
                             hardware=hardware, power=supply, suite=suite["suite_info"]["id"],
                             power_limit_w=gpu.power_limit_w if gpu else None,
-                            power_max_w=gpu.power_max_w if gpu else None)
+                            power_max_w=gpu.power_max_w if gpu else None,
+                            vram_busy_mb=round(busy / 1024**2) if busy is not None else None)
         return results
+
+    @staticmethod
+    def vram_busy_now(hw: HardwareProfile, bench=None, run=None) -> Optional[int]:
+        """Pamięć karty zajęta przez system przed testem (bez modeli Ollamy) – tłumaczy różnice
+        między komputerami: karta z monitorem ma dla modelu mniej miejsca."""
+        from aibobr.detection.base import CommandRunner
+        from aibobr.detection.nvidia import from_nvidia_smi
+        cards = [g for g in hw.gpus if g.selected and not g.integrated]
+        if len(cards) != 1:
+            return None
+        card, used = cards[0], None
+        if card.vendor == GpuVendor.NVIDIA and card.pci_bus:          # świeży odczyt przed testem
+            fresh = from_nvidia_smi(run or CommandRunner()) or ()
+            used = next((g.vram_used for g in fresh if g.pci_bus == card.pci_bus), None)
+        if used is None:
+            return card.vram_busy
+        loaded = 0
+        try:
+            data = bench.http.get_json(f"{bench.host}/api/ps") if bench is not None else {}
+            loaded = sum(int(m.get("size_vram") or 0) for m in (data or {}).get("models") or [])
+        except Exception:
+            pass
+        return max(0, used - loaded)
 
 
 def _short_gpu(name: str) -> str:

@@ -442,6 +442,13 @@ i na Linuksie stan `nvidia-powerd`; limit ≤ 60% maksimum + usługa nieaktywna 
 `note.power_capped` przy wyniku. Benchmark próbkuje pobór mocy co sekundę (kolumny `power_draw_w`,
 `power_limit_w`, `power_max_w`) i ostrzega, gdy karta przez test stała na limicie (≥ 90%).
 
+**Pamięć karty zajęta przez system (pomiar autora 4.11.2026):** RTX 2060 SUPER obsługuje też monitor –
+pulpit Windows zajmuje 1151 MiB; gemma2:9b przy 8k: 72% modelu w karcie (laptop z monitorem na grafice
+Intela: 87%), generowanie 20,1 wobec 28,5 tok/s. Werdykt odejmuje od karty większą z wartości: rezerwa
+VRAM albo zajęte teraz (od 300 MiB, w górę do 0,25 GB), bez modeli wczytanych w Ollamie (`/api/ps`, np.
+5 minut po benchmarku). Uwaga `note.vram_busy`, gdy zajęte > rezerwa, i `note.vram_busy_igpu`, gdy jest
+grafika zintegrowana. Benchmark zapisuje świeży odczyt przed testem (kolumna `vram_busy_mb`).
+
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.
 Sprzęt testowy autora: laptop i5-13450HX + RTX 5050 8 GB + DDR5 oraz Ryzen 7 5700X + RTX 2060 SUPER 8 GB
@@ -457,7 +464,7 @@ Zamiast samych świateł: **dwie warstwy na wspólnej skali w GB**.
 - Linie przerywane oznaczają koniec szybkiej pamięci i koniec całej pamięci.
 
 ```
-VRAM_użyt = Σ (VRAM karty − rezerwa VRAM)   dla zaznaczonych kart
+VRAM_użyt = Σ (VRAM karty − max(rezerwa VRAM, zajęte teraz))   dla zaznaczonych kart (§5c)
 RAM_użyt  = RAM − rezerwa systemu
 
 zielony  potrzeba ≤ VRAM_użyt                       „pójdzie na Twoim komputerze”
