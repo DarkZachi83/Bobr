@@ -427,6 +427,8 @@ class Advisor:
         if v.need.is_estimate:
             notes.append(Line("note.estimate"))
         notes += power_notes(v) + busy_notes(v)
+        if v.level == FitLevel.YELLOW and not v.capacity.cpu_only and not v.capacity.busy:
+            notes.append(Line("note.split_free_vram"))
         mtp = mtp_extra_bytes(spec, settings)
         if mtp:
             notes.append(Line("note.mtp", {"size": Size(mtp)}))

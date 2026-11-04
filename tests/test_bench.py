@@ -20,8 +20,12 @@ class FakeOllama:
 
     def __init__(self):
         self.calls = []
+        self.unloaded = []
 
     def __call__(self, payload):
+        if "prompt" not in payload:                      # zwolnienie modelu (keep_alive 0)
+            self.unloaded.append((payload["model"], payload["keep_alive"]))
+            return {"done": True}
         self.calls.append(payload)
         n = len(self.calls)
         prompt_tokens = max(10, len(payload["prompt"]) // 4)
@@ -104,6 +108,7 @@ class ControllerTest(unittest.TestCase):
             self.assertEqual([r["context"] for r in rows], [1024, 32768])
             self.assertEqual((rows[0]["runtime"], rows[0]["runtime_version"], rows[1]["predicted"]),
                              ("ollama", "0.40.11", "yellow"))
+            self.assertEqual(gen.unloaded, [("llama3.1:8b", 0), ("qwen2.5-coder:14b", 0)])   # karta wolna po teście
             models_in_order = [cl["model"] for cl in gen.calls]
             self.assertEqual(models_in_order, sorted(models_in_order, key=targets_order(targets)))
 

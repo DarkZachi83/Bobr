@@ -10,6 +10,22 @@ from typing import Callable, Optional
 
 from aibobr.detection.base import CommandRunner
 
+AT_LIMIT = 0.9          # pobór ≥ 90% limitu – karta „na ścianie”
+ABOVE_LIMIT = 1.05      # pobór wyraźnie ponad odczytany limit – limit jest dynamiczny (Dynamic Boost)
+
+
+def capped_during_test(gpu, peak_w: Optional[float]) -> bool:
+    """Czy karta przez test stała na niskim limicie mocy.
+
+    Pomiar autora 4.11.2026: z działającym nvidia-powerd sterownik podaje w spoczynku limit 55 W,
+    a pod obciążeniem karta bierze 68–77 W – to nie blokada, więc bez ostrzeżenia."""
+    if gpu is None or not peak_w or not gpu.power_capped or not gpu.power_limit_w:
+        return False
+    if gpu.dynamic_boost is True or peak_w > ABOVE_LIMIT * gpu.power_limit_w:
+        return False
+    return peak_w >= AT_LIMIT * gpu.power_limit_w
+
+
 QUERY = ["nvidia-smi", "--query-gpu=power.draw", "--format=csv,noheader,nounits"]
 
 

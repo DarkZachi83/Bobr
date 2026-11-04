@@ -323,29 +323,46 @@ class AppController:
         stamp = (now or datetime.datetime.now()).strftime("%Y-%m-%d %H:%M")
         results = []
         jobs = [(t, c) for t in targets for c in contexts]
-        for n, (target, ctx) in enumerate(jobs, 1):
-            model = target[len(OLLAMA_PREFIX):] if target.startswith(OLLAMA_PREFIX) else target
-            level = predicted.get((target, ctx))
-            if level == "red":
-                results.append(PerfResult(model, ctx, predicted=level, skipped="bench.skip_red"))
-                continue
+        loaded = None                        # model w karcie: zostaje między długościami kontekstu
+
+        def unload(model):
+            # Po teście modelu zwalniamy go od razu – inaczej Ollama trzyma go jeszcze 5 minut,
+            # a następny model albo inny program dostaje mniej pamięci karty.
             try:
-                with (power_sampler() if power_sampler else _NoSampler()) as power:
-                    r = runner.run(model, ctx, lambda step: report({"n": n, "total": len(jobs), "model": model,
-                                                                    "context": ctx, "step": step}), stop)
-                r = _r(r, power_draw_w=power.peak)
-            except Stopped:
-                results.append(PerfResult(model, ctx, predicted=level, stopped=True))
-                break
-            r = _r(r, predicted=level)
-            results.append(r)
-            if db is not None:
-                gpu = next((g for g in hw.gpus if g.selected and g.power_limit_w), None)
-                db.add_perf(r, measured_at=stamp, runtime="ollama", runtime_version=version,
-                            hardware=hardware, power=supply, suite=suite["suite_info"]["id"],
-                            power_limit_w=gpu.power_limit_w if gpu else None,
-                            power_max_w=gpu.power_max_w if gpu else None,
-                            vram_busy_mb=round(busy / 1024**2) if busy is not None else None)
+                bench.unload(model)
+            except Exception:
+                pass
+
+        try:
+            for n, (target, ctx) in enumerate(jobs, 1):
+                model = target[len(OLLAMA_PREFIX):] if target.startswith(OLLAMA_PREFIX) else target
+                level = predicted.get((target, ctx))
+                if level == "red":
+                    results.append(PerfResult(model, ctx, predicted=level, skipped="bench.skip_red"))
+                    continue
+                if loaded and loaded != model:
+                    unload(loaded)
+                loaded = model
+                try:
+                    with (power_sampler() if power_sampler else _NoSampler()) as power:
+                        r = runner.run(model, ctx, lambda step: report({"n": n, "total": len(jobs), "model": model,
+                                                                        "context": ctx, "step": step}), stop)
+                    r = _r(r, power_draw_w=power.peak)
+                except Stopped:
+                    results.append(PerfResult(model, ctx, predicted=level, stopped=True))
+                    break
+                r = _r(r, predicted=level)
+                results.append(r)
+                if db is not None:
+                    gpu = next((g for g in hw.gpus if g.selected and g.power_limit_w), None)
+                    db.add_perf(r, measured_at=stamp, runtime="ollama", runtime_version=version,
+                                hardware=hardware, power=supply, suite=suite["suite_info"]["id"],
+                                power_limit_w=gpu.power_limit_w if gpu else None,
+                                power_max_w=gpu.power_max_w if gpu else None,
+                                vram_busy_mb=round(busy / 1024**2) if busy is not None else None)
+        finally:
+            if loaded:
+                unload(loaded)
         return results
 
     @staticmethod
