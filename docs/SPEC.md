@@ -448,6 +448,14 @@ Intela: 87%), generowanie 20,1 wobec 28,5 tok/s. Werdykt odejmuje od karty więk
 VRAM albo zajęte teraz (od 300 MiB, w górę do 0,25 GB), bez modeli wczytanych w Ollamie (`/api/ps`, np.
 5 minut po benchmarku). Uwaga `note.vram_busy`, gdy zajęte > rezerwa, i `note.vram_busy_igpu`, gdy jest
 grafika zintegrowana. Benchmark zapisuje świeży odczyt przed testem (kolumna `vram_busy_mb`).
+Przy podziale karta + RAM liczy się każde ~100 MB: laptop, gemma2:9b przy 8k – z Chrome i LibreOffice
+194 MiB zajęte, 85% w karcie, 25,8 tok/s; po zamknięciu 101 MiB, 87%, 27,4 tok/s (Ollama dzieli całymi
+warstwami). Stąd podpowiedź `note.split_free_vram` przy żółtym werdykcie (v0.6.1). Po teście benchmark
+zwalnia model z karty (`keep_alive: 0`), także przy przejściu do następnego modelu.
+
+**Limit mocy z Dynamic Boost (v0.6.1):** z działającym `nvidia-powerd` sterownik podaje w spoczynku limit
+55 W, a pod obciążeniem karta bierze 68–77 W. Ostrzeżenie w benchmarku tylko bez Dynamic Boost i gdy pobór
+nie przekroczył odczytanego limitu o ponad 5% (limit dynamiczny – także na Windows).
 
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.

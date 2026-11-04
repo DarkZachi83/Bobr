@@ -72,6 +72,24 @@ class BoostTest(unittest.TestCase):
         self.assertIsNone(g.dynamic_boost)
 
 
+class DuringTestTest(unittest.TestCase):
+    """Ostrzeżenie w oknie benchmarku (pomiar autora 4.11.2026, nvidia-powerd włączony: 55 W → 68–77 W)."""
+
+    def test_capped_without_boost(self):
+        from aibobr.bench.power import capped_during_test
+        capped = replace(LAPTOP, power_limit_w=35, power_max_w=100, dynamic_boost=False)
+        self.assertTrue(capped_during_test(capped, 34.6))
+        self.assertFalse(capped_during_test(capped, 20.0))                   # daleko od limitu
+
+    def test_no_warning_with_dynamic_boost(self):
+        from aibobr.bench.power import capped_during_test
+        boosted = replace(LAPTOP, power_limit_w=55, power_max_w=100, dynamic_boost=True)
+        self.assertFalse(capped_during_test(boosted, 77.0))
+        unknown = replace(boosted, dynamic_boost=None)                       # Windows: stanu usługi nie znamy
+        self.assertFalse(capped_during_test(unknown, 70.0))                  # pobór ponad limit = limit dynamiczny
+        self.assertTrue(capped_during_test(unknown, 54.0))
+
+
 class NoteTest(unittest.TestCase):
     def test_note_only_when_capped_and_boost_off(self):
         capped = replace(LAPTOP, power_limit_w=35, power_max_w=100, dynamic_boost=False)

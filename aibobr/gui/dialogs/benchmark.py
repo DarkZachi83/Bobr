@@ -209,9 +209,10 @@ class BenchmarkDialog(tk.Toplevel):
 
     def _power_warning(self, done: list) -> None:
         """Karta przez test „na ścianie” limitu mocy (pobór ≥ 90% limitu, limit ≤ 60% maksimum)."""
+        from aibobr.bench.power import capped_during_test
         gpu = next((g for g in self.hw.gpus if g.selected and g.power_capped), None)
         peaks = [r.power_draw_w for r in done if r.power_draw_w]
-        if gpu is None or not peaks or max(peaks) < 0.9 * gpu.power_limit_w:
+        if not peaks or not capped_during_test(gpu, max(peaks)):
             return
         import sys
         key = "bench.power_capped_linux" if sys.platform.startswith("linux") else "bench.power_capped_other"

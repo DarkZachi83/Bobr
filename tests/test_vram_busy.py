@@ -50,6 +50,19 @@ class NoteTest(unittest.TestCase):
         self.assertNotIn("note.vram_busy", [n.key for n in e.notes])
 
 
+class SplitTipTest(unittest.TestCase):
+    """Przy podziale karta + RAM liczy się każde ~100 MB (pomiar autora: 194 → 101 MiB, 85% → 87%, +6%)."""
+
+    def test_tip_only_for_split(self):
+        small = replace(DESKTOP, vram_total=4 * GIB, vram_used=None)            # 8B nie zmieści się w 3 GB
+        _, e = explain(LLAMA, pc(gpus=[small]))
+        self.assertIn("note.split_free_vram", [n.key for n in e.notes])
+        _, e = explain(LLAMA, pc(gpus=[replace(small, vram_total=24 * GIB)]))   # całość w karcie
+        self.assertNotIn("note.split_free_vram", [n.key for n in e.notes])
+        _, e = explain(LLAMA, pc(gpus=[]))                                       # sam procesor
+        self.assertNotIn("note.split_free_vram", [n.key for n in e.notes])
+
+
 class ControllerTest(unittest.TestCase):
     def setUp(self):
         import main

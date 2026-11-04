@@ -303,6 +303,7 @@
   "note.power_capped": "Karta {name} pracuje z limitem mocy {limit} W z {max} W możliwych – usługa nvidia-powerd (Dynamic Boost) nie działa. Włącz ją: sudo systemctl enable --now nvidia-powerd. Pomiar autora: generowanie 2,6 raza szybsze.",
   "note.vram_busy": "Na karcie {name} system i otwarte programy (pulpit, przeglądarka, gry) zajmują teraz {busy}, więc model dostanie {usable}. Przed uruchomieniem modelu zamknij zbędne programy. Pomiar autora (gemma2:9b, 8k): karta 8 GB obsługująca monitor zmieściła 72% modelu, karta 8 GB bez monitora – 87%.",
   "note.vram_busy_igpu": "Twój procesor ma grafikę zintegrowaną – monitor podłączony do płyty głównej zwolni pamięć karty dla modelu.",
+  "note.split_free_vram": "Model nie mieści się w całości w karcie – każde zwolnione ok. 100 MB pamięci karty przenosi część modelu z RAM do karty. Przed uruchomieniem zamknij przeglądarkę i inne programy. Pomiar autora: po zamknięciu Chrome i LibreOffice generowanie szybsze o 6%.",
   "gui.vram_loaded": "w tym Ollama {size} – zwolni się",
   "ollama.no_metadata": "Ollama nie podała danych tego modelu.",
   "ollama.not_found": "Ollama nie ma takiego modelu. Lista: ollama list.",

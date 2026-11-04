@@ -61,6 +61,10 @@ class OllamaBench:
             load_seconds=float(r.get("load_duration") or 0) / ns,
             text=str(r.get("response") or ""))
 
+    def unload(self, model: str) -> None:
+        """Zwalnia model z pamięci od razu (keep_alive 0) – po teście karta jest wolna dla innych programów."""
+        self.http.post_json(f"{self.host}/api/generate", {"model": model, "keep_alive": 0}, timeout=60)
+
     def gpu_share(self, model: str) -> Optional[float]:
         """Jaka część wczytanego modelu jest w karcie (0–1); None, gdy Ollama go nie pokazuje."""
         data = self.http.get_json(f"{self.host}/api/ps")
