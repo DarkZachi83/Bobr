@@ -196,6 +196,7 @@ class BenchmarkDialog(tk.Toplevel):
                 r.model, fmt_context(r.context), pred, _num(r.pp_tps, 0), _num(r.ttft_ms, 0),
                 _num(r.tg_tps), gpu), tags=(r.predicted,) if r.predicted else ())
         done = [r for r in results if r.tg_tps]
+        self._power_warning(done)
         elapsed = time.monotonic() - getattr(self, "started", time.monotonic())
         took = t("bench.took", min=int(elapsed // 60), sec=int(elapsed % 60),
                  est=getattr(self, "estimated_min", 0))
@@ -205,6 +206,17 @@ class BenchmarkDialog(tk.Toplevel):
             best = max(done, key=lambda r: r.tg_tps)
             self.summary.configure(text=t("bench.fastest", model=best.model, tps=_num(best.tg_tps),
                                           context=fmt_context(best.context)))
+
+    def _power_warning(self, done: list) -> None:
+        """Karta przez test „na ścianie” limitu mocy (pobór ≥ 90% limitu, limit ≤ 60% maksimum)."""
+        gpu = next((g for g in self.hw.gpus if g.selected and g.power_capped), None)
+        peaks = [r.power_draw_w for r in done if r.power_draw_w]
+        if gpu is None or not peaks or max(peaks) < 0.9 * gpu.power_limit_w:
+            return
+        import sys
+        key = "bench.power_capped_linux" if sys.platform.startswith("linux") else "bench.power_capped_other"
+        text = "⚠ " + t(key, draw=f"{max(peaks):.0f}", limit=f"{gpu.power_limit_w:.0f}", max=f"{gpu.power_max_w:.0f}")
+        self.warning.configure(text=text)
 
     def _failed(self, e: BaseException) -> None:
         self.running = False

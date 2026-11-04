@@ -281,7 +281,7 @@ class AppController:
         return out
 
     def run_benchmark(self, targets, contexts, predicted: dict, hw: HardwareProfile, report, stop,
-                      db=None, now=None, bench=None) -> list:
+                      db=None, now=None, bench=None, power_sampler=None) -> list:
         """Pomiar wydajności modeli z Ollamy po kolei (nigdy kilku naraz). report(dict) – postęp."""
         import datetime
         from dataclasses import replace as _r
@@ -290,9 +290,12 @@ class AppController:
         from aibobr.sources.factory import OLLAMA_PREFIX
         suite = self.bench_suite()
         bench = bench or OllamaBench(self.ollama_host())
+        if power_sampler is None and any(g.power_limit_w for g in hw.gpus):
+            from aibobr.bench.power import PowerSampler
+            power_sampler = PowerSampler
         version = bench.version()
         runner = PerfRunner(bench, suite)
-        hardware, power = self.hardware_text(hw), power_source()
+        hardware, supply = self.hardware_text(hw), power_source()
         stamp = (now or datetime.datetime.now()).strftime("%Y-%m-%d %H:%M")
         results = []
         jobs = [(t, c) for t in targets for c in contexts]
@@ -303,16 +306,21 @@ class AppController:
                 results.append(PerfResult(model, ctx, predicted=level, skipped="bench.skip_red"))
                 continue
             try:
-                r = runner.run(model, ctx, lambda step: report({"n": n, "total": len(jobs), "model": model,
-                                                                "context": ctx, "step": step}), stop)
+                with (power_sampler() if power_sampler else _NoSampler()) as power:
+                    r = runner.run(model, ctx, lambda step: report({"n": n, "total": len(jobs), "model": model,
+                                                                    "context": ctx, "step": step}), stop)
+                r = _r(r, power_draw_w=power.peak)
             except Stopped:
                 results.append(PerfResult(model, ctx, predicted=level, stopped=True))
                 break
             r = _r(r, predicted=level)
             results.append(r)
             if db is not None:
+                gpu = next((g for g in hw.gpus if g.selected and g.power_limit_w), None)
                 db.add_perf(r, measured_at=stamp, runtime="ollama", runtime_version=version,
-                            hardware=hardware, power=power, suite=suite["suite_info"]["id"])
+                            hardware=hardware, power=supply, suite=suite["suite_info"]["id"],
+                            power_limit_w=gpu.power_limit_w if gpu else None,
+                            power_max_w=gpu.power_max_w if gpu else None)
         return results
 
 
@@ -335,3 +343,13 @@ def power_source() -> Optional[str]:
     if battery is None:
         return None
     return "ac" if battery.power_plugged else "battery"
+
+
+class _NoSampler:
+    peak = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return None

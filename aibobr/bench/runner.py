@@ -27,6 +27,7 @@ class PerfResult:
     gpu_share: Optional[float] = None       # część modelu w karcie wg Ollamy
     predicted: Optional[str] = None         # werdykt AI Bóbra dla tego kontekstu
     skipped: Optional[str] = None           # klucz i18n, gdy pominięty (np. nie zmieści się)
+    power_draw_w: Optional[float] = None    # najwyższy pobór mocy karty w trakcie (NVIDIA)
     stopped: bool = False
 
 

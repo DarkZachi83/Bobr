@@ -190,6 +190,15 @@ def _where(level: FitLevel, cpu_only: bool = False) -> Text:
     return Text("expl.where.ram_only" if cpu_only else "expl.where.ram")
 
 
+def power_notes(v: Verdict) -> list[Line]:
+    """Karta NVIDIA na niskim limicie mocy, gdy na Linuksie nie działa nvidia-powerd (Dynamic
+    Boost). Pomiar autora 4.11.2026, laptop RTX 5050: 35 W zamiast do 100 W – po włączeniu
+    usługi generowanie gemma2:9b wzrosło z 21,6 do 56,4 tok/s."""
+    return [Line("note.power_capped", {"name": g.name, "limit": f"{g.power_limit_w:.0f}",
+                                       "max": f"{g.power_max_w:.0f}"})
+            for g in v.capacity.gpus_used if g.power_capped and g.dynamic_boost is False]
+
+
 def _is_gguf(spec: ModelSpec) -> bool:
     """Kwantyzacja GGUF (Q4_K_S, IQ3_M…) – w odróżnieniu od FP16/BF16/FP8."""
     return spec.quant.upper().startswith(("Q", "IQ", "TQ"))
@@ -408,6 +417,7 @@ class Advisor:
                 "ctx": Context(settings.context_tokens), "max": Context(spec.max_context or 0)}))
         if v.need.is_estimate:
             notes.append(Line("note.estimate"))
+        notes += power_notes(v)
         mtp = mtp_extra_bytes(spec, settings)
         if mtp:
             notes.append(Line("note.mtp", {"size": Size(mtp)}))
@@ -516,6 +526,7 @@ class Advisor:
             notes.append(Line("note.img_load_ram", {"size": Size(n.weights)}))
         if _is_gguf(spec) and v.level == FitLevel.YELLOW and not v.capacity.cpu_only:
             notes.append(Line("note.img_gguf_reserve"))
+        notes += power_notes(v)
         if not info.measured:
             notes.append(Line("note.img_estimate"))
         notes += [Line(w) for w in v.warnings]

@@ -433,6 +433,15 @@ pomijane, szacunek czasu; przy kilku modelach ostrzeżenie i potwierdzenie (decy
 obciążenie, ryzyko zawieszenia przy braku pamięci), na baterii – ostrzeżenie. Każdy przebieg ma inny
 początek promptu (Ollama pamięta przetworzony prompt). Wyniki: `benchmarks.sqlite` (tabela `perf`).
 
+**Limit mocy karty (pomiar autora 4.11.2026):** laptop RTX 5050 na Linuksie pracował z limitem
+35 W z 100 W możliwych, bo usługa `nvidia-powerd` (Dynamic Boost) była wyłączona (Arch: domyślnie).
+Po jej włączeniu gemma2:9b przy 1k: generowanie 21,6 → 56,4 tok/s, prompt 1000 → 1679 tok/s;
+przy 8k 23,5 → 28,5 tok/s (przy 35 W 8k było szybsze niż 1k – część pracy liczył procesor ze swoim
+budżetem mocy). Program: wykrywanie czyta `nvidia-smi -q -d POWER` (bieżący i maksymalny limit)
+i na Linuksie stan `nvidia-powerd`; limit ≤ 60% maksimum + usługa nieaktywna → uwaga
+`note.power_capped` przy wyniku. Benchmark próbkuje pobór mocy co sekundę (kolumny `power_draw_w`,
+`power_limit_w`, `power_max_w`) i ostrzega, gdy karta przez test stała na limicie (≥ 90%).
+
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.
 Sprzęt testowy autora: laptop i5-13450HX + RTX 5050 8 GB + DDR5 oraz Ryzen 7 5700X + RTX 2060 SUPER 8 GB
