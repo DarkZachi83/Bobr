@@ -120,7 +120,7 @@ class BenchmarkDialog(tk.Toplevel):
                 values = (name, fmt_context(ctx), t("bench.pred.red"), t("bench.skip_red"), "", "", "")
                 self.tree.insert("", "end", values=values, tags=("skip",))
                 continue
-            seconds += estimate_seconds(ctx, level)
+            seconds += estimate_seconds(ctx, level, measured=self._measured(name, ctx))
             values = (name, fmt_context(ctx), t(f"bench.pred.{level}") if level else "?", "", "", "", "")
             self.tree.insert("", "end", values=values, tags=(level,) if level else ())
         minutes = max(1, round(seconds / 60))
@@ -137,6 +137,18 @@ class BenchmarkDialog(tk.Toplevel):
             warnings.append(t("bench.warn_battery"))
         self.warning.configure(text="\n".join("⚠ " + w for w in warnings))
         self.start_button.state(["!disabled"] if len(jobs) > skipped else ["disabled"])
+
+    def _measured(self, model: str, ctx: int):
+        """Prędkości z ostatniego pomiaru tego modelu na tym sprzęcie – lepszy szacunek czasu."""
+        db = getattr(self.c, "bench_db", None)
+        if db is None:
+            return None
+        try:
+            rows = db.latest(model, self.c.hardware_text(self.hw))
+        except Exception:
+            return None
+        row = next((r for r in rows if r["context"] == ctx), None) or (rows[-1] if rows else None)
+        return (row["pp_tps"], row["tg_tps"]) if row else None
 
     # ------------------------------------------------------------------ pomiar
     def start(self) -> None:

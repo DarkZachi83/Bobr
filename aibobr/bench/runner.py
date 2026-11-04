@@ -80,11 +80,16 @@ class PerfRunner:
                           gen_tokens=int(_median(gtok) or 0), gpu_share=share)
 
 
-def estimate_seconds(context: int, predicted: Optional[str], runs: int = 3, gen_tokens: int = 256) -> float:
-    """Zgrubny szacunek czasu jednej długości kontekstu – do komunikatu przed startem.
-    Zielony: ~400 tok/s promptu i ~25 tok/s generowania; żółty (karta + RAM): kilka razy wolniej."""
-    slow = 4.0 if predicted == "yellow" else 1.0
-    load = 15
-    pp = runs * context * 0.85 / 400 * slow
-    tg = runs * gen_tokens / 25 * slow
-    return load + pp + tg
+# Domyślne prędkości do szacunku czasu, gdy modelu jeszcze nie mierzono na tym komputerze –
+# z pomiarów autora (RTX 5050 Laptop 8 GB): w karcie gemma2:9b ok. 900–1000 tok/s promptu
+# i ~22 tok/s generowania; karta + RAM qwen2.5-coder:14b ok. 470–510 i 9–12 tok/s.
+DEFAULT_SPEED = {"green": (950.0, 20.0), "yellow": (480.0, 9.0), None: (480.0, 9.0)}
+LOAD_SECONDS = 12
+
+
+def estimate_seconds(context: int, predicted: Optional[str], runs: int = 3, gen_tokens: int = 256,
+                     measured: Optional[tuple[float, float]] = None) -> float:
+    """Szacunek czasu jednej długości kontekstu: wczytanie + `runs` promptów (~85% kontekstu)
+    + `runs` generowań. measured = (prompt tok/s, generowanie tok/s) z wcześniejszego pomiaru."""
+    pp, tg = measured if measured and all(measured) else DEFAULT_SPEED.get(predicted, DEFAULT_SPEED[None])
+    return LOAD_SECONDS + runs * (context * 0.85 / pp + 8 / tg) + runs * gen_tokens / tg + gen_tokens / tg / 16

@@ -1,12 +1,18 @@
 """Prompty do pomiarów wydajności o zadanej długości (etap 12a).
 
-Każdy przebieg dostaje INNY początek promptu: Ollama pamięta przetworzony prompt (prompt cache)
+Każdy przebieg – i każda sesja programu – dostaje INNY początek promptu: Ollama pamięta przetworzony prompt (prompt cache)
 i przy tym samym tekście drugi przebieg „przetwarzałby” go w ułamku sekundy – pomiar byłby fałszywy.
 Długość liczymy z grubsza (ok. 4 znaki na token w angielskim); prawdziwą liczbę tokenów podaje Ollama.
 """
 from __future__ import annotations
 
 import random
+import secrets
+
+# Znacznik sesji: inny przy każdym uruchomieniu programu. Bez niego ten sam prompt w dwóch
+# testach pod rząd trafiał do pamięci podręcznej Ollamy (pomiar autora 4.11.2026: gemma2:9b
+# przy 1k – 4583 tok/s z pamięci podręcznej zamiast 1000 tok/s naprawdę).
+SESSION = secrets.token_hex(4)
 
 CHARS_PER_TOKEN = 4.0
 _WORDS = ("river beaver dam wood water stone forest bank current branch winter spring lodge family "
@@ -17,7 +23,7 @@ def filler(tokens: int, run: int) -> str:
     """Tekst ok. `tokens` tokenów; `run` zmienia początek (inny prompt = bez pamięci podręcznej)."""
     rnd = random.Random(1000 + run)
     target = int(tokens * CHARS_PER_TOKEN)
-    out = [f"Report {run}-{rnd.randint(100000, 999999)}."]
+    out = [f"Report {SESSION}-{run}-{rnd.randint(100000, 999999)}."]
     length = len(out[0])
     while length < target:
         sentence = " ".join(rnd.choice(_WORDS) for _ in range(12)).capitalize() + "."
@@ -33,5 +39,5 @@ def prompt_processing(context: int, run: int) -> str:
 
 
 def generation(run: int) -> str:
-    return (f"Story {run}. Write a long, detailed story about a family of beavers building a dam "
+    return (f"Story {SESSION}-{run}. Write a long, detailed story about a family of beavers building a dam "
             "through one whole year. Do not stop early.")
