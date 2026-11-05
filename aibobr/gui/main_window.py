@@ -108,8 +108,7 @@ class MainWindow:
 
         # --- Statystyka
         self.stats = StatsPanel(self.tabs, self.c.saved, self.open_saved, self.compare_saved,
-                                self.fetch_hf, self.open_benchmark,
-                                kind=(state or {}).get("stats_kind")) if self.c.saved else None
+                                self.fetch_hf, kind=(state or {}).get("stats_kind")) if self.c.saved else None
         if self.stats:
             self.tabs.add(self.stats, text=t("gui.tab.stats"))
             self.pages["stats"] = self.stats
@@ -326,7 +325,7 @@ class MainWindow:
         return hw, self.run_options.apply(settings)
 
     def open_benchmark(self, targets: list[str]) -> None:
-        """Okno benchmarku (etap 12a) – z listy modeli na dysku, z zakładki Sprawdź albo Statystyka."""
+        """Okno benchmarku (etap 12a) – z listy modeli na dysku albo z zakładki Sprawdź."""
         from aibobr.gui.dialogs.benchmark import BenchmarkDialog
         try:
             hw, settings = self.current()

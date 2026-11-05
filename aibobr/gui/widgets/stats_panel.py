@@ -103,10 +103,9 @@ def row_values(item: SavedModel, c: Optional[Comparison], ranked: int) -> tuple:
 class Section(ttk.Frame):
     """Tabela jednej grupy z nagłówkiem „Modele językowe (3/10)” – widoczna, gdy wybrany jej filtr."""
 
-    def __init__(self, master, kind: str, on_open: Callable, on_remove: Callable,
-                 on_bench: Optional[Callable] = None):
+    def __init__(self, master, kind: str, on_open: Callable, on_remove: Callable):
         super().__init__(master, style="Panel.TFrame")
-        self.kind, self.on_open, self.on_remove, self.on_bench = kind, on_open, on_remove, on_bench
+        self.kind, self.on_open, self.on_remove = kind, on_open, on_remove
         self.items: dict[str, SavedModel] = {}
         self.comparisons: dict = {}
         self.toggle = ttk.Label(self, style="Title.TLabel")         # nagłówek grupy
@@ -129,8 +128,6 @@ class Section(ttk.Frame):
         buttons = ttk.Frame(self.body, style="Inner.TFrame")
         ttk.Button(buttons, text=t("stats.open"), command=self._open).pack(side="left")
         ttk.Button(buttons, text=t("stats.remove"), command=self._remove).pack(side="left", padx=6)
-        if on_bench and kind == "text":
-            ttk.Button(buttons, text="⏱ " + t("bench.button"), command=self._bench).pack(side="left")
         self.buttons = buttons
         self.body.pack(fill="x", padx=8, pady=(2, 8))
 
@@ -212,16 +209,6 @@ class Section(ttk.Frame):
         if item:
             self.on_open(item)
 
-    def _bench(self) -> None:
-        """Benchmark zaznaczonego modelu – albo wszystkich z Ollamy w grupie, gdy nic nie zaznaczono."""
-        item = self.selected()
-        picked = [item] if item else list(self.items.values())
-        targets = [i.target for i in picked if i.target.startswith("ollama:")]
-        if targets:
-            self.on_bench(targets)
-        else:
-            self.detail.configure(text=t("bench.only_ollama"))
-
     def _remove(self) -> None:
         item = self.selected()
         if item:
@@ -232,7 +219,7 @@ class StatsPanel(ttk.Frame):
     def __init__(self, master, store: SavedStore, on_open: Callable[[SavedModel], None],
                  on_compare: Optional[Callable[[], None]] = None,
                  on_hf: Optional[Callable[[], None]] = None,
-                 on_bench: Optional[Callable[[list], None]] = None, kind: Optional[str] = None):
+                 kind: Optional[str] = None):
         super().__init__(master, padding=4)
         self.store, self.on_open, self.on_compare = store, on_open, on_compare
         self.comparisons: dict = {}
@@ -259,7 +246,7 @@ class StatsPanel(ttk.Frame):
             b = ttk.Button(side, width=16, command=lambda k=k: (self.kind.set(k), self._show_kind()))
             b.pack(fill="x", pady=3)
             self.filters[k] = b
-        self.sections = {k: Section(holder, k, on_open, self.remove, on_bench) for k in KINDS}
+        self.sections = {k: Section(holder, k, on_open, self.remove) for k in KINDS}
         self.refresh()
         self._show_kind()
 
