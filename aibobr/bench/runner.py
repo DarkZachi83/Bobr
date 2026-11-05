@@ -51,7 +51,9 @@ class PerfRunner:
         return self.warmup + 2 * self.runs
 
     def run(self, model: str, context: int, report: Callable[[str], None] = lambda s: None,
-            stop: Optional[threading.Event] = None) -> PerfResult:
+            stop: Optional[threading.Event] = None,
+            measured: Callable[[str, object], None] = lambda step, g: None) -> PerfResult:
+        """report(krok) przed każdym krokiem; measured(krok, Generation) po nim – do dziennika."""
         def check():
             if stop is not None and stop.is_set():
                 raise Stopped()
@@ -65,6 +67,7 @@ class PerfRunner:
             check()
             report(f"prompt {n}/{self.runs}")
             g = self.bench.generate(model, prompts.prompt_processing(context, n), context, 8)
+            measured(f"prompt {n}/{self.runs}", g)
             pp.append(g.pp_tps)
             ttft.append(g.ttft_ms)
             ptok.append(g.prompt_tokens)
@@ -73,6 +76,7 @@ class PerfRunner:
             check()
             report(f"generate {n}/{self.runs}")
             g = self.bench.generate(model, prompts.generation(n), context, self.gen_tokens)
+            measured(f"generate {n}/{self.runs}", g)
             tg.append(g.tg_tps)
             gtok.append(g.gen_tokens)
         share = self.bench.gpu_share(model)

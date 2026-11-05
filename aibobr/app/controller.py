@@ -99,7 +99,33 @@ class AppController:
         if folder:
             return scanner.scan_folder(Path(folder))
         self.last_scan = scanner.scan_known(sys.platform)   # do porównania: „masz już na dysku”
+        self.save_found(self.last_scan)
         return self.last_scan
+
+    @property
+    def found_path(self) -> Optional[Path]:
+        return self.saved.path.parent / "found_models.json" if self.saved is not None else None
+
+    def save_found(self, report) -> None:
+        """Lista z zakładki Benchmark zostaje między uruchomieniami (etap 13c)."""
+        import datetime
+        if self.found_path is None:
+            return
+        from aibobr.app import found_store
+        try:
+            found_store.save(self.found_path, report, datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
+        except OSError:
+            pass
+
+    def load_found(self):
+        """(ScanReport, kiedy) z poprzedniego szukania albo (None, None)."""
+        if self.found_path is None:
+            return None, None
+        from aibobr.app import found_store
+        report, when = found_store.load(self.found_path)
+        if report is not None and self.last_scan is None:
+            self.last_scan = report                         # „na dysku” w Statystyce bez nowego skanu
+        return report, when
 
     # ------------------------------------------------------------------ sprzęt
     def scan(self) -> HardwareProfile:
@@ -278,9 +304,9 @@ class AppController:
 
     def bench_suite(self) -> dict:
         import json
-        from pathlib import Path as _P
-        path = _P(__file__).resolve().parents[2] / "data" / "benchmarks" / "perf_v1.json"
-        return json.loads(path.read_text(encoding="utf-8"))
+        from aibobr import resources
+        # resources.path – w .exe pliki leżą w katalogu PyInstallera, nie obok kodu
+        return json.loads(resources.path("data", "benchmarks", "perf_v1.json").read_text(encoding="utf-8"))
 
     def bench_predict(self, targets, contexts, hw: HardwareProfile, base: RunSettings) -> dict:
         """Werdykt AI Bóbra dla każdej pary (model, kontekst) – czerwone pomijamy przed startem.
@@ -323,6 +349,8 @@ class AppController:
         stamp = (now or datetime.datetime.now()).strftime("%Y-%m-%d %H:%M")
         results = []
         jobs = [(t, c) for t in targets for c in contexts]
+        report({"event": "start", "version": version, "jobs": len(jobs),
+                "busy_mb": round(busy / 1024**2) if busy is not None else None})
         loaded = None                        # model w karcie: zostaje między długościami kontekstu
 
         def unload(model):
@@ -330,6 +358,7 @@ class AppController:
             # a następny model albo inny program dostaje mniej pamięci karty.
             try:
                 bench.unload(model)
+                report({"event": "unload", "model": model})
             except Exception:
                 pass
 
@@ -339,6 +368,7 @@ class AppController:
                 level = predicted.get((target, ctx))
                 if level == "red":
                     results.append(PerfResult(model, ctx, predicted=level, skipped="bench.skip_red"))
+                    report({"event": "skip", "n": n, "total": len(jobs), "model": model, "context": ctx})
                     continue
                 if loaded and loaded != model:
                     unload(loaded)
@@ -346,13 +376,19 @@ class AppController:
                 try:
                     with (power_sampler() if power_sampler else _NoSampler()) as power:
                         r = runner.run(model, ctx, lambda step: report({"n": n, "total": len(jobs), "model": model,
-                                                                        "context": ctx, "step": step}), stop)
+                                                                        "context": ctx, "step": step}), stop,
+                                       measured=lambda step, g: report({"event": "measure", "n": n, "model": model,
+                                                                        "context": ctx, "step": step,
+                                                                        "pp": g.pp_tps, "ttft": g.ttft_ms,
+                                                                        "tg": g.tg_tps}))
                     r = _r(r, power_draw_w=power.peak)
                 except Stopped:
                     results.append(PerfResult(model, ctx, predicted=level, stopped=True))
+                    report({"event": "stopped", "n": n, "model": model, "context": ctx})
                     break
                 r = _r(r, predicted=level)
                 results.append(r)
+                report({"event": "result", "n": n, "total": len(jobs), "result": r})
                 if db is not None:
                     gpu = next((g for g in hw.gpus if g.selected and g.power_limit_w), None)
                     db.add_perf(r, measured_at=stamp, runtime="ollama", runtime_version=version,

@@ -3,4 +3,4 @@
 Sprawdza, czy konkretny model językowy zmieści się w pamięci komputera i jak szybko
 będzie działał. Logika żyje w tym pakiecie, GUI w aibobr/gui/, main.py tylko składa obiekty.
 """
-__version__ = "0.6.1"
+__version__ = "0.7.0"

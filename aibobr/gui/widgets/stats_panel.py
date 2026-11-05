@@ -124,12 +124,12 @@ class Section(ttk.Frame):
         self.tree.bind("<Double-1>", lambda e: self._open())
         self.tree.bind("<<TreeviewSelect>>", lambda e: self._details())
         self.detail = ttk.Label(self.body, text="", style="Muted.TLabel", wraplength=960)
-        self.summary = ttk.Label(self.body, text="", style="Panel.TLabel", wraplength=960)
+        self.summary = ttk.Frame(self.body, style="Inner.TFrame")    # trzy ramki pod tabelą (uwaga autora)
         buttons = ttk.Frame(self.body, style="Inner.TFrame")
         ttk.Button(buttons, text=t("stats.open"), command=self._open).pack(side="left")
         ttk.Button(buttons, text=t("stats.remove"), command=self._remove).pack(side="left", padx=6)
         self.buttons = buttons
-        self.body.pack(fill="x", padx=8, pady=(2, 8))
+        self.body.pack(fill="both", expand=True, padx=8, pady=(2, 8))
 
     def _title(self) -> None:
         self.toggle.configure(text=f"{t(f'stats.kind.{self.kind}')}  ({len(self.items)}/{MAX_PER_KIND})")
@@ -149,11 +149,11 @@ class Section(ttk.Frame):
         if items:
             self.tree.configure(height=MAX_PER_KIND)          # stała wysokość – układ się nie skacze
             self.tree.pack(fill="x")
-            self.summary.configure(text=self._summary(items))
-            self.summary.pack(anchor="w", pady=(6, 0))
             self.buttons.pack(anchor="w", pady=(6, 0))
             self.detail.configure(text="")
             self.detail.pack(anchor="w", pady=(4, 0))
+            self._boxes(items)
+            self.summary.pack(fill="both", expand=True, pady=(10, 0))
         else:
             self.empty.pack(anchor="w", pady=4)
         self._title()
@@ -162,27 +162,64 @@ class Section(ttk.Frame):
         return self.comparisons.get(item.key)
 
     def _summary(self, items: list[SavedModel]) -> str:
+        """Podsumowanie w jednej linii (tekst ramek – do testów i czytników ekranu)."""
+        return " · ".join(" ".join(str(x) for x in row) for box in self.summary_data(items) for row in box[1])
+
+    def summary_data(self, items: list[SavedModel]) -> list:
+        """[(tytuł, [(etykieta, wartość, kolor)…])…] – trzy ramki pod tabelą."""
         comps = [(i, self._cmp(i)) for i in items if self._cmp(i) and not self._cmp(i).error]
-        if not comps:
-            return ""
-        count = {lvl: sum(1 for _, c in comps if c.level.value == lvl) for lvl in ("green", "yellow", "red")}
+        count = {lvl: sum(1 for _, c in comps if c.level and c.level.value == lvl)
+                 for lvl in ("green", "yellow", "red")}
+        colors = {lvl.value: color for lvl, color in VERDICT_COLORS.items()}
+        levels = [(t(f"stats.box.{lvl}"), str(count[lvl]), colors[lvl]) for lvl in ("green", "yellow", "red")]
         total = sum(c.download or 0 for _, c in comps)
-        parts = [t("stats.sum.levels", **count)]
         if total:
-            parts.append(t("stats.sum.size", size=fmt_gb(total)))
+            levels.append((t("stats.box.size"), fmt_gb(total), None))
         ranked = sorted(((c.rank, i) for i, c in comps if c.rank), key=lambda x: x[0])
-        if len(ranked) >= 2:
-            fastest = ranked[0][1]
-            text = t("stats.sum.fastest", name=fastest.name)
-            if fastest.hf and fastest.hf.get("downloads") is not None:
-                text += " (" + t("stats.hf.downloads", n=fmt_count(fastest.hf["downloads"])) + ")"
-            parts.append(text)
-            parts.append(t("stats.sum.slowest", name=ranked[-1][1].name))
-        popular = [i for i in items if i.hf and i.hf.get("downloads")]
-        if len(popular) >= 2:
-            top = max(popular, key=lambda i: i.hf["downloads"])
-            parts.append(t("stats.sum.popular", name=top.name))
-        return " · ".join(parts)
+        compare = [(t("stats.box.fastest"), ranked[0][1].name if len(ranked) >= 2 else DASH, None),
+                   (t("stats.box.slowest"), ranked[-1][1].name if len(ranked) >= 2 else DASH, None)]
+        popular = sorted((i for i in items if i.hf and i.hf.get("downloads") is not None),
+                         key=lambda i: i.hf["downloads"], reverse=True)
+        compare.append((t("stats.box.popular"), popular[0].name if popular else DASH, None))
+        top = []
+        for n, i in enumerate(popular[:MAX_PER_KIND], 1):
+            value = fmt_count(i.hf["downloads"])
+            if i.hf.get("likes") is not None:
+                value += f"  ♥ {fmt_count(i.hf['likes'])}"
+            top.append((f"{n}. {i.name}", value, None))
+        return [(t("stats.box.levels"), levels), (t("stats.box.compare"), compare),
+                (t("stats.box.downloads"), top or [(t("stats.box.no_hf"), "", None)])]
+
+    def _boxes(self, items: list[SavedModel]) -> None:
+        for child in self.summary.winfo_children():
+            child.destroy()
+        for col, (title, rows) in enumerate(self.summary_data(items)):
+            box = ttk.Frame(self.summary, style="Panel.TFrame", padding=(10, 8))
+            box.grid(row=0, column=col, sticky="nsew", padx=(0 if col == 0 else 8, 0))
+            self.summary.columnconfigure(col, weight=2 if col == 2 else 1, uniform="box")
+            ttk.Label(box, text=title, style="Title.TLabel").grid(row=0, column=0, columnspan=2,
+                                                                  sticky="w", pady=(0, 6))
+            r = 1
+            for label, value, color in rows:
+                if col == 1:
+                    # Porównania: nazwa pod etykietą – długie nazwy modeli się nie ucinają.
+                    ttk.Label(box, text=label, style="Muted.TLabel").grid(row=r, column=0, sticky="w",
+                                                                          pady=(4, 0))
+                    v = ttk.Label(box, text=value, style="Panel.TLabel", wraplength=220,
+                                  font=("TkDefaultFont", 10, "bold"))
+                    v.grid(row=r + 1, column=0, sticky="w")
+                    v.bind("<Configure>", lambda e, w=v: w.configure(wraplength=max(120, e.width)))
+                    r += 2
+                    continue
+                ttk.Label(box, text=label, style="Muted.TLabel" if value else "Panel.TLabel",
+                          wraplength=360 if not value else 0).grid(row=r, column=0, sticky="w", pady=1)
+                v = ttk.Label(box, text=value, style="Panel.TLabel")
+                if color:
+                    v.configure(foreground=color, font=("TkDefaultFont", 10, "bold"))
+                v.grid(row=r, column=1, sticky="e", padx=(12, 0), pady=1)
+                r += 1
+            box.columnconfigure(0, weight=1)
+        self.summary.rowconfigure(0, weight=1)
 
     def _details(self) -> None:
         item = self.selected()
