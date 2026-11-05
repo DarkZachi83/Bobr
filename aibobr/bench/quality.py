@@ -20,8 +20,10 @@ from aibobr.bench.runner import Stopped
 
 CONTEXT = 2048
 SUITES = ("pl_jezyk_v1", "en_format_v1")
-# Kategorie w tabeli „Jakość” (kolumny) – knowledge osobno: wiedza to nie kwantyzacja
-CATEGORIES = ("language_integrity", "knowledge", "format_adherence", "code_syntax")
+# Kolumny tabeli „Jakość”. Polszczyzna w podkategoriach (uwaga z Reddita: składnia liczebnika
+# to inne zjawisko niż odmiana – średnia z 7 zadań mieszała je); wiedza osobno.
+SUBCATEGORIES = ("spelling", "inflection", "numerals", "aspect", "knowledge")
+REPEATS = (1, 3, 5)
 
 _THINK = re.compile(r"<think>.*?</think>", re.S | re.I)
 _FENCE = re.compile(r"```[a-zA-Z0-9_+-]*\s*\n?(.*?)```", re.S)
@@ -47,6 +49,10 @@ class QualityResult:
     prompt: str
     strict: Optional[bool] = None
     skipped: Optional[str] = None
+    subcategory: str = ""
+    runs: int = 1                        # ile razy zadano to samo pytanie (powtórzenia)
+    identical: int = 1                   # ile odpowiedzi identycznych z pierwszą
+    passes: int = 0                      # ile przebiegów zaliczonych
 
 
 def clean(text: str) -> str:
@@ -73,6 +79,10 @@ def _embedded(text: str) -> Any:
     raise ValueError("no JSON")
 
 
+class BadJson(ValueError):
+    """JSON jest w odpowiedzi, ale ma błąd składni (np. "\\ " poza dozwolonymi sekwencjami)."""
+
+
 def parse_json(answer: str) -> tuple[Any, bool]:
     """(dane, ściśle) – ściśle: cała odpowiedź to JSON; inaczej z bloku ``` albo z tekstu.
     ValueError, gdy JSON-u nie ma."""
@@ -86,7 +96,12 @@ def parse_json(answer: str) -> tuple[Any, bool]:
             return json.loads(block.strip()), False
         except ValueError:
             continue
-    return _embedded(text), False
+    try:
+        return _embedded(text), False
+    except ValueError:
+        if any(c in text for c in "[{"):
+            raise BadJson("bad JSON") from None
+        raise
 
 
 def _at(data: Any, path: str) -> Any:
@@ -102,6 +117,8 @@ def _lower(x: Any) -> Any:
 def check_json(answer: str, ev: dict) -> Verdict:
     try:
         data, strict = parse_json(answer)
+    except BadJson:
+        return Verdict(False, "quality.reason.bad_json", strict=False)
     except ValueError:
         return Verdict(False, "quality.reason.no_json", strict=False)
     expect = ev.get("expect")
@@ -135,30 +152,53 @@ def check_json(answer: str, ev: dict) -> Verdict:
 
 
 # ---------------------------------------------------------------------- Python
-def extract_code(answer: str) -> str:
+def _parse(code: str) -> Optional[ast.Module]:
+    try:
+        return ast.parse(code)
+    except SyntaxError:
+        return None
+
+
+def parse_code(answer: str) -> tuple[Optional[ast.Module], bool]:
+    """(drzewo, ściśle) – ściśle: cała odpowiedź to kod; łagodnie: blok ``` albo kod po odcięciu
+    wstępu („Code:”) i komentarza pod spodem. ast.parse tylko czyta – nic nie wykonuje."""
     text = clean(answer)
+    tree = _parse(text)
+    if tree is not None:
+        return tree, True
     blocks = _FENCE.findall(text)
-    return (max(blocks, key=len) if blocks else text).strip()
+    for block in sorted(blocks, key=len, reverse=True):
+        tree = _parse(block.strip())
+        if tree is not None:
+            return tree, False
+    lines = text.splitlines()
+    for start in range(len(lines)):                       # najdłuższy fragment, który jest kodem
+        for end in range(len(lines), start, -1):
+            chunk = "\n".join(lines[start:end]).strip()
+            if chunk and any(k in chunk for k in ("def ", "class ")):
+                tree = _parse(chunk)
+                if tree is not None:
+                    return tree, False
+    return None, False
 
 
 def check_python(answer: str, ev: dict) -> Verdict:
     """Tylko składnia i nazwy – ast.parse nie wykonuje kodu."""
-    try:
-        tree = ast.parse(extract_code(answer))
-    except SyntaxError:
-        return Verdict(False, "quality.reason.syntax")
+    tree, strict = parse_code(answer)
+    if tree is None:
+        return Verdict(False, "quality.reason.syntax", strict=False)
     funcs = {n.name for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
     if ev.get("function") and ev["function"] not in funcs:
-        return Verdict(False, f"quality.reason.no_function:{ev['function']}")
+        return Verdict(False, f"quality.reason.no_function:{ev['function']}", strict=strict)
     if ev.get("class"):
         cls = next((n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == ev["class"]), None)
         if cls is None:
-            return Verdict(False, f"quality.reason.no_class:{ev['class']}")
+            return Verdict(False, f"quality.reason.no_class:{ev['class']}", strict=strict)
         methods = {n.name for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
         missing = [m for m in ev.get("methods", ()) if m not in methods]
         if missing:
-            return Verdict(False, f"quality.reason.no_methods:{', '.join(missing)}")
-    return Verdict(True)
+            return Verdict(False, f"quality.reason.no_methods:{', '.join(missing)}", strict=strict)
+    return Verdict(True, strict=strict)
 
 
 # ---------------------------------------------------------------------- ocena
@@ -179,8 +219,9 @@ def evaluate(answer: str, ev: dict) -> Verdict:
 
 
 class QualityRunner:
-    def __init__(self, bench, suite: dict):
+    def __init__(self, bench, suite: dict, repeats: int = 1):
         self.bench, self.suite = bench, suite
+        self.repeats = max(1, int(repeats))
         cfg = suite.get("default_generation_config", {})
         self.max_tokens = int(cfg.get("max_tokens", 256))
         self.temperature = float(cfg.get("temperature", 0))
@@ -200,26 +241,53 @@ class QualityRunner:
             report({"event": "q_task", "model": model, "suite": sid, "n": n, "total": len(self.tests),
                     "test": test["id"], "title": test.get("title", test["id"]), "prompt": test["prompt"]})
             chunk = lambda text: report({"event": "chunk", "text": text})     # noqa: E731
-            g = self.bench.generate(model, test["prompt"], CONTEXT, self.max_tokens,
-                                    temperature=self.temperature, seed=self.seed, on_chunk=chunk)
-            verdict = evaluate(g.text, test["evaluator"])
+            # Powtórzenia: to samo pytanie N razy (temperatura 0) – zgodność odpowiedzi pokazuje,
+            # że wynik to nie szum losowania. Podgląd na żywo – tylko pierwszy przebieg.
+            answers, verdicts = [], []
+            for run in range(self.repeats):
+                if run and stop is not None and stop.is_set():
+                    raise Stopped()
+                g = self.bench.generate(model, test["prompt"], CONTEXT, self.max_tokens,
+                                        temperature=self.temperature, seed=self.seed,
+                                        on_chunk=chunk if run == 0 else None)
+                answers.append(g.text)
+                verdicts.append(evaluate(g.text, test["evaluator"]))
+                if run:
+                    report({"event": "q_repeat", "model": model, "run": run + 1, "runs": self.repeats,
+                            "same": g.text == answers[0]})
+            passes = sum(v.passed for v in verdicts)
+            verdict = verdicts[0]
+            passed = passes * 2 > len(verdicts)            # większość przebiegów
             r = QualityResult(model, sid, test["id"], test.get("title", test["id"]), test.get("category", ""),
-                              verdict.passed, verdict.reason if not verdict.passed else "", g.text,
-                              test["prompt"], strict=verdict.strict)
+                              passed, "" if passed else (verdict.reason or next(
+                                  (v.reason for v in verdicts if not v.passed), "")),
+                              answers[0], test["prompt"], strict=verdict.strict,
+                              subcategory=test.get("subcategory", ""), runs=len(answers),
+                              identical=sum(a == answers[0] for a in answers), passes=passes)
             out.append(r)
             report({"event": "q_result", "model": model, "result": r})
         return out
 
 
 def score(results: list[QualityResult]) -> dict:
-    """{kategoria: (zaliczone, wszystkie)} + "json_strict": (ściśle zaliczone, wszystkie JSON)."""
+    """{kolumna: (zaliczone, wszystkie)}: podkategorie polszczyzny, "json", "json_strict",
+    "code", "code_strict" oraz "agree": (zadania z identycznymi odpowiedziami, wszystkie)."""
     out: dict = {}
+
+    def add(key, ok):
+        a, b = out.get(key, (0, 0))
+        out[key] = (a + bool(ok), b + 1)
     for r in results:
         if r.skipped:
             continue
-        ok, total = out.get(r.category, (0, 0))
-        out[r.category] = (ok + r.passed, total + 1)
-        if r.strict is not None:
-            s_ok, s_total = out.get("json_strict", (0, 0))
-            out["json_strict"] = (s_ok + bool(r.passed and r.strict), s_total + 1)
+        if r.category == "format_adherence":
+            add("json", r.passed)
+            add("json_strict", r.passed and r.strict)
+        elif r.category == "code_syntax":
+            add("code", r.passed)
+            add("code_strict", r.passed and r.strict)
+        else:
+            add(r.subcategory or r.category, r.passed)
+        if r.runs > 1:
+            add("agree", r.identical == r.runs)
     return out

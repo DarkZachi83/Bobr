@@ -54,6 +54,9 @@ class JsonTest(unittest.TestCase):
         good = json.dumps({"quote": 'She said "hi" and left \\ fast.'})
         self.assertTrue(q.evaluate(good, ev("json_escaping")).passed)
         self.assertEqual(q.evaluate("no json here", ev("json_hardware")).reason, "quality.reason.no_json")
+        # Bielik-Minitron 7B v3.0, 5.11.2026: "\ " to niedozwolona sekwencja – JSON jest, ale błędny
+        minitron = '{"quote": "She said \'hi\' and left \\ fast."}'
+        self.assertEqual(q.evaluate(minitron, ev("json_escaping")).reason, "quality.reason.bad_json")
 
 
 class PythonTest(unittest.TestCase):
@@ -63,6 +66,15 @@ class PythonTest(unittest.TestCase):
         self.assertFalse(q.evaluate("def is_palindrome(s)\n  return", ev("py_palindrome")).passed)
         boom = "import os\nos.remove('/nie/ma')\ndef fibonacci(n):\n    return n"
         self.assertTrue(q.evaluate(boom, ev("py_fibonacci")).passed)    # tylko parsowanie – nic się nie dzieje
+        # Bielik-Minitron 7B v3.0, 5.11.2026: „Code:” przed poprawną funkcją – łagodnie ✓, ściśle ✗
+        v = q.evaluate("Code:\n\ndef is_palindrome(s):\n    s = s.replace(' ', '').lower()\n"
+                       "    return s == s[::-1]", ev("py_palindrome"))
+        self.assertEqual((v.passed, v.strict), (True, False))
+        v = q.evaluate("def fibonacci(n):\n    return [0, 1][:n]", ev("py_fibonacci"))
+        self.assertEqual((v.passed, v.strict), (True, True))
+        v = q.evaluate("```python\nclass Stack:\n    def push(self, i): pass\n    def pop(self): pass\n"
+                       "    def is_empty(self): pass\n```\n\nThis class implements a stack.", ev("py_class"))
+        self.assertEqual((v.passed, v.strict), (True, False))           # Bielik 11B: opis pod kodem
         stack = "class Stack:\n    def push(self, x): pass\n    def pop(self): pass\n"
         v = q.evaluate(stack, ev("py_class"))
         self.assertFalse(v.passed)
@@ -87,8 +99,28 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(sum(e["event"] == "chunk" for e in events), 8)  # podgląd odpowiedzi
         self.assertTrue(out[0].passed)
         scores = q.score(out)
-        self.assertEqual(scores["language_integrity"], (1, 7))
+        self.assertEqual(scores["spelling"], (1, 1))                     # „Zażółć gęślą jaźń”
+        self.assertEqual(scores["inflection"], (0, 4))
+        self.assertEqual(scores["numerals"], (0, 1))                     # osobno (uwaga z Reddita)
         self.assertEqual(scores["knowledge"], (0, 1))
+        self.assertNotIn("agree", scores)                                # jeden przebieg
+
+    def test_repeats_report_agreement(self):
+        from aibobr.bench.ollama import OllamaBench
+        n = {"i": 0}
+
+        def gen(payload):
+            n["i"] += 1
+            text = "Tomaszu" if n["i"] % 5 else "Tomku"                  # co piąta odpowiedź inna
+            return {"response": text, "eval_count": 2, "eval_duration": 10**8}
+        bench = OllamaBench("http://h", FakeHttp(json={"http://h/api/generate": gen}))
+        one = dict(PL, tests=[TESTS["pl_vocative"]])
+        events = []
+        r = q.QualityRunner(bench, one, repeats=5).run("m", events.append)[0]
+        self.assertEqual((r.runs, r.identical, r.passes, r.passed), (5, 4, 4, True))   # większość
+        self.assertEqual(n["i"], 5)
+        self.assertEqual(sum(e["event"] == "chunk" for e in events), 1)  # podgląd: pierwszy przebieg
+        self.assertEqual(q.score([r])["agree"], (0, 1))                  # nie wszystkie identyczne
 
     def test_controller_saves_quality(self):
         import main

@@ -471,6 +471,14 @@ Zapisz…, Eksport CSV (zadania jakości z odpowiedziami). W podglądzie: prompt
 czasy liczy serwer, pomiar bez zmian). Tabela `quality` w benchmarks.sqlite z pełną odpowiedzią.
 Znaczek jakości w Statystyce – w 12d (decyzja autora).
 
+**Po pierwszych testach (5.11.2026, uwagi z Reddita):** polszczyzna w podkategoriach – ortografia,
+fleksja, liczebnik (składnia liczebnika to inne zjawisko niż odmiana), aspekt, wiedza – zamiast
+jednej średniej. Kod jak JSON: ściśle (cała odpowiedź to kod) i łagodnie (blok ``` albo kod po
+odcięciu wstępu „Code:” i opisu pod spodem). Powód „niepoprawny JSON”, gdy JSON jest, ale ma błąd
+składni. **Powtórzenia 1 / 3 / 5:** to samo pytanie N razy (temperatura 0, seed 42 – opcje
+zapytania nadpisują Modelfile), zaliczone = większość przebiegów, kolumna Zgodność = zadania
+z identycznymi odpowiedziami; podgląd na żywo – pierwszy przebieg.
+
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.
 Sprzęt testowy autora: laptop i5-13450HX + RTX 5050 8 GB + DDR5 oraz Ryzen 7 5700X + RTX 2060 SUPER 8 GB
