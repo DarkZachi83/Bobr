@@ -139,6 +139,37 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertEqual(saved["language"], "")
         self.assertEqual(w.lang_var.get(), "")
 
+    def test_menu_language_on_top_and_theme_switch(self):
+        import json
+        from aibobr.gui import theme
+        w = self.window()
+        menu = self.root.nametowidget(self.root["menu"])
+        labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1)
+                  if menu.type(i) == "cascade"]
+        self.assertEqual(labels, ["Plik", "Ustawienia", "Język (Language)", "Pomoc"])   # uwaga autora
+        self.assertEqual(w.theme, "dark")                                  # domyślnie ciemny
+        self.assertEqual(theme.COLORS["bg"], theme.PALETTES["dark"]["bg"])
+        w.change_theme("light")
+        self.pump(seconds=0.3)
+        self.assertEqual(theme.COLORS["bg"], theme.PALETTES["light"]["bg"])
+        self.assertEqual(w.bar.cget("background"), theme.PALETTES["light"]["panel"])   # okno przebudowane
+        self.assertIn("Pójdzie", w.verdict.cget("text"))                   # wynik zachowany
+        saved = json.loads((Path(self.tmp.name) / "cfg" / "settings.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["theme"], "light")
+        self.assertEqual(w.theme_var.get(), "light")
+
+    def test_theme_without_ttkbootstrap(self):
+        """Uruchomienie z kodu bez ttkbootstrap – zwykły ttk („clam”) z naszą paletą."""
+        import sys
+        from unittest import mock
+        from aibobr.gui import theme
+        with mock.patch.dict(sys.modules, {"ttkbootstrap": None, "ttkbootstrap.style": None}):
+            self.assertEqual(theme.apply_style(self.root, "dark"), "dark")
+        from tkinter import ttk
+        self.assertEqual(ttk.Style(self.root).theme_use(), "clam")
+        self.assertEqual(self.root.cget("background"), theme.PALETTES["dark"]["bg"])
+        self.assertEqual(theme.apply_style(self.root, "nieznany"), "dark")   # zły wpis w ustawieniach
+
     def test_new_check_clears_old_result(self):
         from aibobr.i18n import t
         w = self.window()

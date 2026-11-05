@@ -66,10 +66,10 @@ class MemoryBar(tk.Canvas):
         lay = bar_layout(v, left, right - left)
         weights_c, kv_c = LEVEL_COLORS[v.level]
 
-        self.create_text(8, SYS_Y + ROW_H / 2, text=t("cli.row.system"), anchor="w", font=self.bold)
-        self.create_text(8, MODEL_Y + ROW_H / 2, text=t("cli.row.model"), anchor="w", font=self.bold)
+        self.create_text(8, SYS_Y + ROW_H / 2, text=t("cli.row.system"), anchor="w", font=self.bold, fill=COLORS["text"])
+        self.create_text(8, MODEL_Y + ROW_H / 2, text=t("cli.row.model"), anchor="w", font=self.bold, fill=COLORS["text"])
         for y in (SYS_Y, MODEL_Y):                                   # tło torów
-            self.create_rectangle(left, y, right, y + ROW_H, fill="#eef1f4", outline="")
+            self.create_rectangle(left, y, right, y + ROW_H, fill=COLORS["track"], outline="")
 
         for seg in lay.system:
             if seg.kind == "missing":
@@ -81,7 +81,7 @@ class MemoryBar(tk.Canvas):
             self.create_rectangle(seg.x0, SYS_Y, seg.x1, SYS_Y + ROW_H,
                                   fill=COLORS[seg.kind], outline="")
             label = "VRAM" if seg.kind == "vram" else "RAM"
-            self._label_inside(seg, SYS_Y, f"{label} {fmt_gb(seg.value)}", "white")
+            self._label_inside(seg, SYS_Y, f"{label} {fmt_gb(seg.value)}", COLORS["on_bar"])
 
         colors = {"weights": weights_c, "kv": kv_c, "overhead": COLORS["overhead"],
                   "decoder": COLORS["decoder"]}
@@ -90,7 +90,7 @@ class MemoryBar(tk.Canvas):
                                   fill=colors[seg.kind], outline="")
         if lay.model:
             first = lay.model[0]
-            self._label_inside(first, MODEL_Y, fmt_gb(v.need.total), "white")
+            self._label_inside(first, MODEL_Y, fmt_gb(v.need.total), COLORS["on_bar"])
 
         for x in lay.markers:                                         # granice stref
             self.create_line(x, SYS_Y - 6, x, MODEL_Y + ROW_H + 6, dash=(4, 3),
@@ -126,7 +126,7 @@ class MemoryBar(tk.Canvas):
                 continue
             self.create_rectangle(seg.x0, y, seg.x1, y + ROW_H, fill=COLORS[seg.kind], outline="")
             label = "VRAM" if seg.kind == "vram" else "RAM"
-            self._label_inside(seg, y, f"{label} {fmt_gb(seg.value)}", "white")
+            self._label_inside(seg, y, f"{label} {fmt_gb(seg.value)}", COLORS["on_bar"])
 
     def _legend(self, items, left, right, y0) -> None:
         x, y = left, y0
@@ -145,17 +145,16 @@ class MemoryBar(tk.Canvas):
         main_c, light_c = LEVEL_COLORS[v.level]
         rows = ((SYS_Y, t("cli.row.system")), (PEAK_Y, t("gui.bar.peak")), (ALL_Y, t("gui.bar.all")))
         for y, label in rows:
-            self.create_text(8, y + ROW_H / 2, text=label, anchor="w", font=self.bold)
-            self.create_rectangle(left, y, right, y + ROW_H, fill="#eef1f4", outline="")
+            self.create_text(8, y + ROW_H / 2, text=label, anchor="w", font=self.bold, fill=COLORS["text"])
+            self.create_rectangle(left, y, right, y + ROW_H, fill=COLORS["track"], outline="")
         self._system_row(lay.system, SYS_Y)
         colors = {"main": main_c, "vae": main_c, "encoders": main_c, "compute": light_c,
                   "overhead": COLORS["overhead"]}
         for seg in lay.peak:
             self.create_rectangle(seg.x0, PEAK_Y, seg.x1, PEAK_Y + ROW_H, fill=colors[seg.kind], outline="")
         if lay.peak:
-            self._label_inside(lay.peak[0], PEAK_Y, fmt_gb(v.need.peak), "white")
-        soft = {"main": "#c9cfd6", "compute": "#dde1e6", "overhead": "#e4e7eb",
-                "encoders": "#b9c4d0", "vae": "#cdd6df"}
+            self._label_inside(lay.peak[0], PEAK_Y, fmt_gb(v.need.peak), COLORS["on_bar"])
+        soft = {k: COLORS[f"soft_{k}"] for k in ("main", "compute", "overhead", "encoders", "vae")}
         for seg in lay.at_once:
             self.create_rectangle(seg.x0, ALL_Y, seg.x1, ALL_Y + ROW_H, fill=soft[seg.kind], outline="")
         if lay.at_once:

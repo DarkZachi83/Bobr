@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "language": "",                 # "" = język systemu
+    "theme": "dark",                # wygląd okna: "dark" / "light" (etap 13)
     "default_context": 8192,        # tryb Automatyczny (SPEC §3)
     "kv_cache_type": "f16",
     "vram_reserve_gb": 1.0,         # na każdą kartę

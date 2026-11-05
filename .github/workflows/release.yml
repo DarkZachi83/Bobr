@@ -32,7 +32,7 @@ jobs:
             exit 1
           fi
       - name: Zależności
-        run: python -m pip install -r requirements.txt nvidia-ml-py pyinstaller
+        run: python -m pip install -r requirements.txt nvidia-ml-py ttkbootstrap==2.2.6 pyinstaller
       - name: Testy
         run: python -m unittest discover -s tests -t .
       - name: Budowa .exe

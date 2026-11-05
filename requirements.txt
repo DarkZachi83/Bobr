@@ -1,2 +1,3 @@
 psutil>=5.9            # CPU i RAM – jedyna wymagana zależność
 # nvidia-ml-py         # opcjonalnie: dokładny odczyt kart NVIDIA (bez niego: nvidia-smi)
+# ttkbootstrap==2.2.6  # opcjonalnie: wygląd okna (motyw ciemny i jasny); bez niego – zwykły ttk z tą samą paletą
