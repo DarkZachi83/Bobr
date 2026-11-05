@@ -205,6 +205,8 @@ class GuiSmokeTest(unittest.TestCase):
         saved = next(iter(section.items.values()))
         self.assertEqual(saved.target, str(self.gguf))
         self.assertIn("(1/10)", section.toggle.cget("text"))
+        self.assertIn("(1/10)", w.stats.filters["text"].cget("text"))          # przycisk filtra
+        self.assertIn("(0/10)", w.stats.filters["image"].cget("text"))
         w.save_compare()                                                 # ten sam model – odświeżenie
         self.assertIn("odświeżyłem", w.status_bar.cget("text"))
         self.assertEqual(len(section.items), 1)
@@ -215,6 +217,10 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertEqual(w.run_options.context.get(), "32k")
         self.pump(lambda: w.model is not None and w.verdict.cget("text") and w.loading is None, 5)
         self.assertIn("32k", w.header.cget("text").replace(" ", ""))
+        w.stats.kind.set("image")                                        # filtr: jedna tabela naraz
+        w.stats._show_kind()
+        self.assertFalse(section.winfo_manager())
+        self.assertTrue(w.stats.sections["image"].winfo_manager())
         w.stats.remove(saved)
         self.assertEqual(len(section.items), 0)
 

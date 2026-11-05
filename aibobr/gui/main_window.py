@@ -108,7 +108,8 @@ class MainWindow:
 
         # --- Statystyka
         self.stats = StatsPanel(self.tabs, self.c.saved, self.open_saved, self.compare_saved,
-                                self.fetch_hf, self.open_benchmark) if self.c.saved else None
+                                self.fetch_hf, self.open_benchmark,
+                                kind=(state or {}).get("stats_kind")) if self.c.saved else None
         if self.stats:
             self.tabs.add(self.stats, text=t("gui.tab.stats"))
             self.pages["stats"] = self.stats
@@ -160,7 +161,8 @@ class MainWindow:
         return self.run_options
 
     def export_state(self) -> dict:
-        return {"options": self.run_options.export_state(), "advanced": self.advanced.export_state()}
+        return {"options": self.run_options.export_state(), "advanced": self.advanced.export_state(),
+                "stats_kind": self.stats.kind.get() if self.stats else None}
 
     def set_status(self, text: str = "", kind: str = "Muted") -> None:
         color = COLORS["error"] if kind == "Error" else COLORS["muted"]
