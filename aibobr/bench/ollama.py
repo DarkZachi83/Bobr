@@ -7,7 +7,7 @@ Odpowiedź /api/generate niesie gotowe czasy w nanosekundach: prompt_eval_count/
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from aibobr.sources.http import HttpClient
 
@@ -47,11 +47,31 @@ class OllamaBench:
         return str(data.get("version")) if isinstance(data, dict) and data.get("version") else None
 
     def generate(self, model: str, prompt: str, num_ctx: int, num_predict: int,
-                 temperature: float = 0, seed: int = 42) -> Generation:
-        payload = {"model": model, "prompt": prompt, "stream": False, "think": False, "keep_alive": "5m",
+                 temperature: float = 0, seed: int = 42,
+                 on_chunk: Optional[Callable[[str], None]] = None) -> Generation:
+        """on_chunk(tekst) – podgląd na żywo (etap 12c): Ollama wysyła odpowiedź kawałkami
+        (stream). Czasy i tak przychodzą w ostatnim kawałku i liczy je serwer – pomiar się
+        nie zmienia."""
+        stream = on_chunk is not None and hasattr(self.http, "post_lines")
+        payload = {"model": model, "prompt": prompt, "stream": stream, "think": False, "keep_alive": "5m",
                    "options": {"num_ctx": num_ctx, "num_predict": num_predict,
                                "temperature": temperature, "seed": seed}}
-        r = self.http.post_json(f"{self.host}/api/generate", payload, timeout=TIMEOUT)
+        url = f"{self.host}/api/generate"
+        if stream:
+            parts, r = [], {}
+            for line in self.http.post_lines(url, payload, timeout=TIMEOUT):
+                piece = line.get("response") or ""
+                if piece:
+                    parts.append(piece)
+                    on_chunk(piece)
+                if line.get("done"):
+                    r = line
+            text = "".join(parts)
+        else:
+            r = self.http.post_json(url, payload, timeout=TIMEOUT)
+            text = str(r.get("response") or "")
+            if on_chunk is not None and text:
+                on_chunk(text)
         ns = 1e9
         return Generation(
             prompt_tokens=int(r.get("prompt_eval_count") or 0),
@@ -59,7 +79,7 @@ class OllamaBench:
             gen_tokens=int(r.get("eval_count") or 0),
             gen_seconds=float(r.get("eval_duration") or 0) / ns,
             load_seconds=float(r.get("load_duration") or 0) / ns,
-            text=str(r.get("response") or ""))
+            text=text)
 
     def unload(self, model: str) -> None:
         """Zwalnia model z pamięci od razu (keep_alive 0) – po teście karta jest wolna dla innych programów."""

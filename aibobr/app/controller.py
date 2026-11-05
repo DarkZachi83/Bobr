@@ -329,12 +329,23 @@ class AppController:
                 out[(target, ctx)] = level
         return out
 
+    def quality_suite(self, suite_id: str) -> dict:
+        import json
+        from aibobr import resources
+        return json.loads(resources.path("data", "benchmarks", f"{suite_id}.json").read_text(encoding="utf-8"))
+
     def run_benchmark(self, targets, contexts, predicted: dict, hw: HardwareProfile, report, stop,
-                      db=None, now=None, bench=None, power_sampler=None, vram_busy=None) -> list:
-        """Pomiar wydajności modeli z Ollamy po kolei (nigdy kilku naraz). report(dict) – postęp."""
+                      db=None, now=None, bench=None, power_sampler=None, vram_busy=None,
+                      suites=("perf",)) -> list:
+        """Testy modeli z Ollamy po kolei (nigdy kilku naraz). report(dict) – postęp i dziennik.
+
+        suites: "perf" (wydajność przy długościach z contexts) i/lub pakiety jakości (etap 12c,
+        np. "pl_jezyk_v1"). Każdy model: najpierw wydajność, potem jakość, potem zwolnienie z karty.
+        Wynik: PerfResult i QualityResult w kolejności pomiaru."""
         import datetime
         from dataclasses import replace as _r
         from aibobr.bench.ollama import OllamaBench
+        from aibobr.bench.quality import QualityResult, QualityRunner
         from aibobr.bench.runner import PerfResult, PerfRunner, Stopped
         from aibobr.sources.factory import OLLAMA_PREFIX
         suite = self.bench_suite()
@@ -345,13 +356,16 @@ class AppController:
         version = bench.version()
         busy = self.vram_busy_now(hw, bench) if vram_busy is None else vram_busy
         runner = PerfRunner(bench, suite)
+        quality = {sid: self.quality_suite(sid) for sid in suites if sid != "perf"}
         hardware, supply = self.hardware_text(hw), power_source()
         stamp = (now or datetime.datetime.now()).strftime("%Y-%m-%d %H:%M")
         results = []
-        jobs = [(t, c) for t in targets for c in contexts]
+        jobs = [j for tg in targets for j in [(tg, ("perf", c)) for c in (contexts if "perf" in suites else ())]
+                + [(tg, ("quality", sid)) for sid in quality]]
         report({"event": "start", "version": version, "jobs": len(jobs),
                 "busy_mb": round(busy / 1024**2) if busy is not None else None})
         loaded = None                        # model w karcie: zostaje między długościami kontekstu
+        chunk = lambda text: report({"event": "chunk", "text": text})      # noqa: E731
 
         def unload(model):
             # Po teście modelu zwalniamy go od razu – inaczej Ollama trzyma go jeszcze 5 minut,
@@ -362,16 +376,41 @@ class AppController:
             except Exception:
                 pass
 
+        def task(model, ctx, step, prompt):
+            report({"event": "p_task", "model": model, "context": ctx, "step": step, "prompt": preview(prompt)})
+
         try:
-            for n, (target, ctx) in enumerate(jobs, 1):
+            for n, (target, (kind, what)) in enumerate(jobs, 1):
                 model = target[len(OLLAMA_PREFIX):] if target.startswith(OLLAMA_PREFIX) else target
+                if loaded and loaded != model:
+                    unload(loaded)
+                if kind == "quality":
+                    level = predicted.get((target, 1024))       # jakość liczymy przy 2k
+                    if level == "red":
+                        results.append(QualityResult(model, what, "", "", "", False, "", "", "",
+                                                     skipped="bench.skip_red"))
+                        report({"event": "q_skip", "model": model, "suite": what})
+                        continue
+                    loaded = model
+                    try:
+                        out = QualityRunner(bench, quality[what]).run(model, report, stop)
+                    except Stopped:
+                        report({"event": "stopped", "n": n, "model": model})
+                        break
+                    results += out
+                    report({"event": "q_done", "model": model, "suite": what, "results": out})
+                    if db is not None:
+                        for r in out:
+                            db.add_quality(r, measured_at=stamp, runtime="ollama", runtime_version=version,
+                                           hardware=hardware,
+                                           suite_version=quality[what]["suite_info"].get("version"))
+                    continue
+                ctx = what
                 level = predicted.get((target, ctx))
                 if level == "red":
                     results.append(PerfResult(model, ctx, predicted=level, skipped="bench.skip_red"))
                     report({"event": "skip", "n": n, "total": len(jobs), "model": model, "context": ctx})
                     continue
-                if loaded and loaded != model:
-                    unload(loaded)
                 loaded = model
                 try:
                     with (power_sampler() if power_sampler else _NoSampler()) as power:
@@ -380,7 +419,9 @@ class AppController:
                                        measured=lambda step, g: report({"event": "measure", "n": n, "model": model,
                                                                         "context": ctx, "step": step,
                                                                         "pp": g.pp_tps, "ttft": g.ttft_ms,
-                                                                        "tg": g.tg_tps}))
+                                                                        "tg": g.tg_tps}),
+                                       on_chunk=chunk,
+                                       on_task=lambda step, prompt: task(model, ctx, step, prompt))
                     r = _r(r, power_draw_w=power.peak)
                 except Stopped:
                     results.append(PerfResult(model, ctx, predicted=level, stopped=True))
@@ -423,6 +464,13 @@ class AppController:
         except Exception:
             pass
         return max(0, used - loaded)
+
+
+def preview(prompt: str, head: int = 400, tail: int = 200) -> str:
+    """Długi prompt testu wydajności (85% kontekstu) – do podglądu tylko początek i koniec."""
+    if len(prompt) <= head + tail + 40:
+        return prompt
+    return f"{prompt[:head]}\n… [{len(prompt) - head - tail} …]\n{prompt[-tail:]}"
 
 
 def _short_gpu(name: str) -> str:

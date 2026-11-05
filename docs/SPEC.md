@@ -457,6 +457,17 @@ zwalnia model z karty (`keep_alive: 0`), także przy przejściu do następnego m
 55 W, a pod obciążeniem karta bierze 68–77 W. Ostrzeżenie w benchmarku tylko bez Dynamic Boost i gdy pobór
 nie przekroczył odczytanego limitu o ponad 5% (limit dynamiczny – także na Windows).
 
+**12c – jakość (testy Zacharskiego):** pakiety `pl_jezyk_v1` (7 zadań polszczyzny + Księga
+henrykowska jako osobna kategoria „wiedza”) i `en_format_v1` (4 × JSON, 3 × Python). Każde zadanie
+raz: temperatura 0, seed 42, myślenie wyłączone, kontekst 2k. Ocena (`bench/quality.py`): wzorce
+autora; JSON ŚCISŁY (cała odpowiedź) i ŁAGODNY (z ```json albo z tekstu); kod – tylko `ast.parse`
+i nazwy, **nigdy nie uruchamiany**. Odpowiedzi czyszczone z `<think>`, cudzysłowów i kropki.
+W zakładce Benchmark: pakiety do wyboru (domyślnie wszystkie – decyzja autora), wyniki w zakładkach
+Wydajność | Jakość (dwuklik – odpowiedzi z oceną), **podgląd na żywo** obok dziennika: prompt
+(w teście wydajności początek i koniec) i odpowiedź modelu kawałkami (Ollama `stream: true` –
+czasy liczy serwer, pomiar bez zmian). Tabela `quality` w benchmarks.sqlite z pełną odpowiedzią.
+Znaczek jakości w Statystyce – w 12d (decyzja autora).
+
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.
 Sprzęt testowy autora: laptop i5-13450HX + RTX 5050 8 GB + DDR5 oraz Ryzen 7 5700X + RTX 2060 SUPER 8 GB

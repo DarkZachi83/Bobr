@@ -52,7 +52,9 @@ class PerfRunner:
 
     def run(self, model: str, context: int, report: Callable[[str], None] = lambda s: None,
             stop: Optional[threading.Event] = None,
-            measured: Callable[[str, object], None] = lambda step, g: None) -> PerfResult:
+            measured: Callable[[str, object], None] = lambda step, g: None,
+            on_chunk: Optional[Callable[[str], None]] = None,
+            on_task: Callable[[str, str], None] = lambda step, prompt: None) -> PerfResult:
         """report(krok) przed każdym krokiem; measured(krok, Generation) po nim – do dziennika."""
         def check():
             if stop is not None and stop.is_set():
@@ -66,7 +68,9 @@ class PerfRunner:
         for n in range(1, self.runs + 1):
             check()
             report(f"prompt {n}/{self.runs}")
-            g = self.bench.generate(model, prompts.prompt_processing(context, n), context, 8)
+            prompt = prompts.prompt_processing(context, n)
+            on_task(f"prompt {n}/{self.runs}", prompt)
+            g = self.bench.generate(model, prompt, context, 8, on_chunk=on_chunk)
             measured(f"prompt {n}/{self.runs}", g)
             pp.append(g.pp_tps)
             ttft.append(g.ttft_ms)
@@ -75,7 +79,9 @@ class PerfRunner:
         for n in range(1, self.runs + 1):
             check()
             report(f"generate {n}/{self.runs}")
-            g = self.bench.generate(model, prompts.generation(n), context, self.gen_tokens)
+            prompt = prompts.generation(n)
+            on_task(f"generate {n}/{self.runs}", prompt)
+            g = self.bench.generate(model, prompt, context, self.gen_tokens, on_chunk=on_chunk)
             measured(f"generate {n}/{self.runs}", g)
             tg.append(g.tg_tps)
             gtok.append(g.gen_tokens)

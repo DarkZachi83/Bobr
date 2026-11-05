@@ -30,6 +30,9 @@ DEFAULT_ON = {1024, 8192}                  # 32k na życzenie – na słabszym s
 COLUMNS = ("model", "context", "predicted", "pp", "ttft", "tg", "gpu", "status")
 WIDTHS = {"model": 150, "context": 62, "predicted": 95, "pp": 88, "ttft": 70, "tg": 112, "gpu": 70,
           "status": 95}
+SUITES = ("perf", "pl_jezyk_v1", "en_format_v1")    # etap 12c: wszystkie domyślnie zaznaczone
+QCOLS = ("model", "pl", "knowledge", "json_strict", "json", "code")
+QSECONDS = 4.0                                          # szacunek na jedno zadanie jakości (krótka odpowiedź)
 ORDER = {Kind.TEXT: 0, Kind.IMAGE: 1, Kind.ADDON: 2, Kind.OTHER: 3}
 LEFT_WIDTH = 400
 ON, OFF = "☑", "☐"
@@ -71,6 +74,8 @@ class BenchmarkPanel(ttk.Frame):
         self.running = False
         self.results: list = []
         self.log_lines: list[str] = []
+        self.quality: list = []
+        self.qresults: dict[str, list] = {}           # model → odpowiedzi (podgląd po teście)
         self.started = 0.0
         self.estimated = 0.0
         self.steps_total = 0
@@ -335,7 +340,15 @@ class BenchmarkPanel(ttk.Frame):
             ttk.Checkbutton(opts, text=fmt_context(ctx), variable=var, style="Panel.TCheckbutton",
                             command=self._update_plan).pack(side="left", padx=6)
             self.ctx_vars[ctx] = var
-        ttk.Label(opts, text="   " + t("bench.suites"), style="Muted.TLabel").pack(side="left")
+        suites = ttk.Frame(top, style="Inner.TFrame")
+        suites.pack(fill="x", pady=(4, 0))
+        ttk.Label(suites, text=t("bench.suites_label"), style="Panel.TLabel").pack(side="left")
+        self.suite_vars = {}
+        for sid in SUITES:
+            var = tk.BooleanVar(value=True)
+            ttk.Checkbutton(suites, text=t(f"bench.suite.{sid}"), variable=var, style="Panel.TCheckbutton",
+                            command=self._update_plan).pack(side="left", padx=6)
+            self.suite_vars[sid] = var
         self.plan = ttk.Label(top, text="", style="Panel.TLabel", wraplength=640, justify="left")
         self.plan.pack(anchor="w", pady=(8, 0), fill="x")
         self.warning = ttk.Label(top, text="", style="Note.TLabel", wraplength=640, justify="left")
@@ -355,8 +368,23 @@ class BenchmarkPanel(ttk.Frame):
 
         split = ttk.Panedwindow(self.right, orient="vertical")
         split.pack(fill="both", expand=True, pady=(8, 0))
-        res = ttk.Frame(split, style="Panel.TFrame", padding=8)
-        split.add(res, weight=2)
+        self.results_tabs = ttk.Notebook(split)
+        split.add(self.results_tabs, weight=2)
+        res = ttk.Frame(self.results_tabs, style="Panel.TFrame", padding=8)
+        self.results_tabs.add(res, text=t("bench.res.perf"))
+        qres = ttk.Frame(self.results_tabs, style="Panel.TFrame", padding=8)
+        self.results_tabs.add(qres, text=t("bench.res.quality"))
+        self.qtable = ttk.Treeview(qres, columns=QCOLS, show="headings", height=6)
+        for col in QCOLS:
+            self.qtable.heading(col, text=t(f"bench.qcol.{col}"))
+            self.qtable.column(col, width=150 if col == "model" else 110, minwidth=60, anchor="w",
+                               stretch=col == "model")
+        self.qtable.pack(fill="both", expand=True)
+        self.qtable.bind("<Double-Button-1>", lambda e: self.show_answers())
+        qhint = ttk.Label(qres, text=t("bench.qhint"), style="Muted.TLabel", wraplength=500, justify="left")
+        qhint.pack(anchor="w", fill="x", pady=(4, 0))
+        qhint.bind("<Configure>", lambda e: qhint.configure(wraplength=max(200, e.width)))
+        self.qrows: dict[str, str] = {}                       # model → wiersz tabeli Jakość
         self.table = ttk.Treeview(res, columns=COLUMNS, show="headings", height=6)
         for col in COLUMNS:
             self.table.heading(col, text=t(f"bench.col.{col}"))
@@ -369,23 +397,49 @@ class BenchmarkPanel(ttk.Frame):
         self.table.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
 
-        log = ttk.Frame(split, style="Panel.TFrame", padding=8)
-        split.add(log, weight=3)
+        bottom = ttk.Panedwindow(split, orient="horizontal")       # dziennik | podgląd (decyzja autora)
+        split.add(bottom, weight=3)
+        log = ttk.Frame(bottom, style="Panel.TFrame", padding=8)
+        bottom.add(log, weight=3)
+        view = ttk.Frame(bottom, style="Panel.TFrame", padding=8)
+        bottom.add(view, weight=2)
+        ttk.Label(view, text=t("bench.preview.title"), style="Title.TLabel").pack(anchor="w")
+        self.preview_task = ttk.Label(view, text=t("bench.preview.empty"), style="Muted.TLabel",
+                                      wraplength=300, justify="left")
+        self.preview_task.pack(anchor="w", fill="x", pady=(2, 4))
+        self.preview_task.bind("<Configure>", lambda e: self.preview_task.configure(wraplength=max(200, e.width)))
+        pbox = ttk.Frame(view, style="Inner.TFrame")
+        pbox.pack(fill="both", expand=True)
+        self.preview = tk.Text(pbox, wrap="word", font="TkFixedFont", height=10, background="#11171d",
+                               foreground="#cfd8e3", relief="flat", borderwidth=0, padx=10, pady=8,
+                               state="disabled", selectbackground="#354e66", selectforeground="#ffffff")
+        pscroll = ttk.Scrollbar(pbox, orient="vertical", command=self.preview.yview)
+        self.preview.configure(yscrollcommand=pscroll.set)
+        self.preview.pack(side="left", fill="both", expand=True)
+        pscroll.pack(side="right", fill="y")
+        self.preview.tag_configure("head", foreground="#66c9fa")
+        self.preview.tag_configure("prompt", foreground="#9bacc0")
+        self.preview.tag_configure("answer", foreground="#e9ecef")
+        self.preview.tag_configure("ok", foreground="#53d6a0")
+        self.preview.tag_configure("bad", foreground="#ff8282")
         head = ttk.Frame(log, style="Inner.TFrame")
         head.pack(fill="x")
         ttk.Label(head, text=t("bench.log.title"), style="Title.TLabel").pack(side="left")
-        ttk.Button(head, text=t("bench.log.csv"), command=self.export_csv).pack(side="right")
-        ttk.Button(head, text=t("bench.log.save"), command=self.save_log).pack(side="right", padx=6)
-        ttk.Button(head, text=t("bench.log.copy"), command=self.copy_log).pack(side="right")
         self.autoscroll = tk.BooleanVar(value=True)
         ttk.Checkbutton(head, text=t("bench.log.autoscroll"), variable=self.autoscroll,
-                        style="Panel.TCheckbutton").pack(side="right", padx=10)
+                        style="Panel.TCheckbutton").pack(side="right")
+        tools = ttk.Frame(log, style="Inner.TFrame")             # osobny rząd – dziennik bywa wąski
+        tools.pack(fill="x", pady=(4, 0))
+        ttk.Button(tools, text=t("bench.log.copy"), command=self.copy_log).pack(side="left")
+        ttk.Button(tools, text=t("bench.log.save"), command=self.save_log).pack(side="left", padx=6)
+        ttk.Button(tools, text=t("bench.log.csv"), command=self.export_csv).pack(side="left")
         line = ttk.Frame(log, style="Inner.TFrame")
         line.pack(fill="x", pady=(6, 2))
-        self.stage = ttk.Label(line, text="", style="Note.TLabel")
-        self.stage.pack(side="left")
         self.percent = ttk.Label(line, text="", style="Panel.TLabel", font=("TkDefaultFont", 10, "bold"))
         self.percent.pack(side="right")
+        self.stage = ttk.Label(line, text="", style="Note.TLabel", wraplength=300, justify="left")
+        self.stage.pack(side="left", fill="x", expand=True)
+        self.stage.bind("<Configure>", lambda e: self.stage.configure(wraplength=max(150, e.width)))
         self.bar = ttk.Progressbar(log, mode="determinate", maximum=100)
         self.bar.pack(fill="x")
         self.times = ttk.Label(log, text="", style="Muted.TLabel")
@@ -447,8 +501,23 @@ class BenchmarkPanel(ttk.Frame):
         targets = self.targets()
         self.table.delete(*self.table.get_children())
         self.job_rows.clear()
-        jobs = [(tg, c) for tg in targets for c in self.contexts()]
+        perf = self.suite_vars["perf"].get()
+        quality = [sid for sid in SUITES[1:] if self.suite_vars[sid].get()]
+        jobs = [(tg, c) for tg in targets for c in (self.contexts() if perf else ())]
         seconds, skipped = 0.0, 0
+        self.qrows.clear()
+        self.qtable.delete(*self.qtable.get_children())
+        qtasks = 0
+        if quality:
+            ntasks = sum(len(self.c.quality_suite(sid).get("tests", ())) for sid in quality)
+            for tg in targets:
+                name = tg[len("ollama:"):] if tg.startswith("ollama:") else tg
+                red = self.predicted.get((tg, min(CONTEXTS))) == "red"
+                self.qrows[name] = self.qtable.insert("", "end", values=(name,) + (
+                    (t("bench.status.skip"),) if red else (t("bench.status.wait"),)) + ("",) * 4)
+                if not red:
+                    qtasks += ntasks
+                    seconds += 12 + ntasks * QSECONDS
         for target, ctx in jobs:
             level = self.predicted.get((target, ctx))
             name = target[len("ollama:"):] if target.startswith("ollama:") else target
@@ -468,6 +537,8 @@ class BenchmarkPanel(ttk.Frame):
             self.plan.configure(text=t("bench.none_checked"))
         else:
             text = t("bench.plan", jobs=len(jobs) - skipped, minutes=minutes)
+            if quality:
+                text = t("bench.plan_q", jobs=len(jobs) - skipped, tasks=qtasks, minutes=minutes)
             if skipped:
                 text += " " + t("bench.plan_skipped", n=skipped)
             self.plan.configure(text=text)
@@ -478,8 +549,8 @@ class BenchmarkPanel(ttk.Frame):
         if power_source() == "battery":
             warnings.append(t("bench.warn_battery"))
         self.warning.configure(text="\n".join("⚠ " + w for w in warnings))
-        self.steps_total = (len(jobs) - skipped) * 7
-        self.start_button.state(["!disabled"] if len(jobs) > skipped else ["disabled"])
+        self.steps_total = (len(jobs) - skipped) * 7 + qtasks
+        self.start_button.state(["!disabled"] if len(jobs) > skipped or qtasks else ["disabled"])
 
     # ------------------------------------------------------------------ dziennik
     def log(self, kind: str, text: str) -> None:
@@ -529,7 +600,8 @@ class BenchmarkPanel(ttk.Frame):
     # ------------------------------------------------------------------ pomiar
     def start(self) -> None:
         contexts, targets = self.contexts(), self.targets()
-        if not contexts or not targets or self.running:
+        suites = tuple(sid for sid in SUITES if self.suite_vars[sid].get())
+        if not targets or self.running or not suites or (suites == ("perf",) and not contexts):
             return
         if len(targets) > 1 and not self.confirm(t("bench.title"), t("bench.confirm_many")):
             return
@@ -557,7 +629,7 @@ class BenchmarkPanel(ttk.Frame):
         self.worker.run_with_progress(
             "bench",
             lambda report: self.c.run_benchmark(targets, contexts, self.predicted, hw, report, self.stop,
-                                                db=self.c.bench_db),
+                                                db=self.c.bench_db, suites=suites),
             self._progress, self._done, self._failed)
 
     def _clock(self) -> None:
@@ -627,11 +699,43 @@ class BenchmarkPanel(ttk.Frame):
         elif event == "stopped":
             self._status(p["model"], p["context"], t("bench.status.stopped"))
             self.log("WARN", t("bench.log.stopped"))
+        elif event == "p_task":
+            self._preview_start(f"{p['model']} | {ctx} | {self._step_text(p['step'])}", p["prompt"])
+        elif event == "chunk":
+            self._preview_add(p["text"])
+        elif event == "q_task":
+            self.steps_done += 1
+            share = min(1.0, self.steps_done / self.steps_total) if self.steps_total else 0
+            self.bar.configure(value=share * 100)
+            self.percent.configure(text=f"{share * 100:.0f}%")
+            suite = t(f"bench.suite.{p['suite']}")
+            label = f"{p['model']} | {suite} | {p['n']}/{p['total']} {p['title']}"
+            self.stage.configure(text=label)
+            self._qstatus(p["model"], f"{suite} {p['n']}/{p['total']}")
+            self._preview_start(label, p["prompt"])
+            self.log("RUN", label)
+        elif event == "q_result":
+            r = p["result"]
+            mark = "✓" if r.passed else "✗"
+            reason = "" if r.passed else " – " + reason_text(r.reason)
+            self._preview_verdict(f"{mark} {t('bench.preview.verdict')}{reason}", r.passed)
+            self.log("OK" if r.passed else "WARN", f"{r.model} | {mark} {r.title}{reason}")
+        elif event == "q_done":
+            self._quality_row(p["model"], p["results"])
+            ok = sum(r.passed for r in p["results"])
+            self.log("OK", t("bench.log.q_done", model=p["model"], suite=t(f"bench.suite.{p['suite']}"),
+                             ok=ok, total=len(p["results"])))
+        elif event == "q_skip":
+            self._qstatus(p["model"], t("bench.status.skip"))
+            self.log("WARN", t("bench.log.skip", model=p["model"], context=t(f"bench.suite.{p['suite']}")))
         elif event == "unload":
             self.log("INFO", t("bench.log.unload", model=p["model"]))
 
     def _done(self, results: list) -> None:
         self.running = False
+        from aibobr.bench.quality import QualityResult
+        self.quality = [r for r in results if isinstance(r, QualityResult) and not r.skipped]
+        results = [r for r in results if not isinstance(r, QualityResult)]
         self.results = results
         if not self.winfo_exists():
             return
@@ -676,3 +780,82 @@ class BenchmarkPanel(ttk.Frame):
         text = t("bench.no_ollama") if isinstance(e, SourceError) else t("gui.unexpected", error=repr(e))
         self.stage.configure(text=text)
         self.log("ERROR", text)
+
+    # ------------------------------------------------------------------ podgląd i jakość (12c)
+    def _preview_start(self, title: str, prompt: str) -> None:
+        self.preview_task.configure(text=title)
+        self.preview.configure(state="normal")
+        self.preview.delete("1.0", "end")
+        self.preview.insert("end", t("bench.preview.prompt") + "\n", ("head",))
+        self.preview.insert("end", prompt + "\n\n", ("prompt",))
+        self.preview.insert("end", t("bench.preview.answer") + "\n", ("head",))
+        self.preview.configure(state="disabled")
+
+    def _preview_add(self, text: str) -> None:
+        self.preview.configure(state="normal")
+        self.preview.insert("end", text, ("answer",))
+        self.preview.configure(state="disabled")
+        self.preview.see("end")
+
+    def _preview_verdict(self, text: str, ok: bool) -> None:
+        self.preview.configure(state="normal")
+        self.preview.insert("end", "\n\n" + text + "\n", ("ok" if ok else "bad",))
+        self.preview.configure(state="disabled")
+        self.preview.see("end")
+
+    def _qstatus(self, model: str, text: str) -> None:
+        iid = self.qrows.get(model)
+        if iid and model not in self.qresults:          # wyniki pierwszego pakietu zostają widoczne
+            self.qtable.item(iid, values=(model, text, "", "", "", ""))
+
+    def _quality_row(self, model: str, results: list) -> None:
+        from aibobr.bench.quality import score
+        self.qresults[model] = self.qresults.get(model, []) + list(results)
+        sc = score(self.qresults[model])
+
+        def cell(key):
+            return f"{sc[key][0]}/{sc[key][1]}" if key in sc else "–"
+        values = (model, cell("language_integrity"), cell("knowledge"), cell("json_strict"),
+                  cell("format_adherence"), cell("code_syntax"))
+        iid = self.qrows.get(model)
+        if iid:
+            self.qtable.item(iid, values=values)
+        else:
+            self.qrows[model] = self.qtable.insert("", "end", values=values)
+
+    def show_answers(self) -> None:
+        """Dwuklik w tabeli Jakość: wszystkie zadania i odpowiedzi modelu z oceną."""
+        sel = self.qtable.selection()
+        if not sel:
+            return
+        model = self.qtable.item(sel[0], "values")[0]
+        results = self.qresults.get(model)
+        if not results:
+            return
+        win = tk.Toplevel(self)
+        win.title(t("bench.answers_title", model=model))
+        win.geometry("760x620")
+        text = tk.Text(win, wrap="word", font="TkFixedFont", background="#11171d", foreground="#cfd8e3",
+                       relief="flat", padx=12, pady=10)
+        scroll = ttk.Scrollbar(win, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+        text.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
+        for tag, color in (("head", "#66c9fa"), ("prompt", "#9bacc0"), ("ok", "#53d6a0"), ("bad", "#ff8282")):
+            text.tag_configure(tag, foreground=color)
+        for r in results:
+            mark = "✓" if r.passed else "✗"
+            reason = "" if r.passed else " – " + reason_text(r.reason)
+            text.insert("end", f"{mark} {r.title}{reason}\n", ("ok" if r.passed else "bad",))
+            text.insert("end", r.prompt + "\n", ("prompt",))
+            text.insert("end", (r.answer.strip() or "–") + "\n\n")
+        text.configure(state="disabled")
+        self.answers_window = win
+
+
+def reason_text(reason: str) -> str:
+    """„quality.reason.no_function:fibonacci” → tekst z tłumaczeń z argumentem."""
+    if not reason:
+        return ""
+    key, _, arg = reason.partition(":")
+    return t(key, arg=arg) if key.startswith("quality.") else reason
