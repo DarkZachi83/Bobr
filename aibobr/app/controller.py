@@ -336,7 +336,7 @@ class AppController:
 
     def run_benchmark(self, targets, contexts, predicted: dict, hw: HardwareProfile, report, stop,
                       db=None, now=None, bench=None, power_sampler=None, vram_busy=None,
-                      suites=("perf",)) -> list:
+                      suites=("perf",), repeats: int = 1) -> list:
         """Testy modeli z Ollamy po kolei (nigdy kilku naraz). report(dict) – postęp i dziennik.
 
         suites: "perf" (wydajność przy długościach z contexts) i/lub pakiety jakości (etap 12c,
@@ -393,7 +393,7 @@ class AppController:
                         continue
                     loaded = model
                     try:
-                        out = QualityRunner(bench, quality[what]).run(model, report, stop)
+                        out = QualityRunner(bench, quality[what], repeats).run(model, report, stop)
                     except Stopped:
                         report({"event": "stopped", "n": n, "model": model})
                         break

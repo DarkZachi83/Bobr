@@ -290,12 +290,13 @@ class GuiSmokeTest(unittest.TestCase):
         w.c.bench_predict = lambda tg, ctxs, hw, s: {(t_, c): ("red" if c == 32768 else "green")
                                                      for t_ in tg for c in ctxs}
 
-        def fake_run(tg, ctxs, predicted, hw, report, stop, db=None, suites=()):
+        def fake_run(tg, ctxs, predicted, hw, report, stop, db=None, suites=(), repeats=1):
             from aibobr.bench.quality import QualityResult
             self.assertEqual(suites, ("perf", "pl_jezyk_v1", "en_format_v1"))   # domyślnie wszystkie
             report({"event": "start", "version": "0.40.13", "jobs": len(tg), "busy_mb": 101})
             q = QualityResult(tg[0][7:], "pl_jezyk_v1", "pl_vocative", "Wołacz", "language_integrity",
-                              False, "quality.reason.pattern", "Tomasz", "Podaj wołacz…")
+                              False, "quality.reason.pattern", "Tomasz", "Podaj wołacz…",
+                              subcategory="inflection")
             report({"event": "q_task", "model": tg[0][7:], "suite": "pl_jezyk_v1", "n": 1, "total": 1,
                     "test": "pl_vocative", "title": "Wołacz", "prompt": "Podaj wołacz…"})
             report({"event": "chunk", "text": "Tomasz"})
@@ -350,7 +351,7 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertEqual(pw.state(), "normal")
         self.assertEqual(pw.rows[0]["answer"], "Tomasz")                    # do eksportu CSV
         qrow = b.qtable.item(b.qrows["llama3.1:8b"], "values")
-        self.assertEqual(qrow[1], "0/1")                                    # Polszczyzna
+        self.assertEqual(qrow[2], "0/1")                                    # Fleksja
         b.qtable.selection_set(b.qrows["llama3.1:8b"])
         b.show_answers()
         self.assertIn("Tomasz", b.answers_window.winfo_children()[0].get("1.0", "end"))

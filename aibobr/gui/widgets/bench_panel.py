@@ -23,6 +23,7 @@ from typing import Callable, Optional
 from aibobr.bench.runner import estimate_seconds
 from aibobr.gui.theme import COLORS, VERDICT_COLORS
 from aibobr.i18n import fmt_context, fmt_gb, t
+from aibobr.bench.quality import REPEATS
 from aibobr.scan.model import FoundModel, Kind, ScanReport
 
 CONTEXTS = (1024, 8192, 32768)
@@ -31,7 +32,8 @@ COLUMNS = ("model", "context", "predicted", "pp", "ttft", "tg", "gpu", "status")
 WIDTHS = {"model": 150, "context": 62, "predicted": 95, "pp": 88, "ttft": 70, "tg": 112, "gpu": 70,
           "status": 95}
 SUITES = ("perf", "pl_jezyk_v1", "en_format_v1")    # etap 12c: wszystkie domyślnie zaznaczone
-QCOLS = ("model", "pl", "knowledge", "json_strict", "json", "code")
+QCOLS = ("model", "spelling", "inflection", "numerals", "aspect", "knowledge", "json_strict", "json",
+         "code_strict", "code", "agree")
 QSECONDS = 1.5          # zadanie jakości – pomiar autora: gemma2:9b w karcie, 15 zadań w ok. 15 s
 ORDER = {Kind.TEXT: 0, Kind.IMAGE: 1, Kind.ADDON: 2, Kind.OTHER: 3}
 LEFT_WIDTH = 400
@@ -349,6 +351,12 @@ class BenchmarkPanel(ttk.Frame):
             ttk.Checkbutton(suites, text=t(f"bench.suite.{sid}"), variable=var, style="Panel.TCheckbutton",
                             command=self._update_plan).pack(side="left", padx=6)
             self.suite_vars[sid] = var
+        ttk.Label(suites, text="   " + t("bench.repeats"), style="Panel.TLabel").pack(side="left")
+        self.repeats = tk.StringVar(value="1")
+        rc = ttk.Combobox(suites, textvariable=self.repeats, values=[str(r) for r in REPEATS], width=3,
+                          state="readonly")
+        rc.pack(side="left", padx=4)
+        rc.bind("<<ComboboxSelected>>", lambda e: self._update_plan())
         self.plan = ttk.Label(top, text="", style="Panel.TLabel", wraplength=640, justify="left")
         self.plan.pack(anchor="w", pady=(8, 0), fill="x")
         self.warning = ttk.Label(top, text="", style="Note.TLabel", wraplength=640, justify="left")
@@ -377,7 +385,7 @@ class BenchmarkPanel(ttk.Frame):
         self.qtable = ttk.Treeview(qres, columns=QCOLS, show="headings", height=6)
         for col in QCOLS:
             self.qtable.heading(col, text=t(f"bench.qcol.{col}"))
-            self.qtable.column(col, width=150 if col == "model" else 110, minwidth=60, anchor="w",
+            self.qtable.column(col, width=150 if col == "model" else 78, minwidth=50, anchor="w",
                                stretch=col == "model")
         self.qtable.pack(fill="both", expand=True)
         self.qtable.bind("<Double-Button-1>", lambda e: self.show_answers())
@@ -496,10 +504,10 @@ class BenchmarkPanel(ttk.Frame):
                 name = tg[len("ollama:"):] if tg.startswith("ollama:") else tg
                 red = self.predicted.get((tg, min(CONTEXTS))) == "red"
                 self.qrows[name] = self.qtable.insert("", "end", values=(name,) + (
-                    (t("bench.status.skip"),) if red else (t("bench.status.wait"),)) + ("",) * 4)
+                    (t("bench.status.skip"),) if red else (t("bench.status.wait"),)) + ("",) * (len(QCOLS) - 2))
                 if not red:
                     qtasks += ntasks
-                    seconds += 12 + ntasks * QSECONDS
+                    seconds += 12 + ntasks * QSECONDS * int(self.repeats.get())
         for target, ctx in jobs:
             level = self.predicted.get((target, ctx))
             name = target[len("ollama:"):] if target.startswith("ollama:") else target
@@ -583,6 +591,7 @@ class BenchmarkPanel(ttk.Frame):
     def start(self) -> None:
         contexts, targets = self.contexts(), self.targets()
         suites = tuple(sid for sid in SUITES if self.suite_vars[sid].get())
+        repeats = int(self.repeats.get())          # odczyt tu – zmienne Tk nie z wątku w tle
         if not targets or self.running or not suites or (suites == ("perf",) and not contexts):
             return
         if len(targets) > 1 and not self.confirm(t("bench.title"), t("bench.confirm_many")):
@@ -613,7 +622,7 @@ class BenchmarkPanel(ttk.Frame):
         self.worker.run_with_progress(
             "bench",
             lambda report: self.c.run_benchmark(targets, contexts, self.predicted, hw, report, self.stop,
-                                                db=self.c.bench_db, suites=suites),
+                                                db=self.c.bench_db, suites=suites, repeats=repeats),
             self._progress, self._done, self._failed)
 
     def _clock(self) -> None:
@@ -702,6 +711,8 @@ class BenchmarkPanel(ttk.Frame):
             r = p["result"]
             mark = "✓" if r.passed else "✗"
             reason = "" if r.passed else " – " + reason_text(r.reason)
+            if r.runs > 1:
+                reason += " · " + t("bench.log.agree", same=r.identical, runs=r.runs, passes=r.passes)
             self._preview_verdict(f"{mark} {t('bench.preview.verdict')}{reason}", r.passed,
                                   {"model": r.model, "suite": r.suite, "test": r.test_id, "passed": int(r.passed),
                                    "reason": reason.lstrip(" –"), "prompt": r.prompt, "answer": r.answer})
@@ -791,7 +802,7 @@ class BenchmarkPanel(ttk.Frame):
     def _qstatus(self, model: str, text: str) -> None:
         iid = self.qrows.get(model)
         if iid and model not in self.qresults:          # wyniki pierwszego pakietu zostają widoczne
-            self.qtable.item(iid, values=(model, text, "", "", "", ""))
+            self.qtable.item(iid, values=(model, text) + ("",) * (len(QCOLS) - 2))
 
     def _quality_row(self, model: str, results: list) -> None:
         from aibobr.bench.quality import score
@@ -800,8 +811,7 @@ class BenchmarkPanel(ttk.Frame):
 
         def cell(key):
             return f"{sc[key][0]}/{sc[key][1]}" if key in sc else "–"
-        values = (model, cell("language_integrity"), cell("knowledge"), cell("json_strict"),
-                  cell("format_adherence"), cell("code_syntax"))
+        values = (model,) + tuple(cell(c) for c in QCOLS[1:])
         iid = self.qrows.get(model)
         if iid:
             self.qtable.item(iid, values=values)

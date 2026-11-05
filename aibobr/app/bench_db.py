@@ -41,13 +41,19 @@ CREATE TABLE IF NOT EXISTS quality (
     passed INTEGER NOT NULL,
     strict INTEGER,
     reason TEXT,
-    answer TEXT
+    answer TEXT,
+    subcategory TEXT,
+    runs INTEGER,
+    identical INTEGER,
+    passes INTEGER
 );
 CREATE INDEX IF NOT EXISTS quality_model ON quality(model, suite);
 """
 # Kolumny dodane później – starsze bazy dostają je przy otwarciu (ALTER TABLE).
 EXTRA_COLUMNS = {"power_draw_w": "REAL", "power_limit_w": "REAL", "power_max_w": "REAL",
                  "vram_busy_mb": "REAL"}       # zajęte przez system przed testem (np. pulpit)
+
+QUALITY_EXTRA = {"subcategory": "TEXT", "runs": "INTEGER", "identical": "INTEGER", "passes": "INTEGER"}
 
 
 class BenchDb:
@@ -60,6 +66,10 @@ class BenchDb:
             for name, kind in EXTRA_COLUMNS.items():
                 if name not in have:
                     db.execute(f"ALTER TABLE perf ADD COLUMN {name} {kind}")
+            have = {row[1] for row in db.execute("PRAGMA table_info(quality)")}
+            for name, kind in QUALITY_EXTRA.items():          # tabela z wersji roboczej 12c
+                if name not in have:
+                    db.execute(f"ALTER TABLE quality ADD COLUMN {name} {kind}")
 
     def _connect(self):
         return sqlite3.connect(self.path)
@@ -84,10 +94,11 @@ class BenchDb:
         with closing(self._connect()) as db, db:
             db.execute(
                 "INSERT INTO quality (measured_at, model, runtime, runtime_version, hardware, suite,"
-                " suite_version, test_id, category, passed, strict, reason, answer)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " suite_version, test_id, category, passed, strict, reason, answer, subcategory, runs,"
+                " identical, passes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (measured_at, r.model, runtime, runtime_version, hardware, r.suite, suite_version, r.test_id,
-                 r.category, int(r.passed), None if r.strict is None else int(r.strict), r.reason, r.answer))
+                 r.category, int(r.passed), None if r.strict is None else int(r.strict), r.reason, r.answer,
+                 r.subcategory, r.runs, r.identical, r.passes))
 
     def quality_count(self) -> int:
         with closing(self._connect()) as db:
