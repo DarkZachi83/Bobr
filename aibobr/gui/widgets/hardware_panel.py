@@ -174,8 +174,8 @@ class HardwarePanel(ttk.Frame):
             self._render_advanced()
 
     def _line(self, parent, label: str, value: str, row: int, style="Panel.TLabel") -> None:
-        ttk.Label(parent, text=label, style="Muted.TLabel").grid(row=row, column=0, sticky="w", padx=(0, 12))
-        ttk.Label(parent, text=value, style=style, wraplength=self.wrap).grid(row=row, column=1, sticky="w")
+        ttk.Label(parent, text=label, style="Muted.TLabel").grid(row=row, column=0, sticky="nw", padx=(0, 12))
+        ttk.Label(parent, text=value, style=style, wraplength=self.wrap).grid(row=row, column=1, sticky="nw")
 
     def _render_auto(self) -> None:
         hw = self.scan

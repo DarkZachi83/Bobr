@@ -44,15 +44,20 @@ class ScrollPage(ttk.Frame):
         self.left.grid_forget()
         self.right.grid_forget()
         if wide:
+            # Obie kolumny do dołu okna – ramki kończą się równo (uwaga autora).
             self.inner.columnconfigure(0, weight=1)
             self.inner.columnconfigure(1, weight=0, minsize=RIGHT_WIDTH)
-            self.left.grid(row=0, column=0, sticky="nwe", padx=(0, 10))
-            self.right.grid(row=0, column=1, sticky="nwe")
+            self.inner.rowconfigure(0, weight=1)
+            self.inner.rowconfigure(1, weight=0)
+            self.left.grid(row=0, column=0, sticky="nswe", padx=(0, 10))
+            self.right.grid(row=0, column=1, sticky="nswe")
         else:
             self.inner.columnconfigure(0, weight=1)
             self.inner.columnconfigure(1, weight=0, minsize=0)
+            self.inner.rowconfigure(0, weight=0)
+            self.inner.rowconfigure(1, weight=1)
             self.left.grid(row=0, column=0, sticky="nwe")
-            self.right.grid(row=1, column=0, sticky="nwe", pady=(10, 0))
+            self.right.grid(row=1, column=0, sticky="nswe", pady=(10, 0))
 
     def _resize(self, event) -> None:
         self.canvas.itemconfigure(self._window, width=event.width)
@@ -60,7 +65,11 @@ class ScrollPage(ttk.Frame):
         self._update_region()
 
     def _update_region(self) -> None:
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        # Strona co najmniej tak wysoka jak okno – kolumny sięgają dołu; dłuższa – przewijanie.
+        height = max(self.canvas.winfo_height(), self.inner.winfo_reqheight())
+        if int(self.canvas.itemcget(self._window, "height") or 0) != height:
+            self.canvas.itemconfigure(self._window, height=height)
+        self.canvas.configure(scrollregion=(0, 0, self.canvas.winfo_width(), height))
         fits = self.inner.winfo_reqheight() <= self.canvas.winfo_height()
         if fits:
             self.canvas.yview_moveto(0)

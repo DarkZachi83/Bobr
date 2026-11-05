@@ -16,9 +16,9 @@ from aibobr.domain.models import Verdict
 from aibobr.gui.theme import COLORS, VERDICT_COLORS
 from aibobr.i18n import fmt_gb, t
 
-SIZE = 132            # średnica pierścienia
-THICK = 13
-HEIGHT = SIZE + 46
+SIZE = 150            # średnica pierścienia
+THICK = 14
+CELL = SIZE + 46      # pierścień + podpis pod spodem
 
 
 def meter_values(v: Verdict) -> dict:
@@ -41,9 +41,12 @@ def meter_values(v: Verdict) -> dict:
 
 
 class Meters(tk.Canvas):
-    def __init__(self, master, **kw):
-        super().__init__(master, height=HEIGHT, width=2 * SIZE + 60, highlightthickness=0,
-                         background=COLORS["panel"], **kw)
+    def __init__(self, master, vertical: bool = True, **kw):
+        # Pionowo – jeden pod drugim (uwaga autora: ładniej w wąskiej prawej kolumnie).
+        self.vertical = vertical
+        height = 2 * CELL + 8 if vertical else CELL
+        super().__init__(master, height=height, width=SIZE + 40 if vertical else 2 * SIZE + 60,
+                         highlightthickness=0, background=COLORS["panel"], **kw)
         self.verdict: Optional[Verdict] = None
         self.font = tkfont.nametofont("TkDefaultFont")
         self.big = self.font.copy()
@@ -58,7 +61,7 @@ class Meters(tk.Canvas):
 
     def redraw(self) -> None:
         self.delete("all")
-        width = max(self.winfo_width(), 2 * SIZE + 20)
+        width = max(self.winfo_width(), SIZE + 20 if self.vertical else 2 * SIZE + 20)
         gap = (width - 2 * SIZE) / 3
         v = self.verdict
         values = meter_values(v) if v is not None else {"vram": (None, ""), "ram": (None, "")}
@@ -67,8 +70,10 @@ class Meters(tk.Canvas):
                   "ram": COLORS["error"] if v is not None and v.level == FitLevel.RED else COLORS["ram"]}
         for i, (key, label) in enumerate((("vram", "VRAM"), ("ram", "RAM"))):
             pct, caption = values[key]
-            x0 = gap + i * (SIZE + gap)
-            y0 = 4
+            if self.vertical:
+                x0, y0 = (width - SIZE) / 2, 4 + i * (CELL + 8)
+            else:
+                x0, y0 = gap + i * (SIZE + gap), 4
             box = (x0 + THICK / 2, y0 + THICK / 2, x0 + SIZE - THICK / 2, y0 + SIZE - THICK / 2)
             self.create_oval(*box, outline=COLORS["track"], width=THICK)
             if pct:
@@ -80,4 +85,4 @@ class Meters(tk.Canvas):
                              fill=colors[key] if pct else COLORS["text"])
             self.create_text(cx, cy + 18, text=label, font=self.bold, fill=COLORS["muted"])
             self.create_text(cx, y0 + SIZE + 18, text=caption, font=self.font, fill=COLORS["muted"],
-                             width=SIZE + gap - 6)
+                             width=width - 12 if self.vertical else SIZE + gap - 6)

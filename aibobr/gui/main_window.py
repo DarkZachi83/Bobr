@@ -92,7 +92,7 @@ class MainWindow:
         self.picker.pack(fill="x", pady=(0, 8))
         self.picker.text.set(self.model_text)
         self.result = ResultView(check.left, lambda: check.wrap)
-        self.result.pack(fill="x")
+        self.result.pack(fill="both", expand=True)
         self.save_button = ttk.Button(self.result.actions, text="💾 " + t("gui.save_compare"),
                                       command=self.save_compare)
         self.save_button.state(["disabled"])
@@ -101,7 +101,7 @@ class MainWindow:
                                        command=lambda: self.open_benchmark([self.model_text]))
         self.hardware = HardwarePanel(check.right, self.recompute, self.save_defaults, mode="auto",
                                       wrap=230)
-        self.hardware.pack(fill="x")
+        self.hardware.pack(fill="both", expand=True)
         self.meters = Meters(self.hardware.meter_box)
         self.meters.pack(fill="x", pady=(4, 6))
         self.manual_hint = ttk.Frame(self.hardware, style="Inner.TFrame")   # brak skanu → Zaawansowane
@@ -126,10 +126,10 @@ class MainWindow:
         self.adv_model_label = ttk.Label(self.adv_model, text="", style="Panel.TLabel")
         self.adv_model_label.pack(anchor="w", padx=10, pady=(4, 8))
         self.adv_result = ResultView(adv.left, lambda: adv.wrap)
-        self.adv_result.pack(fill="x")
+        self.adv_result.pack(fill="both", expand=True)
         self.advanced = HardwarePanel(adv.right, self.recompute, self.save_defaults, mode="advanced",
                                       title=t("gui.adv_computer"))
-        self.advanced.pack(fill="x")
+        self.advanced.pack(fill="both", expand=True)
         self.adv_meters = Meters(self.advanced.meter_box)
         self.adv_meters.pack(fill="x", pady=(4, 6))
 
