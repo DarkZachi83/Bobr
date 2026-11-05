@@ -341,7 +341,14 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertIn("prompt 1/3: 812 tok/s", log)
         self.assertIn("END", log)
         self.assertIn("✗ Wołacz – brak oczekiwanej formy", log)
-        self.assertIn("Tomasz", b.preview.get("1.0", "end"))                 # podgląd odpowiedzi
+        pw = b.preview_window                                               # osobne okno (uwaga autora)
+        self.assertIn("Tomasz", pw.content())                               # podgląd odpowiedzi
+        pw.protocol("WM_DELETE_WINDOW")
+        pw.withdraw()                                                       # zamknięcie tylko chowa
+        self.assertTrue(pw.winfo_exists())
+        b.show_preview()                                                    # „Przywróć”
+        self.assertEqual(pw.state(), "normal")
+        self.assertEqual(pw.rows[0]["answer"], "Tomasz")                    # do eksportu CSV
         qrow = b.qtable.item(b.qrows["llama3.1:8b"], "values")
         self.assertEqual(qrow[1], "0/1")                                    # Polszczyzna
         b.qtable.selection_set(b.qrows["llama3.1:8b"])
