@@ -329,7 +329,7 @@ class GuiSmokeTest(unittest.TestCase):
         log = "\n".join(b.log_lines)
         self.assertIn("Ollama 0.40.13", log)
         self.assertIn("101 MiB", log)
-        self.assertIn("prompt 812 tok/s", log)
+        self.assertIn("prompt 1/3: 812 tok/s", log)
         self.assertIn("END", log)
 
     def test_benchmark_tab_finds_models_and_remembers(self):

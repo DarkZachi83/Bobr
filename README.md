@@ -27,20 +27,26 @@ Q4_K_M, context, KV cache, MoE. AI Bóbr answers one question for **one specific
 does it fit, and where?
 
 - **Pick a model:** a Hugging Face link, `hf.co/<repo>:Q4_K_M` (the same form as `ollama run`),
-  a local `.gguf` file, or enter the numbers by hand. In Advanced mode also a model you already
-  have in Ollama (**From Ollama…**).
+  a local `.gguf` file, a model from the **Benchmark** tab list (Ollama, LM Studio, …) or the
+  numbers entered by hand (**File → Enter model data manually…**). Context and KV cache sit right
+  next to the quantization.
 - **It scans your PC:** CPU, RAM and graphics cards (NVIDIA, AMD, Intel; Linux and Windows).
 - **You get a memory bar:** your fast VRAM and slower RAM against what the model needs –
   weights, chat memory (KV cache) and overhead.
   - 🟢 everything on the graphics card – full speed,
   - 🟡 part of it in RAM – slower (with the percentage that stays on the card),
   - 🔴 doesn't fit at all – and how much is missing.
-- **"Explanation"** (one click, hidden by default) tells you in plain words what uses the
+- **Two dials** show how much of your graphics card and RAM the model will take.
+- **"Explanation"** (always visible under the result) tells you in plain words what uses the
   memory and **what you can do**: a quantization, a context length or a KV-cache setting that
   actually changes the verdict, or a smaller model from the built-in list that fits.
 
 It reads only the header of the model file – a few MB, not gigabytes – so checking a 40 GB
 model from Hugging Face takes seconds. Nothing is downloaded or installed.
+
+The window has four tabs – **Check**, **Benchmark**, **Statistics**, **Advanced** (the same model on
+hardware you type in: "what if I had a 16 GB card?") – and a **dark or light theme** (☀/☾ icon or
+Settings → Theme). The language is in its own **Language** menu.
 
 ### Quick start
 
@@ -59,7 +65,7 @@ python main.py                          # window
 ```
 
 **macOS:** not supported yet – the program starts, but you have to enter RAM and VRAM by hand
-(Advanced mode). Apple Silicon's unified memory needs its own rules, and we can't test them yet.
+(Advanced tab). Apple Silicon's unified memory needs its own rules, and we can't test them yet.
 
 ### Text mode
 
@@ -90,7 +96,7 @@ KV cache = 2 × layers × KV heads × head size × context × bytes per element
   bits per weight from `data/quants.json` (marked as an estimate).
 - **KV cache:** from the model's architecture; grows with context. 8B at 8k ≈ 1 GB, at 32k ≈ 4 GB.
 - **Usable memory:** VRAM minus 1 GB per card, RAM minus 2 GB (Linux) / 4 GB (Windows) for the system.
-  Changeable in Advanced mode.
+  Changeable on the Advanced tab.
 - **MoE models** (e.g. Qwen3-30B-A3B) must fit entirely, but use only part of the parameters per
   word, so they stay usable even partly in RAM. The program then suggests LM Studio's
   *"Force Model Expert Weights onto CPU"* or llama.cpp's `--cpu-moe`.
@@ -126,29 +132,33 @@ The bar has three rows: **System**, **Peak** and **All at once**.
 ### Compare models
 
 Click **Save for comparison** under a result to keep the model with its settings. The **Statistics**
-tab lists up to 10 saved models per group (language, image, speech/music) with the date checked,
+tab shows one table with **Text / Image / Audio** filter buttons – up to 10 saved models per group –
 compared live on this computer: today's verdict, relative speed (★ fastest, ▼ slowest), the largest
 context or image that fits entirely on the card, the best quantization that fits, headroom, size and
 whether you already have it on disk. **Hugging Face data** (on request): downloads in the last 30 days,
 likes, last update and license – with a warning for non-commercial or gated models.
-Double-click opens a model again with the same settings.
-Everything stays in a file on your computer.
+Under the table: how many models run (green / yellow / red), the fastest, the slowest and the most
+popular one, and the top 10 by Hugging Face downloads. Double-click opens a model again with the
+same settings. Everything stays in a file on your computer.
 
 ### Benchmark – Zacharski tests
 
-For models installed in **Ollama**, the **Benchmark…** button measures real speed on your computer:
+On the **Benchmark** tab, tick models installed in **Ollama** and measure their real speed:
 prompt processing (tokens/s, time to first token) and generation (tokens/s) at 1k and 8k context
 (32k on request), with a warm-up and the median of 3 runs. AI Bóbr shows its prediction next to each
 measurement, skips models that won't fit, measures one model at a time and warns that testing several
 models takes long and loads the computer. It also notices a laptop card held at a low power limit and
-a card that shares its memory with the monitor. Results are saved on your computer (`benchmarks.sqlite`).
+a card that shares its memory with the monitor. A **live log** shows every run, with progress and the
+time left; you can copy it, save it to a file or export the results to CSV. Results are saved on your
+computer (`benchmarks.sqlite`).
 
 ### Models on your disk
 
-**Models on disk…** (or `--scan [FOLDER]`) lists the models you already have – from Ollama,
+The **Benchmark** tab (or `--scan [FOLDER]`) lists the models you already have – from Ollama,
 LM Studio, the Hugging Face cache, llama.cpp and GPT4All, or from any folder you pick (e.g. Stable
 Diffusion or ComfyUI). It asks first, reads only file names, sizes and headers, never opens pickle
-files (`.ckpt`) and sends nothing anywhere. Text models can be checked with one double-click.
+files (`.ckpt`) and sends nothing anywhere. The list is remembered, each model gets a verdict for
+your computer, and a double-click checks it on the Check tab.
 
 ### Model list
 
@@ -201,20 +211,26 @@ Q4_K_M, kontekst, cache KV, MoE. AI Bóbr odpowiada na jedno pytanie dla **konkr
 czy się zmieści i gdzie?
 
 - **Wskazujesz model:** link do Hugging Face, `hf.co/<repo>:Q4_K_M` (ta sama forma co w
-  `ollama run`), plik `.gguf` z dysku albo dane wpisane ręcznie. W trybie Zaawansowanym także
-  model, który masz już w Ollamie (**Z Ollamy…**).
+  `ollama run`), plik `.gguf` z dysku, model z listy w zakładce **Benchmark** (Ollama, LM Studio…)
+  albo dane wpisane ręcznie (**Plik → Wpisz dane modelu ręcznie…**). Kontekst i cache KV są tuż
+  obok kwantyzacji.
 - **Program sprawdza komputer:** procesor, RAM i karty graficzne (NVIDIA, AMD, Intel; Linux i Windows).
 - **Dostajesz pasek pamięci:** szybki VRAM i wolniejszy RAM obok tego, czego potrzebuje model –
   wag, pamięci rozmowy (cache KV) i narzutu.
   - 🟢 całość w karcie graficznej – pełna prędkość,
   - 🟡 część w RAM – wolniej (z procentem, który zostaje w karcie),
   - 🔴 nie mieści się wcale – i ile brakuje.
-- **„Wyjaśnienie”** (jedno kliknięcie, domyślnie zwinięte) mówi prostymi słowami, co zajmuje
+- **Dwa mierniki** pokazują, jaką część karty graficznej i RAM zajmie model.
+- **„Wyjaśnienie”** (zawsze widoczne pod wynikiem) mówi prostymi słowami, co zajmuje
   pamięć i **co możesz zrobić**: kwantyzację, długość kontekstu albo ustawienie cache KV, które
   naprawdę zmieniają werdykt, albo mniejszy model z wbudowanej listy, który się zmieści.
 
 Program czyta tylko nagłówek pliku modelu – kilka MB, nie gigabajty – więc sprawdzenie modelu
 40 GB z Hugging Face trwa kilka sekund. Nic nie jest pobierane ani instalowane.
+
+Okno ma cztery zakładki – **Sprawdź**, **Benchmark**, **Statystyka**, **Zaawansowane** (ten sam model
+na sprzęcie, który wpiszesz: „co by było z kartą 16 GB?”) – i **styl ciemny albo jasny** (ikona ☀/☾
+albo Ustawienia → Styl). Język zmienisz w osobnym menu **Język**.
 
 ### Szybki start
 
@@ -233,7 +249,7 @@ python main.py                          # okno
 ```
 
 **macOS:** jeszcze nieobsługiwany – program się uruchomi, ale RAM i VRAM trzeba wpisać ręcznie
-(tryb Zaawansowany). Pamięć zunifikowana Apple Silicon wymaga własnych reguł, których na razie
+(zakładka Zaawansowane). Pamięć zunifikowana Apple Silicon wymaga własnych reguł, których na razie
 nie możemy sprawdzić.
 
 ### Tryb tekstowy
@@ -256,7 +272,7 @@ cache KV = 2 × warstwy × głowice KV × wymiar głowicy × kontekst × bajty n
   bity na wagę z `data/quants.json` (oznaczone jako szacunek).
 - **Cache KV:** z architektury modelu; rośnie z kontekstem. 8B przy 8k ≈ 1 GB, przy 32k ≈ 4 GB.
 - **Pamięć użytkowa:** VRAM minus 1 GB na kartę, RAM minus 2 GB (Linux) / 4 GB (Windows) dla
-  systemu. Do zmiany w trybie Zaawansowanym.
+  systemu. Do zmiany w zakładce Zaawansowane.
 - **Modele MoE** (np. Qwen3-30B-A3B) muszą się zmieścić w całości, ale przy każdym słowie używają
   tylko części parametrów, więc częściowo w RAM nadal są używalne. Program podpowiada wtedy
   „Force Model Expert Weights onto CPU” w LM Studio albo `--cpu-moe` w llama.cpp.
@@ -294,29 +310,33 @@ trzy wiersze: **System**, **Szczyt** i **Naraz**.
 ### Porównanie modeli
 
 Przycisk **Zapisz do porównania** pod wynikiem zapamiętuje model razem z ustawieniami. Zakładka
-**Statystyka** pokazuje do 10 zapisanych modeli w każdej grupie (językowe, obrazów, mowy i muzyki)
+**Statystyka** ma jedną tabelę z przyciskami filtrów **Tekst / Obraz / Dźwięk** – do 10 zapisanych modeli w grupie –
 porównanych na bieżąco na tym komputerze: werdykt dziś, szybkość względna (★ najszybszy, ▼ najwolniejszy),
 największy kontekst albo obraz w całości w karcie, najlepsza kwantyzacja w karcie, zapas, rozmiar i to,
 czy model już masz na dysku. **Dane z Hugging Face** (na żądanie): pobrania z ostatnich 30 dni,
 polubienia, data aktualizacji i licencja – z ostrzeżeniem przy licencji niekomercyjnej albo wymaganej
-akceptacji warunków. Dwuklik otwiera model ponownie z tymi samymi ustawieniami.
-Wszystko zostaje w pliku na Twoim komputerze.
+akceptacji warunków. Pod tabelą: ile modeli pójdzie (zielone / żółte / czerwone), najszybszy,
+najwolniejszy i najpopularniejszy oraz 10 najczęściej pobieranych z Hugging Face. Dwuklik otwiera
+model ponownie z tymi samymi ustawieniami. Wszystko zostaje w pliku na Twoim komputerze.
 
 ### Benchmark – testy Zacharskiego
 
-Dla modeli zainstalowanych w **Ollamie** przycisk **Benchmark…** mierzy prawdziwą szybkość na Twoim
-komputerze: przetwarzanie promptu (tokeny/s, czas do pierwszego tokenu) i generowanie (tokeny/s) przy
+W zakładce **Benchmark** zaznaczasz modele zainstalowane w **Ollamie** i mierzysz ich prawdziwą szybkość
+na Twoim komputerze: przetwarzanie promptu (tokeny/s, czas do pierwszego tokenu) i generowanie (tokeny/s) przy
 kontekście 1k i 8k (32k na życzenie), z rozgrzewką i medianą z 3 przebiegów. Obok pomiaru AI Bóbr pokazuje
 swoje przewidywanie, pomija modele, które się nie zmieszczą, mierzy modele po kolei i ostrzega, że test
 kilku modeli trwa długo i obciąża komputer. Zauważa też kartę w laptopie na niskim limicie mocy i kartę,
-która dzieli pamięć z monitorem. Wyniki zostają na Twoim komputerze (`benchmarks.sqlite`).
+która dzieli pamięć z monitorem. **Dziennik na żywo** pokazuje każdy przebieg, postęp i czas do końca;
+możesz go skopiować, zapisać do pliku albo wyeksportować wyniki do CSV. Wyniki zostają na Twoim
+komputerze (`benchmarks.sqlite`).
 
 ### Modele na dysku
 
-**Modele na dysku…** (albo `--scan [FOLDER]`) pokazuje modele, które już masz – z Ollamy, LM Studio,
+Zakładka **Benchmark** (albo `--scan [FOLDER]`) pokazuje modele, które już masz – z Ollamy, LM Studio,
 pamięci podręcznej Hugging Face, llama.cpp i GPT4All albo ze wskazanego folderu (np. Stable Diffusion,
 ComfyUI). Najpierw pyta o zgodę, czyta tylko nazwy, rozmiary i nagłówki plików, nigdy nie otwiera plików
-pickle (`.ckpt`) i nic nie wysyła. Model tekstowy sprawdzisz dwuklikiem.
+pickle (`.ckpt`) i nic nie wysyła. Lista jest zapamiętana, każdy model ma werdykt dla Twojego
+komputera, a dwuklik sprawdza go w zakładce Sprawdź.
 
 ### Lista modeli
 
