@@ -1,4 +1,4 @@
-"""Przycisk „Wyjaśnienie” i zwijany panel (SPEC §8) – domyślnie zwinięty."""
+"""Wyjaśnienie pod wynikiem (SPEC §8) – od etapu 13b zawsze widoczne (decyzja autora)."""
 from __future__ import annotations
 
 import tkinter as tk
@@ -13,11 +13,11 @@ from aibobr.knowledge.advisor import Explanation, render, render_list
 class ExplanationPanel(ttk.Frame):
     def __init__(self, master, **kw):
         super().__init__(master, style="Inner.TFrame", **kw)
-        self.expanded = False
+        self.expanded = True                       # zawsze rozwinięte (etap 13b)
         self.explanation: Optional[Explanation] = None
-        self.button = ttk.Button(self, command=self.toggle)
-        self.button.pack(anchor="w", padx=9, pady=(6, 8))
-        self.text = tk.Text(self, height=14, wrap="word", relief="flat", borderwidth=0,
+        self.title = ttk.Label(self, text=t("gui.explain"), style="Title.TLabel")
+        self.title.pack(anchor="w", padx=9, pady=(8, 2))
+        self.text = tk.Text(self, height=5, wrap="word", relief="flat", borderwidth=0,
                             background=COLORS["panel"], foreground=COLORS["text"],
                             highlightthickness=1, highlightbackground=COLORS["border"],
                             highlightcolor=COLORS["border"], insertbackground=COLORS["text"],
@@ -26,37 +26,23 @@ class ExplanationPanel(ttk.Frame):
         bold.configure(weight="bold")
         self.text.tag_configure("title", font=bold, spacing1=10, spacing3=2)
         self.text.tag_configure("item", lmargin1=14, lmargin2=30, spacing1=1)
+        self.text.tag_configure("muted", foreground=COLORS["muted"])
+        self.text.pack(fill="both", expand=True, padx=2, pady=(0, 8))
         # Szerokość okna zmienia liczbę zawiniętych linii – przeliczamy wysokość po zmianie.
         self.text.bind("<Configure>", lambda e: self._fit_height())
-        self._update_button()
-
-    def _update_button(self) -> None:
-        arrow = "▾" if self.expanded else "▸"
-        self.button.configure(text=f"{arrow} {t('gui.explain')}")
-        self.button.state(["!disabled"] if self.explanation else ["disabled"])
-
-    def toggle(self) -> None:
-        if not self.expanded and self.explanation is None:
-            return
-        self.expanded = not self.expanded
-        if self.expanded:
-            self.text.pack(fill="both", expand=True, padx=2, pady=(0, 8))
-        else:
-            self.text.pack_forget()
-        self._update_button()
+        self._fill()
 
     def set_explanation(self, explanation: Optional[Explanation]) -> None:
         self.explanation = explanation
-        if explanation is None and self.expanded:
-            self.toggle()
         self._fill()
-        self._update_button()
 
     def _fill(self) -> None:
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")
         e = self.explanation
-        if e is not None:
+        if e is None:
+            self.text.insert("end", t("gui.explain_empty"), "muted")
+        else:
             sections = [(render(e.need[0]), e.need[1:]),
                         (t("expl.pc.title"), e.computer),
                         (t(e.actions_title), e.actions)]
@@ -73,6 +59,6 @@ class ExplanationPanel(ttk.Frame):
         pixels = self.text.count("1.0", "end", "ypixels")
         line = tkfont.nametofont("TkDefaultFont").metrics("linespace")
         value = pixels[0] if isinstance(pixels, tuple) else (pixels or 0)
-        lines = max(5, min(value // max(line, 1) + 1, 32))
+        lines = max(2, min(value // max(line, 1) + 1, 40))
         if int(self.text.cget("height")) != lines:      # bez pętli zdarzeń <Configure>
             self.text.configure(height=lines)

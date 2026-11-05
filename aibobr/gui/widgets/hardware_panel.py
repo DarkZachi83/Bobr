@@ -1,9 +1,10 @@
 """Panel „Twój komputer” (SPEC §3, §10).
 
-Automatyczny: podsumowanie skanu, liczy z ustawieniami domyślnymi.
-Zaawansowany: te same dane w polach liczbowych (bez suwaków), wpisane ze skanu – żeby
-poprawić tylko błędną wartość albo sprawdzić sprzęt, którego jeszcze nie ma – oraz
-parametry uruchomienia (kontekst, cache KV, rezerwy, próg zapasu).
+Od etapu 13b dwa osobne panele zamiast przełącznika trybu:
+- zakładka Sprawdź – podsumowanie skanu (mode="auto"), mierniki nad nim,
+- zakładka Zaawansowane – te same dane w polach liczbowych (bez suwaków), wpisane ze skanu –
+  żeby poprawić tylko błędną wartość albo sprawdzić sprzęt, którego jeszcze nie ma – oraz
+  własne parametry uruchomienia (kontekst, cache KV, rezerwy, próg zapasu).
 """
 from __future__ import annotations
 
@@ -44,11 +45,14 @@ class GpuRow:
 
 class HardwarePanel(ttk.Frame):
     def __init__(self, master, on_change: Callable[[], None],
-                 on_save_defaults: Callable[[dict], None]):
+                 on_save_defaults: Callable[[dict], None], mode: str = "auto",
+                 title: Optional[str] = None, wrap: int = 0):
         super().__init__(master, style="Panel.TFrame")
         self.on_change = on_change
         self.on_save_defaults = on_save_defaults
-        self.mode = tk.StringVar(value="auto")
+        self.mode = tk.StringVar(value=mode)
+        self.wrap = wrap                          # zawijanie wartości (wąska prawa kolumna)
+        self.touched = False                      # pola Zaawansowanych zmienione przez użytkownika
         self.scan: Optional[HardwareProfile] = None
         self.platform = "linux"
         self.defaults = RunSettings()
@@ -72,24 +76,37 @@ class HardwarePanel(ttk.Frame):
 
         top = ttk.Frame(self, style="Inner.TFrame")
         top.pack(fill="x", padx=10, pady=(8, 4))
-        ttk.Label(top, text=t("gui.computer"), style="Title.TLabel").pack(side="left")
-        for value, key in (("advanced", "gui.mode.advanced"), ("auto", "gui.mode.auto")):
-            ttk.Radiobutton(top, text=t(key), value=value, variable=self.mode,
-                            style="Panel.TRadiobutton",
-                            command=self._mode_changed).pack(side="right", padx=4)
+        ttk.Label(top, text=title or t("gui.computer"), style="Title.TLabel").pack(side="left")
+        self.meter_box = ttk.Frame(self, style="Inner.TFrame")       # mierniki (main_window)
+        self.meter_box.pack(fill="x", padx=10)
         self.body = ttk.Frame(self, style="Inner.TFrame")
         self.body.pack(fill="x", padx=10, pady=(0, 8))
+        self.bind("<Destroy>", self._cancel, add="+")
+
+    def _cancel(self, event=None) -> None:
+        if self._pending and (event is None or event.widget is self):
+            try:
+                self.after_cancel(self._pending)
+            except Exception:
+                pass
+            self._pending = None
 
     # ------------------------------------------------------------------ dane wejściowe
     def set_scan(self, hw: Optional[HardwareProfile], defaults: RunSettings, platform: str,
                  unsupported: Optional[str] = None) -> None:
         self.scan, self.defaults, self.platform, self.unsupported = hw, defaults, platform, unsupported
         self.reset_fields()
-        if unsupported:
-            self.mode.set("advanced")
         self.render()
 
     def reset_fields(self) -> None:
+        self._quiet = True
+        try:
+            self._reset_fields()
+        finally:
+            self._quiet = False
+        self.touched = False
+
+    def _reset_fields(self) -> None:
         hw, d = self.scan, self.defaults
         self.ram_shown = _num(to_gib(hw.ram_total)) if hw and hw.ram_total else ""
         self.ram.set(self.ram_shown)
@@ -106,7 +123,7 @@ class HardwarePanel(ttk.Frame):
         self.batch.set("1")
 
     def export_state(self) -> dict:
-        return {"mode": self.mode.get(), "ram": self.ram.get(), "context": self.context.get(),
+        return {"mode": self.mode.get(), "touched": self.touched, "ram": self.ram.get(), "context": self.context.get(),
                 "kv": self.kv.get(), "vram_reserve": self.vram_reserve.get(),
                 "ram_reserve": self.ram_reserve.get(), "margin": self.margin.get(),
                 "resolution": self.resolution.get(), "batch": self.batch.get(),
@@ -121,6 +138,7 @@ class HardwarePanel(ttk.Frame):
             row.shown = _num(to_gib(gpu.vram_total)) if gpu and gpu.vram_total else ""
             self.rows.append(row)
         self.mode.set(state["mode"])
+        self.touched = state.get("touched", False)
         self.render()
 
     # ------------------------------------------------------------------ widok
@@ -129,8 +147,9 @@ class HardwarePanel(ttk.Frame):
         self.on_change()
 
     def _changed(self) -> None:
-        if self.mode.get() != "advanced":
+        if self.mode.get() != "advanced" or getattr(self, "_quiet", False):
             return
+        self.touched = True
         if self._pending:
             self.after_cancel(self._pending)
         self._pending = self.after(350, self.on_change)
@@ -155,8 +174,8 @@ class HardwarePanel(ttk.Frame):
             self._render_advanced()
 
     def _line(self, parent, label: str, value: str, row: int, style="Panel.TLabel") -> None:
-        ttk.Label(parent, text=label, style="Muted.TLabel").grid(row=row, column=0, sticky="w", padx=(0, 12))
-        ttk.Label(parent, text=value, style=style).grid(row=row, column=1, sticky="w")
+        ttk.Label(parent, text=label, style="Muted.TLabel").grid(row=row, column=0, sticky="nw", padx=(0, 12))
+        ttk.Label(parent, text=value, style=style, wraplength=self.wrap).grid(row=row, column=1, sticky="nw")
 
     def _render_auto(self) -> None:
         hw = self.scan
@@ -241,6 +260,19 @@ class HardwarePanel(ttk.Frame):
         ttk.Button(buttons, text=t("gui.save_defaults"), command=self._save).pack(side="left")
         ttk.Button(buttons, text=t("gui.reset_scan"),
                    command=lambda: (self.reset_fields(), self.render(), self.on_change())).pack(side="left", padx=6)
+
+    def copy_run(self, context: str, kv: str, resolution: str, batch: str) -> None:
+        """Start z wartości zakładki Sprawdź – dopóki użytkownik sam nic tu nie zmienił."""
+        if self.touched:
+            return
+        self._quiet = True
+        try:
+            self.context.set(context)
+            self.kv.set(kv)
+            self.resolution.set(resolution)
+            self.batch.set(batch)
+        finally:
+            self._quiet = False
 
     def _add_gpu(self) -> None:
         self.rows.append(GpuRow(None, t("gui.gpu_n", n=len(self.rows) + 1), "", True))

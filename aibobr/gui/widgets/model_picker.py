@@ -1,4 +1,8 @@
-"""Panel „Wskaż model” (SPEC §4): link / plik .gguf / wpis ręczny + wybór kwantyzacji."""
+"""Sekcja „Model” (SPEC §4, etap 13b): link / plik .gguf / wpis ręczny, kwantyzacja,
+a w zakładce Sprawdź także kontekst i KV cache (RunOptions).
+
+Komunikaty (wczytywanie, błędy) idą do paska stanu okna – on_status(tekst, rodzaj).
+"""
 from __future__ import annotations
 
 import tkinter as tk
@@ -7,52 +11,73 @@ from typing import Callable, Optional
 
 from aibobr.i18n import fmt_gb, t
 from aibobr.sources.base import LoadedModel
-from aibobr.gui.theme import COLORS
 
 
 class ModelPicker(ttk.Frame):
     def __init__(self, master, on_check: Callable[[str], None], on_manual: Callable[[], None],
-                 on_quant: Callable[[str], None], on_ollama: Optional[Callable[[], None]] = None,
-                 on_found: Optional[Callable[[], None]] = None):
+                 on_quant: Callable[[str], None], on_found: Optional[Callable[[], None]] = None,
+                 on_status: Optional[Callable[[str, str], None]] = None,
+                 options: Optional[Callable[[tk.Widget], tk.Widget]] = None):
         super().__init__(master, style="Panel.TFrame")
         self.on_check, self.on_quant = on_check, on_quant
+        self.on_status = on_status or (lambda text, kind: None)
         self.text = tk.StringVar()
         self.quant_label = tk.StringVar()
         self._quants: dict[str, str] = {}
-
-        ttk.Label(self, text=t("gui.model"), style="Title.TLabel").grid(
-            row=0, column=0, columnspan=4, sticky="w", padx=10, pady=(8, 2))
-        ttk.Label(self, text=t("cli.ask_model_hint"), style="Muted.TLabel").grid(
-            row=1, column=0, columnspan=4, sticky="w", padx=10)
-        self.entry = ttk.Entry(self, textvariable=self.text)
-        self.entry.grid(row=2, column=0, sticky="we", padx=(10, 6), pady=6)
-        self.entry.bind("<Return>", lambda e: self._check())
-        ttk.Button(self, text=t("gui.browse"), command=self.browse).grid(row=2, column=1, padx=(0, 6))
-        self.check_button = ttk.Button(self, text=t("gui.check"), style="Accent.TButton",
-                                       command=self._check)
-        self.check_button.grid(row=2, column=2, padx=(0, 10))
         self.columnconfigure(0, weight=1)
 
+        ttk.Label(self, text=t("gui.model"), style="Title.TLabel").grid(
+            row=0, column=0, sticky="w", padx=10, pady=(8, 2))
+        ttk.Label(self, text=t("cli.ask_model_hint"), style="Muted.TLabel").grid(
+            row=1, column=0, sticky="w", padx=10)
+
+        line = ttk.Frame(self, style="Inner.TFrame")
+        line.grid(row=2, column=0, sticky="we", padx=10, pady=6)
+        line.columnconfigure(0, weight=1)
+        self.entry = ttk.Entry(line, textvariable=self.text)
+        self.entry.grid(row=0, column=0, sticky="we", padx=(0, 6))
+        self.entry.bind("<Return>", lambda e: self._check())
+        ttk.Button(line, text=t("gui.paste"), command=self.paste).grid(row=0, column=1, padx=(0, 4))
+        ttk.Button(line, text=t("gui.clear"), command=self.clear).grid(row=0, column=2, padx=(0, 4))
+        ttk.Button(line, text=t("gui.browse"), command=self.browse).grid(row=0, column=3, padx=(0, 6))
+        self.check_button = ttk.Button(line, text=t("gui.check"), style="Accent.TButton", command=self._check)
+        self.check_button.grid(row=0, column=4)
+
         bottom = ttk.Frame(self, style="Inner.TFrame")
-        bottom.grid(row=3, column=0, columnspan=3, sticky="we", padx=10, pady=(0, 8))
+        bottom.grid(row=3, column=0, sticky="we", padx=10, pady=(0, 4))
         ttk.Label(bottom, text=t("gui.quant"), style="Muted.TLabel").pack(side="left")
-        self.combo = ttk.Combobox(bottom, textvariable=self.quant_label, state="disabled", width=26)
-        self.combo.pack(side="left", padx=6)
+        self.combo = ttk.Combobox(bottom, textvariable=self.quant_label, state="disabled", width=22)
+        self.combo.pack(side="left", padx=(6, 12))
         self.combo.bind("<<ComboboxSelected>>", lambda e: self.on_quant(self._quants[self.quant_label.get()]))
-        ttk.Button(bottom, text=t("gui.manual"), command=on_manual).pack(side="right")
-        # W obu trybach: „co ja w ogóle mam na dysku?” (etap 9a).
-        self.found_button = ttk.Button(bottom, text=t("gui.scan"), command=on_found or (lambda: None))
+        self.options = options(bottom) if options else None
+        if self.options is not None:
+            self.options.pack(side="left")
+
+        extra = ttk.Frame(self, style="Inner.TFrame")
+        extra.grid(row=4, column=0, sticky="we", padx=10, pady=(2, 8))
+        ttk.Button(extra, text=t("gui.manual"), command=on_manual).pack(side="right")
+        # „Co ja w ogóle mam na dysku?” (etap 9a) – w 13c osobna zakładka.
+        self.found_button = ttk.Button(extra, text=t("gui.scan"), command=on_found or (lambda: None))
         self.found_button.pack(side="right", padx=(0, 6))
-        # Tylko w trybie Zaawansowanym (decyzja autora: tryb Automatyczny zostaje prosty).
-        self.ollama_button = ttk.Button(bottom, text=t("gui.ollama"), command=on_ollama or (lambda: None))
-        self.advanced = False
-        self.status = ttk.Label(self, text="", style="Muted.TLabel", wraplength=760)
-        self.status.grid(row=4, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 8))
-        self.status.grid_remove()
 
     def _check(self) -> None:
         if self.text.get().strip():
-            self.on_check(self.text.get())
+            self.on_check(self.text.get().strip())
+
+    def paste(self) -> None:
+        try:
+            text = self.clipboard_get().strip()
+        except tk.TclError:
+            text = ""
+        if text:
+            self.text.set(text)
+            self.entry.icursor("end")
+        else:
+            self.on_status(t("gui.clipboard_empty"), "Muted")
+
+    def clear(self) -> None:
+        self.text.set("")
+        self.entry.focus_set()
 
     def browse(self) -> None:
         path = filedialog.askopenfilename(
@@ -62,26 +87,11 @@ class ModelPicker(ttk.Frame):
             self.text.set(path)
             self.on_check(path)
 
-    def set_advanced(self, advanced: bool) -> None:
-        if advanced == self.advanced:
-            return
-        self.advanced = advanced
-        if advanced:
-            self.ollama_button.pack(side="right", padx=(0, 6))
-        else:
-            self.ollama_button.pack_forget()
-
     def set_busy(self, busy: bool) -> None:
         self.check_button.state(["disabled"] if busy else ["!disabled"])
 
     def set_status(self, text: str = "", kind: str = "Muted") -> None:
-        if text:
-            self.status.configure(text=text, style=f"{kind}.TLabel" if kind != "Error" else "Note.TLabel")
-            if kind == "Error":
-                self.status.configure(foreground=COLORS["error"])
-            self.status.grid()
-        else:
-            self.status.grid_remove()
+        self.on_status(text, kind)
 
     def set_model(self, model: Optional[LoadedModel], quant: Optional[str]) -> None:
         self._quants.clear()

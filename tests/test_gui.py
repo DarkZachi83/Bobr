@@ -92,20 +92,26 @@ class GuiSmokeTest(unittest.TestCase):
         w = self.window()
         self.assertIn("Pójdzie na Twoim komputerze", w.verdict.cget("text"))
         auto = w.verdict.cget("text")
-        w.hardware.show_advanced()
-        self.pump(seconds=0.5)
-        self.assertEqual(w.verdict.cget("text"), auto)          # samo przełączenie nic nie zmienia
-        w.hardware.context.set("20k")                       # 16k mieści się (pomiar autora)
+        # Zaawansowane: start z wartości Sprawdź – ten sam wynik, dopóki nic nie zmienisz
+        self.assertEqual(w.adv_result.verdict.cget("text"), auto)
+        w.run_options.context.set("20k")                    # kontekst w zakładce Sprawdź (etap 13b)
         self.pump(lambda: "wolniej" in w.verdict.cget("text"), 3)
-        self.assertIn("nieco wolniej", w.verdict.cget("text"))
-        w.explanation.toggle()
-        self.assertIn("Co możesz zrobić", w.explanation.text.get("1.0", "end"))
+        self.assertIn("nieco wolniej", w.verdict.cget("text"))      # 16k mieści się (pomiar autora)
+        self.assertIn("Co możesz zrobić", w.explanation.text.get("1.0", "end"))   # zawsze widoczne
+        self.assertEqual(w.advanced.context.get(), "20k")           # Zaawansowane idą za Sprawdź…
+        w.advanced.context.set("8k")                                # …dopóki ich nie zmienisz
+        self.pump(lambda: "całość" in w.adv_result.verdict.cget("text"), 3)
+        w.run_options.context.set("32k")
+        self.pump(seconds=0.6)
+        self.assertEqual(w.advanced.context.get(), "8k")            # niezależne
+        w.run_options.context.set("20k")
+        self.pump(lambda: "wolniej" in w.verdict.cget("text"), 3)
         w.change_language("en")
         self.pump(seconds=0.5)
         self.assertIn("AI BEAVER", self.root.title())
-        self.assertEqual(w.hardware.context.get(), "20k")         # stan zachowany
+        self.assertEqual(w.run_options.context.get(), "20k")        # stan zachowany
+        self.assertEqual(w.advanced.context.get(), "8k")
         self.assertIn("a bit slower", w.verdict.cget("text"))
-        self.assertTrue(w.explanation.expanded)
 
     def test_vram_busy_shown_and_noted(self):
         import json
@@ -122,7 +128,6 @@ class GuiSmokeTest(unittest.TestCase):
             if widget.winfo_class() == "TLabel":
                 texts.append(str(widget.cget("text")))
         self.assertTrue(any("zajęte teraz" in x and "VRAM" in x for x in texts))
-        w.explanation.toggle()
         self.assertIn("10,8 GB użytkowe", w.explanation.text.get("1.0", "end"))   # 12 − 1,25 zajęte
         notes = [str(x.cget("text")) for x in w.notes.winfo_children() if x.winfo_class() == "TLabel"]
         self.assertTrue(any("system i otwarte programy" in x for x in notes), notes)
@@ -194,29 +199,35 @@ class GuiSmokeTest(unittest.TestCase):
         w = self.window()
         self.assertFalse(w.save_button.instate(["disabled"]))
         w.save_compare()
-        self.assertIn("Statystyka", w.save_status.cget("text"))
+        self.assertIn("Statystyka", w.status_bar.cget("text"))
         section = w.stats.sections["text"]
         self.assertEqual(len(section.items), 1)
         saved = next(iter(section.items.values()))
         self.assertEqual(saved.target, str(self.gguf))
         self.assertIn("(1/10)", section.toggle.cget("text"))
+        self.assertIn("(1/10)", w.stats.filters["text"].cget("text"))          # przycisk filtra
+        self.assertIn("(0/10)", w.stats.filters["image"].cget("text"))
         w.save_compare()                                                 # ten sam model – odświeżenie
-        self.assertIn("odświeżyłem", w.save_status.cget("text"))
+        self.assertIn("odświeżyłem", w.status_bar.cget("text"))
         self.assertEqual(len(section.items), 1)
-        # Otwórz z innymi ustawieniami: kontekst 32k → tryb Zaawansowany i nowy wynik
+        # Otwórz z innymi ustawieniami: kontekst 32k → pole kontekstu w Sprawdź i nowy wynik
         from dataclasses import replace
         w.open_saved(replace(saved, context=32768))
-        self.assertEqual(w.tabs.index(w.tabs.select()), 0)
-        self.assertEqual(w.hardware.mode.get(), "advanced")
+        self.assertEqual(w.tab, "check")
+        self.assertEqual(w.run_options.context.get(), "32k")
         self.pump(lambda: w.model is not None and w.verdict.cget("text") and w.loading is None, 5)
         self.assertIn("32k", w.header.cget("text").replace(" ", ""))
+        w.stats.kind.set("image")                                        # filtr: jedna tabela naraz
+        w.stats._show_kind()
+        self.assertFalse(section.winfo_manager())
+        self.assertTrue(w.stats.sections["image"].winfo_manager())
         w.stats.remove(saved)
         self.assertEqual(len(section.items), 0)
 
     def test_stats_tab_compares_on_this_computer(self):
         w = self.window()
         w.save_compare()
-        w.tabs.select(1)
+        w.tabs.select(w.pages["stats"])
         self.pump(lambda: "Porównanie dla" in w.stats.status.cget("text"), 5)
         section = w.stats.sections["text"]
         row = section.tree.item(section.tree.get_children()[0], "values")
@@ -271,28 +282,39 @@ class GuiSmokeTest(unittest.TestCase):
     def test_fields_follow_model_kind(self):
         from tests.test_images import SDXL, safetensors
         w = self.window()
-        w.hardware.show_advanced()
-        self.pump(seconds=0.3)
-        self.assertIn("context", w.hardware.entries)                     # model tekstowy
-        self.assertNotIn("resolution", w.hardware.entries)
+        self.assertIn("context", w.advanced.entries)                     # model tekstowy
+        self.assertNotIn("resolution", w.advanced.entries)
+        self.assertIn("context", w.run_options.widgets)                  # …także w Sprawdź
         path = safetensors(Path(self.tmp.name) / "sdxl.safetensors", SDXL)
         w.check(str(path))
-        self.pump(lambda: "resolution" in w.hardware.entries, 5)
-        self.assertNotIn("context", w.hardware.entries)                  # obrazy: bez kontekstu
-        w.hardware.context.set("zle")                                    # błąd w ukrytym polu…
+        self.pump(lambda: "resolution" in w.advanced.entries, 5)
+        self.assertNotIn("context", w.advanced.entries)                  # obrazy: bez kontekstu
+        self.assertEqual(set(w.run_options.widgets), {"resolution", "batch"})
+        w.advanced.context.set("zle")                                    # błąd w ukrytym polu…
         self.pump(seconds=0.6)
-        self.assertNotIn("Popraw", w.verdict.cget("text"))               # …nie blokuje wyniku
+        self.assertNotIn("Popraw", w.adv_result.verdict.cget("text"))    # …nie blokuje wyniku
 
-    def test_ollama_button_only_in_advanced_mode(self):
+    def test_meters_show_share_of_hardware(self):
+        from aibobr.gui.widgets.meters import meter_values
         w = self.window()
-        self.assertFalse(w.picker.ollama_button.winfo_ismapped())
-        w.hardware.show_advanced()
-        self.pump(lambda: w.picker.ollama_button.winfo_ismapped(), 2)
-        self.assertTrue(w.picker.ollama_button.winfo_ismapped())
-        w.hardware.mode.set("auto")
-        w.hardware._mode_changed()
-        self.pump(seconds=0.3)
-        self.assertFalse(w.picker.ollama_button.winfo_ismapped())
+        values = meter_values(w.meters.verdict)
+        self.assertEqual(values["vram"][0], 100 * w.meters.verdict.in_vram / w.meters.verdict.capacity.vram_usable)
+        self.assertIn("z 7,0 GB", values["vram"][1])
+        w.run_options.context.set("128k")                                # nie zmieści się
+        self.pump(lambda: w.meters.verdict is not None and w.meters.verdict.level.value == "red", 3)
+        self.assertIn("brakuje", meter_values(w.meters.verdict)["ram"][1])
+
+    def test_narrow_window_stacks_columns(self):
+        from types import SimpleNamespace
+        from aibobr.gui.widgets.scroll_page import BREAKPOINT
+        w = self.window()
+        page = w.check_page
+        page._resize(SimpleNamespace(width=BREAKPOINT + 180))       # ekran serwera CI bywa mały
+        self.assertTrue(page.wide)
+        self.assertEqual(int(page.right.grid_info()["column"]), 1)
+        page._resize(SimpleNamespace(width=BREAKPOINT - 200))       # laptop 1366×768 przy 125%
+        self.assertFalse(page.wide)
+        self.assertEqual(int(page.right.grid_info()["row"]), 1)     # prawa kolumna pod lewą
 
     def test_ollama_dialog_lists_models(self):
         from aibobr.gui.dialogs.ollama_models import OllamaModelsDialog
@@ -349,17 +371,18 @@ class GuiSmokeTest(unittest.TestCase):
         w = self.window("detection_failed.json")
         self.assertIn("Nie udało się odczytać", w.verdict.cget("text"))
         button = w.notes.winfo_children()[0]
-        button.invoke()
+        button.invoke()                                        # → zakładka Zaawansowane
         self.pump(seconds=0.5)
-        self.assertEqual(w.hardware.mode.get(), "advanced")
-        w.hardware.rows[0].vram.set("24")
-        self.pump(lambda: "Zapomnij" in w.verdict.cget("text") or "Pójdzie" in w.verdict.cget("text"), 3)
-        self.assertIn("Pójdzie", w.verdict.cget("text"))
+        self.assertEqual(w.tab, "advanced")
+        w.advanced.rows[0].vram.set("24")
+        v = w.adv_result.verdict
+        self.pump(lambda: "Zapomnij" in v.cget("text") or "Pójdzie" in v.cget("text"), 3)
+        self.assertIn("Pójdzie", v.cget("text"))
 
     def test_bad_file_shows_error_in_picker(self):
         w = self.window(model=Path(self.tmp.name) / "brak.gguf")
-        self.pump(lambda: w.picker.status.winfo_ismapped(), 3)
-        self.assertIn("Nie ma takiego pliku", w.picker.status.cget("text"))
+        self.pump(lambda: "Nie ma takiego pliku" in w.status_bar.cget("text"), 3)
+        self.assertIn("Nie ma takiego pliku", w.status_bar.cget("text"))
         self.assertIsNone(w.model)
 
     def test_about_dialog_shows_picture(self):

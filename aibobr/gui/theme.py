@@ -136,4 +136,10 @@ def apply_style(root, theme: str = DEFAULT_THEME) -> str:
     style.configure("Invalid.TEntry", fieldbackground=c["invalid"])
     style.configure("Accent.TButton", font=("TkDefaultFont", 10, "bold"))
     style.configure("Toggle.TButton", font=("TkDefaultFont", 10, "bold"), anchor="w")
+    # Przyciski filtrów w Statystyce: wybrany – tło w kolorze zaznaczenia.
+    style.configure("Filter.TButton", anchor="w", padding=(10, 6))
+    style.configure("FilterOn.TButton", anchor="w", padding=(10, 6), background=c["select"],
+                    foreground="#ffffff", bordercolor=c["select"], font=("TkDefaultFont", 10, "bold"))
+    style.map("FilterOn.TButton", background=[("active", c["select"]), ("pressed", c["select"])],
+              foreground=[("active", "#ffffff")])
     return theme

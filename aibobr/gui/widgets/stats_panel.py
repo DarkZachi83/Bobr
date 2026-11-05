@@ -1,6 +1,7 @@
-"""Zakładka „Statystyka” (etap 11, SPEC §5b): zapisane modele w trzech rozwijanych grupach.
+"""Zakładka „Statystyka” (etap 11, SPEC §5b): zapisane modele.
 
-Każda grupa (tekst / obraz / dźwięk) to tabela do 10 modeli. Kolumny porównania (etap 11b)
+Od etapu 13 jedna tabela zamiast trzech rozwijanych – z boku przyciski filtrów Tekst / Obraz /
+Dźwięk (uwaga autora: ergonomia jak w makiecie). Każda grupa to do 10 modeli. Kolumny porównania (etap 11b)
 liczą się na bieżąco dla tego komputera: werdykt dziś, klasa szybkości z miejscem w grupie
 (★ najszybszy, ▼ najwolniejszy), największy kontekst albo rozdzielczość w całości w karcie,
 najlepsza kwantyzacja w karcie, zapas, rozmiar i to, czy model już jest na dysku. Pod
@@ -9,6 +10,7 @@ Dwuklik albo „Otwórz” wczytuje model w zakładce Sprawdź; „Usuń” zwal
 """
 from __future__ import annotations
 
+import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Optional
 
@@ -23,6 +25,7 @@ COLUMNS = ("model", "quant", "settings", "today", "speed", "maxfit", "bestq", "m
 WIDTHS = {"model": 150, "quant": 75, "settings": 105, "today": 110, "speed": 115, "maxfit": 95,
           "bestq": 80, "margin": 95, "size": 70, "disk": 80, "downloads": 85}
 DASH = "–"
+ICONS = {"text": "▤", "image": "▧", "audio": "♫"}
 
 
 def settings_text(item: SavedModel) -> str:
@@ -98,17 +101,15 @@ def row_values(item: SavedModel, c: Optional[Comparison], ranked: int) -> tuple:
 
 
 class Section(ttk.Frame):
-    """Nagłówek „▾ Modele językowe (3/10)” – klik zwija i rozwija tabelę."""
+    """Tabela jednej grupy z nagłówkiem „Modele językowe (3/10)” – widoczna, gdy wybrany jej filtr."""
 
-    def __init__(self, master, kind: str, on_open: Callable, on_remove: Callable,
-                 on_bench: Optional[Callable] = None):
+    def __init__(self, master, kind: str, on_open: Callable, on_remove: Callable):
         super().__init__(master, style="Panel.TFrame")
-        self.kind, self.on_open, self.on_remove, self.on_bench = kind, on_open, on_remove, on_bench
+        self.kind, self.on_open, self.on_remove = kind, on_open, on_remove
         self.items: dict[str, SavedModel] = {}
         self.comparisons: dict = {}
-        self.expanded = True
-        self.toggle = ttk.Button(self, style="Toggle.TButton", command=self.flip)
-        self.toggle.pack(fill="x", anchor="w")
+        self.toggle = ttk.Label(self, style="Title.TLabel")         # nagłówek grupy
+        self.toggle.pack(fill="x", anchor="w", padx=8, pady=(8, 2))
         self.body = ttk.Frame(self, style="Inner.TFrame")
         self.empty = ttk.Label(self.body, text=t("stats.empty"), style="Muted.TLabel")
         self.tree = ttk.Treeview(self.body, columns=COLUMNS, show="headings", height=MAX_PER_KIND,
@@ -127,23 +128,11 @@ class Section(ttk.Frame):
         buttons = ttk.Frame(self.body, style="Inner.TFrame")
         ttk.Button(buttons, text=t("stats.open"), command=self._open).pack(side="left")
         ttk.Button(buttons, text=t("stats.remove"), command=self._remove).pack(side="left", padx=6)
-        if on_bench and kind == "text":
-            ttk.Button(buttons, text="⏱ " + t("bench.button"), command=self._bench).pack(side="left")
         self.buttons = buttons
         self.body.pack(fill="x", padx=8, pady=(2, 8))
 
-    def flip(self) -> None:
-        self.expanded = not self.expanded
-        if self.expanded:
-            self.body.pack(fill="x", padx=8, pady=(2, 8))
-        else:
-            self.body.pack_forget()
-        self._title()
-
     def _title(self) -> None:
-        arrow = "▾" if self.expanded else "▸"
-        self.toggle.configure(text=f"{arrow} {t(f'stats.kind.{self.kind}')}  "
-                                   f"({len(self.items)}/{MAX_PER_KIND})")
+        self.toggle.configure(text=f"{t(f'stats.kind.{self.kind}')}  ({len(self.items)}/{MAX_PER_KIND})")
 
     def fill(self, items: list[SavedModel], comparisons: Optional[dict] = None) -> None:
         self.comparisons = comparisons or {}
@@ -158,7 +147,7 @@ class Section(ttk.Frame):
         for w in (self.empty, self.tree, self.summary, self.detail, self.buttons):
             w.pack_forget()
         if items:
-            self.tree.configure(height=max(1, len(items)))
+            self.tree.configure(height=MAX_PER_KIND)          # stała wysokość – układ się nie skacze
             self.tree.pack(fill="x")
             self.summary.configure(text=self._summary(items))
             self.summary.pack(anchor="w", pady=(6, 0))
@@ -220,16 +209,6 @@ class Section(ttk.Frame):
         if item:
             self.on_open(item)
 
-    def _bench(self) -> None:
-        """Benchmark zaznaczonego modelu – albo wszystkich z Ollamy w grupie, gdy nic nie zaznaczono."""
-        item = self.selected()
-        picked = [item] if item else list(self.items.values())
-        targets = [i.target for i in picked if i.target.startswith("ollama:")]
-        if targets:
-            self.on_bench(targets)
-        else:
-            self.detail.configure(text=t("bench.only_ollama"))
-
     def _remove(self) -> None:
         item = self.selected()
         if item:
@@ -240,7 +219,7 @@ class StatsPanel(ttk.Frame):
     def __init__(self, master, store: SavedStore, on_open: Callable[[SavedModel], None],
                  on_compare: Optional[Callable[[], None]] = None,
                  on_hf: Optional[Callable[[], None]] = None,
-                 on_bench: Optional[Callable[[list], None]] = None):
+                 kind: Optional[str] = None):
         super().__init__(master, padding=4)
         self.store, self.on_open, self.on_compare = store, on_open, on_compare
         self.comparisons: dict = {}
@@ -258,14 +237,36 @@ class StatsPanel(ttk.Frame):
                   wraplength=960).pack(anchor="w", pady=(0, 8))
         holder = ttk.Frame(self)
         holder.pack(fill="both", expand=True)
-        self.sections = {k: Section(holder, k, on_open, self.remove, on_bench) for k in KINDS}
-        for section in self.sections.values():
-            section.pack(fill="x", pady=(0, 8))
+        side = ttk.Frame(holder, style="Panel.TFrame", padding=10)
+        side.pack(side="left", fill="y", padx=(0, 10))
+        ttk.Label(side, text=t("stats.filter"), style="Muted.TLabel").pack(anchor="w", pady=(0, 6))
+        self.kind = tk.StringVar(value=kind if kind in KINDS else KINDS[0])
+        self.filters: dict[str, ttk.Button] = {}
+        for k in KINDS:
+            b = ttk.Button(side, width=16, command=lambda k=k: (self.kind.set(k), self._show_kind()))
+            b.pack(fill="x", pady=3)
+            self.filters[k] = b
+        self.sections = {k: Section(holder, k, on_open, self.remove) for k in KINDS}
         self.refresh()
+        self._show_kind()
+
+    def _show_kind(self) -> None:
+        for k, b in self.filters.items():                  # wybrany filtr – wyróżniony
+            b.configure(style="FilterOn.TButton" if k == self.kind.get() else "Filter.TButton")
+        for k, section in self.sections.items():
+            if k == self.kind.get():
+                section.pack(side="left", fill="both", expand=True)
+            else:
+                section.pack_forget()
+
+    def _filter_labels(self) -> None:
+        for k, b in self.filters.items():
+            b.configure(text=f"{ICONS[k]}  {t(f'stats.filter.{k}')}  ({len(self.store.of_kind(k))}/{MAX_PER_KIND})")
 
     def refresh(self) -> None:
         for kind, section in self.sections.items():
             section.fill(self.store.of_kind(kind), self.comparisons)
+        self._filter_labels()
 
     def show(self, comparisons: dict, hardware: str) -> None:
         self.comparisons = comparisons
