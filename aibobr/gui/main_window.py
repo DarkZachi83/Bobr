@@ -1,8 +1,11 @@
-"""Główne okno AI Bobra (SPEC §3, §6, §8, §11).
+"""Główne okno AI Bobra (SPEC §3, §6, §8, §11; układ etapu 13b).
 
-Model → Twój komputer (Automatyczny / Zaawansowany) → Wynik: pasek, werdykt,
-uwagi i przycisk „Wyjaśnienie”. Pobieranie z HF i skan idą w tle (worker.py).
-Zmiana języka przebudowuje okno, zachowując stan.
+Zakładki: Sprawdź | Statystyka | Zaawansowane (w 13c dojdą Modele na dysku).
+Sprawdź: po lewej Model (z kontekstem i KV cache) i Wynik (pasek, werdykt, uwagi,
+wyjaśnienie), po prawej Twój komputer z miernikami. Zaawansowane działają jak osobne okno:
+ten sam model, sprzęt i parametry wpisane ręcznie, własny wynik. Na dole pasek stanu.
+Pobieranie z HF i skan idą w tle (worker.py). Zmiana języka i stylu przebudowuje okno,
+zachowując stan.
 """
 from __future__ import annotations
 
@@ -18,14 +21,16 @@ from aibobr.calculator.verdict import IncompleteProfileError
 from aibobr.detection.base import PlatformUnsupported
 from aibobr.gui.dialogs.manual_model import ManualModelDialog
 from aibobr.gui.theme import COLORS, THEMES, VERDICT_COLORS, apply_style, theme_name
-from aibobr.gui.widgets.explanation import ExplanationPanel
 from aibobr.gui.widgets.hardware_panel import HardwarePanel
-from aibobr.gui.widgets.memory_bar import MemoryBar
+from aibobr.gui.widgets.meters import Meters
 from aibobr.gui.widgets.model_picker import ModelPicker
+from aibobr.gui.widgets.result_view import ResultView
+from aibobr.gui.widgets.run_options import RunOptions
+from aibobr.gui.widgets.scroll_page import ScrollPage
 from aibobr.gui.widgets.stats_panel import StatsPanel
 from aibobr.gui.worker import Worker
 from aibobr.i18n import LANGUAGES, fmt_context, fmt_params, set_language, system_language, t
-from aibobr.knowledge.advisor import audio_label, image_label, render
+from aibobr.knowledge.advisor import audio_label, image_label
 from aibobr.sources.base import LoadedModel, SourceError
 from aibobr.sources.factory import OLLAMA_PREFIX, source_kind
 
@@ -41,7 +46,7 @@ class MainWindow:
         self.model: Optional[LoadedModel] = None
         self.loading: Optional[str] = None       # komunikat wczytywania nowego modelu
         self.last = None                         # (spec, werdykt, sprzęt, ustawienia) – do zapisu
-        self.tab = 0                             # otwarta zakładka (zachowana przy zmianie języka)
+        self.tab = "check"                       # otwarta zakładka (zachowana przy zmianie języka)
         self.quant: Optional[str] = initial_quant
         self.model_text = initial_model or ""
         self.hw = None
@@ -60,61 +65,107 @@ class MainWindow:
         self.root.title(t("app.title", version=__version__))
         self._menu()
 
-        outer = ttk.Frame(self.root, padding=12)
+        outer = ttk.Frame(self.root, padding=(12, 10, 12, 4))
         outer.pack(fill="both", expand=True)
         head = ttk.Frame(outer)
-        head.pack(fill="x", pady=(0, 8))
+        head.pack(fill="x", pady=(0, 6))
         ttk.Label(head, text=t("gui.app_name"), font=("TkDefaultFont", 16, "bold")).pack(side="left")
         ttk.Label(head, text="  AI Hardware Checker", foreground=COLORS["muted"]).pack(side="left", pady=(6, 0))
+        other = "light" if self.theme == "dark" else "dark"
+        ttk.Button(head, text="☀" if self.theme == "dark" else "☾", width=3,
+                   command=lambda: self.change_theme(other)).pack(side="right")
+        self.status_bar = ttk.Label(outer, text="", foreground=COLORS["muted"], anchor="w")
+        self.status_bar.pack(side="bottom", fill="x", pady=(4, 0))
 
         self.tabs = ttk.Notebook(outer)
         self.tabs.pack(fill="both", expand=True)
-        page = ttk.Frame(self.tabs, padding=(0, 8, 0, 0))
-        self.tabs.add(page, text=t("gui.tab.check"))
+        self.pages: dict[str, tk.Widget] = {}
+
+        # --- Sprawdź
+        check = ScrollPage(self.tabs, padding=(0, 8, 0, 0))
+        self.tabs.add(check, text=t("gui.tab.check"))
+        self.pages["check"] = check
+        self.check_page = check
+        self.run_options = None
+        self.picker = ModelPicker(check.left, self.check, self.manual, self.select_quant,
+                                  self.from_disk, self.set_status, options=self._options)
+        self.picker.pack(fill="x", pady=(0, 8))
+        self.picker.text.set(self.model_text)
+        self.result = ResultView(check.left, lambda: check.wrap)
+        self.result.pack(fill="x")
+        self.save_button = ttk.Button(self.result.actions, text="💾 " + t("gui.save_compare"),
+                                      command=self.save_compare)
+        self.save_button.state(["disabled"])
+        self.save_button.pack(side="left")
+        self.bench_button = ttk.Button(self.result.actions, text="⏱ " + t("bench.button"),
+                                       command=lambda: self.open_benchmark([self.model_text]))
+        self.hardware = HardwarePanel(check.right, self.recompute, self.save_defaults, mode="auto",
+                                      wrap=230)
+        self.hardware.pack(fill="x")
+        self.meters = Meters(self.hardware.meter_box)
+        self.meters.pack(fill="x", pady=(4, 6))
+        self.manual_hint = ttk.Frame(self.hardware, style="Inner.TFrame")   # brak skanu → Zaawansowane
+
+        # --- Statystyka
         self.stats = StatsPanel(self.tabs, self.c.saved, self.open_saved, self.compare_saved,
                                 self.fetch_hf, self.open_benchmark) if self.c.saved else None
         if self.stats:
             self.tabs.add(self.stats, text=t("gui.tab.stats"))
-        self.tabs.select(self.tab)
+            self.pages["stats"] = self.stats
+
+        # --- Zaawansowane: jak osobne okno – ten sam model, sprzęt wpisany ręcznie, własny wynik
+        adv = ScrollPage(self.tabs, padding=(0, 8, 0, 0))
+        self.tabs.add(adv, text=t("gui.tab.advanced"))
+        self.pages["advanced"] = adv
+        self.adv_model = ttk.Frame(adv.left, style="Panel.TFrame")
+        self.adv_model.pack(fill="x", pady=(0, 8))
+        ttk.Label(self.adv_model, text=t("gui.model"), style="Title.TLabel").pack(anchor="w", padx=10, pady=(8, 0))
+        intro = ttk.Label(self.adv_model, text=t("gui.adv_intro"), style="Muted.TLabel", wraplength=500)
+        intro.pack(anchor="w", padx=10, fill="x")
+        intro.bind("<Configure>", lambda e: intro.configure(wraplength=max(300, e.width - 4)))
+        self.adv_model_label = ttk.Label(self.adv_model, text="", style="Panel.TLabel")
+        self.adv_model_label.pack(anchor="w", padx=10, pady=(4, 8))
+        self.adv_result = ResultView(adv.left, lambda: adv.wrap)
+        self.adv_result.pack(fill="x")
+        self.advanced = HardwarePanel(adv.right, self.recompute, self.save_defaults, mode="advanced",
+                                      title=t("gui.adv_computer"))
+        self.advanced.pack(fill="x")
+        self.adv_meters = Meters(self.advanced.meter_box)
+        self.adv_meters.pack(fill="x", pady=(4, 6))
+
+        self.tabs.select(self.pages.get(self.tab, check))
         self.tabs.bind("<<NotebookTabChanged>>", lambda e: self._tab_changed())
 
-        self.picker = ModelPicker(page, self.check, self.manual, self.select_quant, self.from_ollama,
-                                  self.from_disk)
-        self.picker.pack(fill="x", pady=(0, 8))
-        self.picker.text.set(self.model_text)
-
-        self.hardware = HardwarePanel(page, self.recompute, self.save_defaults)
-        self.hardware.pack(fill="x", pady=(0, 8))
-
-        result = ttk.Frame(page, style="Panel.TFrame")
-        result.pack(fill="x")
-        self.header = ttk.Label(result, text="", style="Title.TLabel")
-        self.header.pack(anchor="w", padx=10, pady=(8, 0))
-        self.bar = MemoryBar(result)
-        self.bar.pack(fill="x", padx=6, pady=(4, 0))
-        self.verdict = ttk.Label(result, text="", style="Verdict.TLabel", wraplength=820)
-        self.verdict.pack(anchor="w", padx=10)
-        self.notes = ttk.Frame(result, style="Inner.TFrame")
-        self.notes.pack(fill="x", padx=10, pady=(2, 0))
-        save_row = ttk.Frame(result, style="Inner.TFrame")
-        save_row.pack(fill="x", padx=10, pady=(6, 0))
-        self.save_button = ttk.Button(save_row, text="💾 " + t("gui.save_compare"), command=self.save_compare)
-        self.save_button.state(["disabled"])
-        self.save_button.pack(side="left")
-        self.bench_button = ttk.Button(save_row, text="⏱ " + t("bench.button"),
-                                       command=lambda: self.open_benchmark([self.model_text]))
-        self.save_status = ttk.Label(save_row, text="", style="Muted.TLabel", wraplength=600)
-        self.save_status.pack(side="left", padx=8)
-        self.explanation = ExplanationPanel(result)
-        self.explanation.pack(fill="x", padx=1, pady=(4, 1))
-
         if self.hw is not None or self.unsupported:
-            self.hardware.set_scan(self.hw, self.c.run_settings(self._platform()),
-                                   self._platform(), self.unsupported)
+            platform = self._platform()
+            for panel in (self.hardware, self.advanced):
+                panel.set_scan(self.hw, self.c.run_settings(platform), platform, self.unsupported)
+            self.run_options.set_defaults(self.c.run_settings(platform))
         if state:
-            self.hardware.import_state(state)
+            self.run_options.import_state(state.get("options", {}))
+            if state.get("advanced"):
+                self.advanced.import_state(state["advanced"])
         self.picker.set_model(self.model, self.quant)
         self.recompute()
+
+    # Wynik zakładki Sprawdź – skróty (używane też w testach)
+    header = property(lambda self: self.result.header)
+    bar = property(lambda self: self.result.bar)
+    verdict = property(lambda self: self.result.verdict)
+    notes = property(lambda self: self.result.notes)
+    explanation = property(lambda self: self.result.explanation)
+
+    def _options(self, parent) -> RunOptions:
+        self.run_options = RunOptions(parent, self.recompute)
+        return self.run_options
+
+    def export_state(self) -> dict:
+        return {"options": self.run_options.export_state(), "advanced": self.advanced.export_state()}
+
+    def set_status(self, text: str = "", kind: str = "Muted") -> None:
+        color = COLORS["error"] if kind == "Error" else COLORS["muted"]
+        if hasattr(self, "status_bar"):
+            self.status_bar.configure(text=text, foreground=color)
 
     def _menu(self) -> None:
         bar = tk.Menu(self.root)
@@ -162,19 +213,22 @@ class MainWindow:
         return sys.platform
 
     def start_scan(self) -> None:
+        def apply(hw, platform):
+            for panel in (self.hardware, self.advanced):
+                panel.set_scan(hw, self.c.run_settings(platform), platform, self.unsupported)
+            self.run_options.set_defaults(self.c.run_settings(platform))
+            self.recompute()
+
         def done(hw):
             self.hw = hw
-            self.hardware.set_scan(hw, self.c.run_settings(hw.platform), hw.platform)
-            self.recompute()
+            apply(hw, hw.platform)
 
         def failed(e):
             if isinstance(e, PlatformUnsupported):
                 self.unsupported = e.platform
             else:
                 self.unsupported = str(e) or type(e).__name__
-            self.hardware.set_scan(None, self.c.run_settings(self._platform()),
-                                   self._platform(), self.unsupported)
-            self.recompute()
+            apply(None, self._platform())
 
         self.worker.run("scan", self.c.scan, done, failed)
 
@@ -217,7 +271,9 @@ class MainWindow:
 
     def set_model(self, model: LoadedModel, quant: Optional[str] = None) -> None:
         self.model = model
-        self.hardware.set_model_kind("image" if model.arch.image is not None else "text")
+        kind = "image" if model.arch.image is not None else "text"
+        self.run_options.set_kind(kind)
+        self.advanced.set_model_kind(kind)
         names = [v.quant for v in model.variants]
         self.quant = quant if quant in names else model.default_variant().quant
         self.picker.set_model(model, self.quant)
@@ -241,24 +297,15 @@ class MainWindow:
         self.last = None
         if hasattr(self, "save_button"):
             self.save_button.state(["disabled"])
-            self.save_status.configure(text="")
+            self.bench_button.pack_forget()
         if not message and self.loading:     # trwa wczytywanie nowego modelu
             message, color = self.loading, COLORS["muted"]
-        self.bar.set_verdict(None, hint=self.model is None and not self.loading)
-        self.header.configure(text="")
-        self.verdict.configure(text=message, style=style, foreground=color or COLORS["text"])
-        for child in self.notes.winfo_children():
-            child.destroy()
-        self.explanation.set_explanation(None)
-
-    def from_ollama(self) -> None:
-        from aibobr.gui.dialogs.ollama_models import OllamaModelsDialog
-        dialog = OllamaModelsDialog(self.root, self.worker, self.c.ollama_models)
-        self.root.wait_window(dialog)
-        if dialog.result:
-            text = OLLAMA_PREFIX + dialog.result
-            self.picker.text.set(text)
-            self.check(text)
+        hint = self.model is None and not self.loading
+        self.result.clear(message, style, color, hint)
+        self.meters.set_verdict(None)
+        self.adv_result.clear(message, style, color, hint)
+        self.adv_meters.set_verdict(None)
+        self.adv_model_label.configure(text=t("gui.adv_no_model") if self.model is None else "")
 
     def from_disk(self) -> None:
         from aibobr.gui.dialogs.found_models import FoundModelsDialog
@@ -271,42 +318,73 @@ class MainWindow:
             self.picker.text.set(dialog.result)
             self.check(dialog.result)
 
+    def current(self):
+        """Sprzęt i ustawienia zakładki Sprawdź: skan + kontekst / KV cache z sekcji Model."""
+        hw, settings = self.hardware.current()
+        return hw, self.run_options.apply(settings)
+
     def open_benchmark(self, targets: list[str]) -> None:
         """Okno benchmarku (etap 12a) – z listy modeli na dysku, z zakładki Sprawdź albo Statystyka."""
         from aibobr.gui.dialogs.benchmark import BenchmarkDialog
         try:
-            hw, settings = self.hardware.current()
+            hw, settings = self.current()
         except ValueError:
             messagebox.showinfo(t("bench.title"), t("stats.need_hw"), parent=self.root)
             return
         BenchmarkDialog(self.root, self.c, self.worker, targets, hw, settings)
 
     def recompute(self) -> None:
-        if not hasattr(self, "bar"):
+        if not hasattr(self, "adv_result") or self.run_options is None:
             return
-        self.picker.set_advanced(self.hardware.mode.get() == "advanced")
         if self.model is None:
             self._clear_result()
             return
-        try:
-            hw, settings = self.hardware.current()
-        except ValueError as e:
-            if e.args and e.args[0] == ["scan"]:
-                self._clear_result(t("gui.scanning"), "Muted.TLabel")
-            else:
-                self._clear_result(t("gui.fix_fields"), color=COLORS["error"])
-            return
         spec = self.model.spec(self.quant)
+        o = self.run_options.export_state()
+        self.advanced.copy_run(o["context"], o["kv"], o["resolution"], o["batch"])
+        self.adv_model_label.configure(text=f"{spec.name}  ·  {spec.quant}")
+        self.last = None
+        shown = self._render(self.result, self.meters, self.current, spec, main=True)
+        self._render(self.adv_result, self.adv_meters, self.advanced.current, spec, main=False)
+        if shown is not None:
+            v, hw, settings = shown
+            self.last = (spec, v, hw, settings)
+            self.save_button.state(["!disabled"])
+            if self.model_text.startswith(OLLAMA_PREFIX) and not spec.image and not spec.audio:
+                self.bench_button.pack(side="left", padx=(6, 0))
+            else:
+                self.bench_button.pack_forget()
+        else:
+            self.save_button.state(["disabled"])
+            self.bench_button.pack_forget()
+
+    def _render(self, view: ResultView, meters: Meters, source, spec, main: bool):
+        """Jeden wynik (Sprawdź albo Zaawansowane). Zwraca (werdykt, sprzęt, ustawienia) albo None."""
+        meters.set_verdict(None)
+        try:
+            hw, settings = source()
+        except ValueError as e:
+            if e.args and e.args[0] == ["scan"] and self.unsupported:
+                view.clear(t("detection.unsupported_gui", platform=self.unsupported), color=COLORS["error"])
+                if main:                           # bez skanu: sprzęt wpisuje się w Zaawansowanych
+                    ttk.Button(view.notes, text=t("gui.set_manually"),
+                               command=self.show_advanced).pack(anchor="w", pady=4)
+            elif e.args and e.args[0] == ["scan"]:
+                view.clear(t("gui.scanning"), "Muted.TLabel")
+            else:
+                view.clear(t("gui.fix_fields"), color=COLORS["error"])
+            return None
         try:
             v, expl = self.c.explain(self.model, spec, hw, settings)
         except IncompleteProfileError:
-            self._clear_result(t("gui.missing"), color=COLORS["error"])
-            ttk.Button(self.notes, text=t("gui.set_manually"),
-                       command=self.hardware.show_advanced).pack(anchor="w", pady=4)
-            return
+            view.clear(t("gui.missing"), color=COLORS["error"])
+            if main:
+                ttk.Button(view.notes, text=t("gui.set_manually"),
+                           command=self.show_advanced).pack(anchor="w", pady=4)
+            return None
         except MissingModelData:
-            self._clear_result(t("note.estimate"), color=COLORS["error"])
-            return
+            view.clear(t("note.estimate"), color=COLORS["error"])
+            return None
 
         image = image_label(spec, settings)
         if image:                                    # obrazy: rozdzielczość zamiast kontekstu
@@ -318,28 +396,18 @@ class MainWindow:
         audio = audio_label(spec, settings)
         if audio:
             header += f"\n{audio}"
-        self.header.configure(text=header)
-        self.bar.set_verdict(v)
-        self.verdict.configure(text=render(expl.summary), style="Verdict.TLabel",
-                               foreground=VERDICT_COLORS[v.level])
-        for child in self.notes.winfo_children():
-            child.destroy()
-        for note in expl.notes:
-            ttk.Label(self.notes, text="⚠ " + render(note), style="Note.TLabel",
-                      wraplength=820).pack(anchor="w")
-        self.explanation.set_explanation(expl)
-        self.last = (spec, v, hw, settings)
-        self.save_button.state(["!disabled"])
-        if self.model_text.startswith(OLLAMA_PREFIX) and not spec.image and not spec.audio:
-            self.bench_button.pack(side="left", padx=(6, 0), before=self.save_status)
-        else:
-            self.bench_button.pack_forget()
-        self.save_status.configure(text="")
+        view.show(header, v, expl)
+        meters.set_verdict(v)
+        return v, hw, settings
+
+    def show_advanced(self) -> None:
+        self.tabs.select(self.pages["advanced"])
 
     # ------------------------------------------------------------------ porównanie (etap 11a)
     def _tab_changed(self) -> None:
-        self.tab = self.tabs.index(self.tabs.select())
-        if self.stats and self.tab == 1:
+        current = self.tabs.nametowidget(self.tabs.select())
+        self.tab = next((k for k, w in self.pages.items() if w is current), "check")
+        if self.stats and self.tab == "stats":
             self.stats.refresh()
             self.compare_saved()
 
@@ -348,7 +416,7 @@ class MainWindow:
         if not self.stats or not self.c.saved.items:
             return
         try:
-            hw, settings = self.hardware.current()
+            hw, settings = self.current()
         except ValueError:
             self.stats.set_status(t("stats.need_hw"))
             return
@@ -379,24 +447,24 @@ class MainWindow:
         if not self.last or not self.c.saved:
             return
         if not self.model_text:
-            self.save_status.configure(text=t("gui.saved_manual"))
+            self.set_status(t("gui.saved_manual"))
             return
         from aibobr.app.saved import MAX_PER_KIND, ListFull
         item = self.c.saved_entry(self.model_text, *self.last)
         try:
             new = self.c.saved.add(item)
         except ListFull as e:
-            self.save_status.configure(text=t("gui.saved_full", group=t(f"stats.kind.{e.kind}"),
-                                              max=MAX_PER_KIND))
+            self.set_status(t("gui.saved_full", group=t(f"stats.kind.{e.kind}"), max=MAX_PER_KIND))
             return
-        self.save_status.configure(text=t("gui.saved_new" if new else "gui.saved_updated"))
+        self.set_status(t("gui.saved_new" if new else "gui.saved_updated"))
         if self.stats:
             self.stats.refresh()
 
     def open_saved(self, item) -> None:
         """Zakładka Statystyka → Otwórz: model z zapisanymi ustawieniami w zakładce Sprawdź."""
-        self.tabs.select(0)
-        self.hardware.apply_saved(item)
+        self.tabs.select(self.pages["check"])
+        self.run_options.set_kind("image" if item.kind == "image" else "text")
+        self.run_options.apply_saved(item)
         self.picker.text.set(item.target)
         self.check(item.target, quant=item.quant)
 
@@ -406,19 +474,13 @@ class MainWindow:
         set_language(code)
         self.c.settings["language"] = code
         self.c.config.save_user({"language": code})
-        expanded = self.explanation.expanded
-        self.build(self.hardware.export_state())
-        if expanded:
-            self.explanation.toggle()
+        self.build(self.export_state())
 
     def change_theme(self, theme: str) -> None:
         self.theme = apply_style(self.root, theme)
         self.c.settings["theme"] = self.theme
         self.c.config.save_user({"theme": self.theme})
-        expanded = self.explanation.expanded
-        self.build(self.hardware.export_state())
-        if expanded:
-            self.explanation.toggle()
+        self.build(self.export_state())
 
     def set_token(self) -> None:
         token = simpledialog.askstring(t("gui.menu.token"), t("gui.token_prompt"),
@@ -451,7 +513,11 @@ def run_gui(controller: AppController, model: Optional[str] = None,
             quant: Optional[str] = None) -> int:
     from aibobr.gui.theme import enable_dpi_awareness
     enable_dpi_awareness()
-    root = tk.Tk()           # bez stałej wysokości: okno rośnie po rozwinięciu wyjaśnienia
+    root = tk.Tk()
+    # Dwie kolumny, gdy ekran pozwala; mniejszy ekran – jedna kolumna z przewijaniem (etap 13b).
+    width = min(1180, root.winfo_screenwidth() - 40)
+    height = min(880, root.winfo_screenheight() - 80)
+    root.geometry(f"{max(760, width)}x{max(560, height)}")
     icon = resources.path("assets", "aibobr.png")
     if icon.exists():
         root.iconphoto(True, tk.PhotoImage(file=str(icon)))

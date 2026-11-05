@@ -624,9 +624,18 @@ Zewnętrzne polecenia (`nvidia-smi`, PowerShell) mają limit czasu.
   i Windowsie; autor testuje GUI na Linuksie. Na Windowsie włączona obsługa skalowania
   ekranu (DPI), żeby okno nie było rozmazane. Gdy okna nie da się otworzyć (brak tkintera
   albo ekranu, np. przez SSH), program sam przechodzi w tryb tekstowy.
-  Układ okna: **Model** (pole na link/ścieżkę, „Plik…”, „Sprawdź”, lista kwantyzacji
-  z rozmiarami, „Wpisz dane modelu ręcznie…”) → **Twój komputer** (Automatyczny /
-  Zaawansowany) → **Wynik** (pasek, werdykt, uwagi, przycisk „Wyjaśnienie”).
+  Układ okna (etap 13b, makieta autora): zakładki **Sprawdź | Statystyka | Zaawansowane**
+  (w 13c dojdzie „Modele na dysku” po Sprawdź), pasek stanu na dole, ikona ☀/☾ zmienia styl.
+  **Sprawdź** – po lewej Model (pole, Wklej, Wyczyść, Plik…, Sprawdź, kwantyzacja, kontekst
+  i KV cache – przy obrazach rozdzielczość i liczba obrazów, „Wpisz dane modelu ręcznie…”)
+  i Wynik w ramce w kolorze werdyktu (pasek, werdykt, uwagi, Zapisz / Benchmark, wyjaśnienie
+  zawsze widoczne); po prawej Twój komputer: mierniki VRAM i RAM – **jaką część sprzętu zajmie
+  model** (część w karcie / VRAM użytkowy, część w RAM / RAM użytkowy, kolor werdyktu;
+  czerwony – „brakuje X GB”; kilka kart – jeden wspólny, bo nie wiadomo, jak program rozłoży
+  model) i dane skanu. Okno węższe niż ok. 1000 px – prawa kolumna pod lewą, przewijanie.
+  **Zaawansowane** działają jak osobne okno: ten sam model, sprzęt i parametry wpisane ręcznie
+  (kontekst i KV cache na starcie z Sprawdź, po zmianie niezależne), własny wynik z miernikami.
+  Sprawdź liczy zawsze dla skanu; bez skanu – przycisk do Zaawansowanych.
   Pobieranie z HF i skan idą w tle, okno nie zamarza. Menu: Plik, Ustawienia (token HF,
   aktualizacja listy modeli, Styl: Ciemny / Jasny), **Język** (osobne menu na wierzchu – program
   startuje w języku systemu, kto go nie zna, musi szybko znaleźć zmianę; w polskim „Język (Language)”),
@@ -635,7 +644,7 @@ Zewnętrzne polecenia (`nvidia-smi`, PowerShell) mają limit czasu.
   ciemny. Kolory w jednym miejscu (`gui/theme.py`, palety jasna i ciemna – na ciemnym tle jaśniejsze
   kolory werdyktu, żeby był kontrast); pasek pamięci, menu, listy i pole wyjaśnienia biorą je z palety.
   Bez ttkbootstrap (uruchomienie z kodu) – zwykły ttk („clam”) z tą samą paletą.
-  W trybie Zaawansowanym niezmienione pola liczą się z dokładną wartością ze skanu,
+  W Zaawansowanych niezmienione pola liczą się z dokładną wartością ze skanu,
   a nie z zaokrąglonego napisu – samo przełączenie trybu nie może zmienić wyniku.
   „Zapisz jako domyślne” zapisuje parametry do ustawień użytkownika (tryb Automatyczny).
 - **Tryb tekstowy**: `python main.py --cli <model>` (do czasu GUI także bez `--cli`).
