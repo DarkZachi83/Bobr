@@ -69,6 +69,19 @@ class HttpClient:
             except ValueError as e:
                 raise SourceError("source.http_error", f"bad JSON from {url}") from e
 
+    def post_lines(self, url: str, payload: dict, timeout: Optional[float] = None):
+        """Odpowiedź strumieniowa (NDJSON – jeden obiekt JSON w linii), np. Ollama stream: true."""
+        body = json.dumps(payload).encode("utf-8")
+        with self._request(url, {"Content-Type": "application/json"}, body, timeout) as resp:
+            for raw in resp:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    yield json.loads(raw.decode("utf-8"))
+                except ValueError as e:
+                    raise SourceError("source.http_error", f"bad JSON line from {url}") from e
+
     def get_range(self, url: str, start: int, length: int) -> tuple[bytes, str]:
         """Bajty [start, start+length) – mniej, jeśli plik się wcześniej kończy –
         oraz adres, pod którym je ostatecznie podano (po przekierowaniach)."""

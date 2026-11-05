@@ -27,6 +27,23 @@ CREATE TABLE IF NOT EXISTS perf (
     suite TEXT
 );
 CREATE INDEX IF NOT EXISTS perf_model ON perf(model, context);
+CREATE TABLE IF NOT EXISTS quality (
+    id INTEGER PRIMARY KEY,
+    measured_at TEXT NOT NULL,
+    model TEXT NOT NULL,
+    runtime TEXT NOT NULL,
+    runtime_version TEXT,
+    hardware TEXT,
+    suite TEXT NOT NULL,
+    suite_version TEXT,
+    test_id TEXT NOT NULL,
+    category TEXT,
+    passed INTEGER NOT NULL,
+    strict INTEGER,
+    reason TEXT,
+    answer TEXT
+);
+CREATE INDEX IF NOT EXISTS quality_model ON quality(model, suite);
 """
 # Kolumny dodane później – starsze bazy dostają je przy otwarciu (ALTER TABLE).
 EXTRA_COLUMNS = {"power_draw_w": "REAL", "power_limit_w": "REAL", "power_max_w": "REAL",
@@ -60,6 +77,21 @@ class BenchDb:
                 (measured_at, r.model, runtime, runtime_version, hardware, power, r.context, r.pp_tps,
                  r.ttft_ms, r.tg_tps, r.prompt_tokens, r.gen_tokens, r.gpu_share, r.predicted, suite,
                  getattr(r, "power_draw_w", None), power_limit_w, power_max_w, vram_busy_mb))
+
+    def add_quality(self, r, *, measured_at: str, runtime: str, runtime_version: Optional[str],
+                    hardware: str, suite_version: Optional[str] = None) -> None:
+        """Etap 12c: jeden wiersz na zadanie – z pełną odpowiedzią modelu (do porównań w czasie)."""
+        with closing(self._connect()) as db, db:
+            db.execute(
+                "INSERT INTO quality (measured_at, model, runtime, runtime_version, hardware, suite,"
+                " suite_version, test_id, category, passed, strict, reason, answer)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (measured_at, r.model, runtime, runtime_version, hardware, r.suite, suite_version, r.test_id,
+                 r.category, int(r.passed), None if r.strict is None else int(r.strict), r.reason, r.answer))
+
+    def quality_count(self) -> int:
+        with closing(self._connect()) as db:
+            return db.execute("SELECT COUNT(*) FROM quality").fetchone()[0]
 
     def latest(self, model: str, hardware: str) -> list[dict]:
         """Ostatni pomiar każdej długości kontekstu dla modelu na tym sprzęcie."""
