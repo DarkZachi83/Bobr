@@ -299,13 +299,16 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertIn("brakuje", meter_values(w.meters.verdict)["ram"][1])
 
     def test_narrow_window_stacks_columns(self):
+        from types import SimpleNamespace
+        from aibobr.gui.widgets.scroll_page import BREAKPOINT
         w = self.window()
-        self.root.geometry("1200x800")
-        self.pump(lambda: w.check_page.wide, 2)
-        self.assertTrue(w.check_page.wide)
-        self.root.geometry("800x700")                                    # laptop 1366×768 przy 125%
-        self.pump(lambda: w.check_page.wide is False, 2)
-        self.assertEqual(int(w.check_page.right.grid_info()["row"]), 1)  # prawa kolumna pod lewą
+        page = w.check_page
+        page._resize(SimpleNamespace(width=BREAKPOINT + 180))       # ekran serwera CI bywa mały
+        self.assertTrue(page.wide)
+        self.assertEqual(int(page.right.grid_info()["column"]), 1)
+        page._resize(SimpleNamespace(width=BREAKPOINT - 200))       # laptop 1366×768 przy 125%
+        self.assertFalse(page.wide)
+        self.assertEqual(int(page.right.grid_info()["row"]), 1)     # prawa kolumna pod lewą
 
     def test_ollama_dialog_lists_models(self):
         from aibobr.gui.dialogs.ollama_models import OllamaModelsDialog
