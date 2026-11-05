@@ -304,9 +304,9 @@ class AppController:
 
     def bench_suite(self) -> dict:
         import json
-        from pathlib import Path as _P
-        path = _P(__file__).resolve().parents[2] / "data" / "benchmarks" / "perf_v1.json"
-        return json.loads(path.read_text(encoding="utf-8"))
+        from aibobr import resources
+        # resources.path – w .exe pliki leżą w katalogu PyInstallera, nie obok kodu
+        return json.loads(resources.path("data", "benchmarks", "perf_v1.json").read_text(encoding="utf-8"))
 
     def bench_predict(self, targets, contexts, hw: HardwareProfile, base: RunSettings) -> dict:
         """Werdykt AI Bóbra dla każdej pary (model, kontekst) – czerwone pomijamy przed startem.

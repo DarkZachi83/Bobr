@@ -22,6 +22,7 @@ DATA = [
     ("data/audio_models.json", "data"),
     ("data/image_models.json", "data"),
     ("data/models/catalog.json", "data/models"),
+    ("data/benchmarks/*.json", "data/benchmarks"),     # testy Zacharskiego (etap 12)
     ("config/settings.json", "config"),
     ("assets/aibobr.png", "assets"),
     ("assets/about.png", "assets"),
