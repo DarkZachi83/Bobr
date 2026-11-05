@@ -32,7 +32,7 @@ WIDTHS = {"model": 150, "context": 62, "predicted": 95, "pp": 88, "ttft": 70, "t
           "status": 95}
 SUITES = ("perf", "pl_jezyk_v1", "en_format_v1")    # etap 12c: wszystkie domyślnie zaznaczone
 QCOLS = ("model", "pl", "knowledge", "json_strict", "json", "code")
-QSECONDS = 4.0                                          # szacunek na jedno zadanie jakości (krótka odpowiedź)
+QSECONDS = 1.5          # zadanie jakości – pomiar autora: gemma2:9b w karcie, 15 zadań w ok. 15 s
 ORDER = {Kind.TEXT: 0, Kind.IMAGE: 1, Kind.ADDON: 2, Kind.OTHER: 3}
 LEFT_WIDTH = 400
 ON, OFF = "☑", "☐"
@@ -397,31 +397,9 @@ class BenchmarkPanel(ttk.Frame):
         self.table.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
 
-        bottom = ttk.Panedwindow(split, orient="horizontal")       # dziennik | podgląd (decyzja autora)
-        split.add(bottom, weight=3)
-        log = ttk.Frame(bottom, style="Panel.TFrame", padding=8)
-        bottom.add(log, weight=3)
-        view = ttk.Frame(bottom, style="Panel.TFrame", padding=8)
-        bottom.add(view, weight=2)
-        ttk.Label(view, text=t("bench.preview.title"), style="Title.TLabel").pack(anchor="w")
-        self.preview_task = ttk.Label(view, text=t("bench.preview.empty"), style="Muted.TLabel",
-                                      wraplength=300, justify="left")
-        self.preview_task.pack(anchor="w", fill="x", pady=(2, 4))
-        self.preview_task.bind("<Configure>", lambda e: self.preview_task.configure(wraplength=max(200, e.width)))
-        pbox = ttk.Frame(view, style="Inner.TFrame")
-        pbox.pack(fill="both", expand=True)
-        self.preview = tk.Text(pbox, wrap="word", font="TkFixedFont", height=10, background="#11171d",
-                               foreground="#cfd8e3", relief="flat", borderwidth=0, padx=10, pady=8,
-                               state="disabled", selectbackground="#354e66", selectforeground="#ffffff")
-        pscroll = ttk.Scrollbar(pbox, orient="vertical", command=self.preview.yview)
-        self.preview.configure(yscrollcommand=pscroll.set)
-        self.preview.pack(side="left", fill="both", expand=True)
-        pscroll.pack(side="right", fill="y")
-        self.preview.tag_configure("head", foreground="#66c9fa")
-        self.preview.tag_configure("prompt", foreground="#9bacc0")
-        self.preview.tag_configure("answer", foreground="#e9ecef")
-        self.preview.tag_configure("ok", foreground="#53d6a0")
-        self.preview.tag_configure("bad", foreground="#ff8282")
+        log = ttk.Frame(split, style="Panel.TFrame", padding=8)
+        split.add(log, weight=3)
+        self.preview_window = None             # okno „Podgląd” – tworzone przy pierwszym Starcie
         head = ttk.Frame(log, style="Inner.TFrame")
         head.pack(fill="x")
         ttk.Label(head, text=t("bench.log.title"), style="Title.TLabel").pack(side="left")
@@ -433,6 +411,10 @@ class BenchmarkPanel(ttk.Frame):
         ttk.Button(tools, text=t("bench.log.copy"), command=self.copy_log).pack(side="left")
         ttk.Button(tools, text=t("bench.log.save"), command=self.save_log).pack(side="left", padx=6)
         ttk.Button(tools, text=t("bench.log.csv"), command=self.export_csv).pack(side="left")
+        self.restore_button = ttk.Button(tools, text=t("bench.preview.restore"), command=self.show_preview)
+        self.restore_button.pack(side="right")
+        ttk.Label(tools, text=t("bench.preview.title") + ":", style="Panel.TLabel").pack(side="right", padx=6)
+        self.restore_button.state(["disabled"])
         line = ttk.Frame(log, style="Inner.TFrame")
         line.pack(fill="x", pady=(6, 2))
         self.percent = ttk.Label(line, text="", style="Panel.TLabel", font=("TkDefaultFont", 10, "bold"))
@@ -620,6 +602,8 @@ class BenchmarkPanel(ttk.Frame):
         self.stop_button.state(["!disabled"])
         self.summary.configure(text="")
         self.log_lines.clear()
+        self.show_preview()                    # podgląd jako osobne okno (uwaga autora)
+        self.preview_window.clear()
         self.console.configure(state="normal")
         self.console.delete("1.0", "end")
         self.console.configure(state="disabled")
@@ -718,7 +702,9 @@ class BenchmarkPanel(ttk.Frame):
             r = p["result"]
             mark = "✓" if r.passed else "✗"
             reason = "" if r.passed else " – " + reason_text(r.reason)
-            self._preview_verdict(f"{mark} {t('bench.preview.verdict')}{reason}", r.passed)
+            self._preview_verdict(f"{mark} {t('bench.preview.verdict')}{reason}", r.passed,
+                                  {"model": r.model, "suite": r.suite, "test": r.test_id, "passed": int(r.passed),
+                                   "reason": reason.lstrip(" –"), "prompt": r.prompt, "answer": r.answer})
             self.log("OK" if r.passed else "WARN", f"{r.model} | {mark} {r.title}{reason}")
         elif event == "q_done":
             self._quality_row(p["model"], p["results"])
@@ -782,26 +768,25 @@ class BenchmarkPanel(ttk.Frame):
         self.log("ERROR", text)
 
     # ------------------------------------------------------------------ podgląd i jakość (12c)
+    def show_preview(self) -> None:
+        """„Przywróć” – okno podglądu znowu na wierzchu (w trakcie testu i po nim)."""
+        from aibobr.gui.widgets.preview_window import PreviewWindow
+        if self.preview_window is None or not self.preview_window.winfo_exists():
+            self.preview_window = PreviewWindow(self, self.on_status)
+        self.preview_window.show()
+        self.restore_button.state(["!disabled"])
+
     def _preview_start(self, title: str, prompt: str) -> None:
-        self.preview_task.configure(text=title)
-        self.preview.configure(state="normal")
-        self.preview.delete("1.0", "end")
-        self.preview.insert("end", t("bench.preview.prompt") + "\n", ("head",))
-        self.preview.insert("end", prompt + "\n\n", ("prompt",))
-        self.preview.insert("end", t("bench.preview.answer") + "\n", ("head",))
-        self.preview.configure(state="disabled")
+        if self.preview_window is not None and self.preview_window.winfo_exists():
+            self.preview_window.start(title, prompt)
 
     def _preview_add(self, text: str) -> None:
-        self.preview.configure(state="normal")
-        self.preview.insert("end", text, ("answer",))
-        self.preview.configure(state="disabled")
-        self.preview.see("end")
+        if self.preview_window is not None and self.preview_window.winfo_exists():
+            self.preview_window.add(text)
 
-    def _preview_verdict(self, text: str, ok: bool) -> None:
-        self.preview.configure(state="normal")
-        self.preview.insert("end", "\n\n" + text + "\n", ("ok" if ok else "bad",))
-        self.preview.configure(state="disabled")
-        self.preview.see("end")
+    def _preview_verdict(self, text: str, ok: bool, row: dict = None) -> None:
+        if self.preview_window is not None and self.preview_window.winfo_exists():
+            self.preview_window.verdict(text, ok, row)
 
     def _qstatus(self, model: str, text: str) -> None:
         iid = self.qrows.get(model)

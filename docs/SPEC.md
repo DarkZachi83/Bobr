@@ -463,7 +463,10 @@ raz: temperatura 0, seed 42, myślenie wyłączone, kontekst 2k. Ocena (`bench/q
 autora; JSON ŚCISŁY (cała odpowiedź) i ŁAGODNY (z ```json albo z tekstu); kod – tylko `ast.parse`
 i nazwy, **nigdy nie uruchamiany**. Odpowiedzi czyszczone z `<think>`, cudzysłowów i kropki.
 W zakładce Benchmark: pakiety do wyboru (domyślnie wszystkie – decyzja autora), wyniki w zakładkach
-Wydajność | Jakość (dwuklik – odpowiedzi z oceną), **podgląd na żywo** obok dziennika: prompt
+Wydajność | Jakość (dwuklik – odpowiedzi z oceną), **podgląd na żywo** w osobnym oknie „Podgląd”
+(uwaga autora – zakładka mniej zatłoczona): otwiera się przy Starcie, zamknięcie tylko je chowa (test
+trwa), „Przywróć” w zakładce pokazuje je znowu; cały przebieg zostaje do następnego Startu – Kopiuj,
+Zapisz…, Eksport CSV (zadania jakości z odpowiedziami). W podglądzie: prompt
 (w teście wydajności początek i koniec) i odpowiedź modelu kawałkami (Ollama `stream: true` –
 czasy liczy serwer, pomiar bez zmian). Tabela `quality` w benchmarks.sqlite z pełną odpowiedzią.
 Znaczek jakości w Statystyce – w 12d (decyzja autora).
