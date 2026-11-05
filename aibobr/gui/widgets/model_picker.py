@@ -1,5 +1,5 @@
-"""Sekcja „Model” (SPEC §4, etap 13b): link / plik .gguf / wpis ręczny, kwantyzacja,
-a w zakładce Sprawdź także kontekst i KV cache (RunOptions).
+"""Sekcja „Model” (SPEC §4, etap 13b): link / plik .gguf, kwantyzacja, kontekst i KV cache
+(RunOptions). Wpis ręczny – menu Plik; modele na dysku – zakładka Benchmark (etap 13c).
 
 Komunikaty (wczytywanie, błędy) idą do paska stanu okna – on_status(tekst, rodzaj).
 """
@@ -14,8 +14,7 @@ from aibobr.sources.base import LoadedModel
 
 
 class ModelPicker(ttk.Frame):
-    def __init__(self, master, on_check: Callable[[str], None], on_manual: Callable[[], None],
-                 on_quant: Callable[[str], None], on_found: Optional[Callable[[], None]] = None,
+    def __init__(self, master, on_check: Callable[[str], None], on_quant: Callable[[str], None],
                  on_status: Optional[Callable[[str, str], None]] = None,
                  options: Optional[Callable[[tk.Widget], tk.Widget]] = None):
         super().__init__(master, style="Panel.TFrame")
@@ -44,7 +43,7 @@ class ModelPicker(ttk.Frame):
         self.check_button.grid(row=0, column=4)
 
         bottom = ttk.Frame(self, style="Inner.TFrame")
-        bottom.grid(row=3, column=0, sticky="we", padx=10, pady=(0, 4))
+        bottom.grid(row=3, column=0, sticky="we", padx=10, pady=(0, 10))
         ttk.Label(bottom, text=t("gui.quant"), style="Muted.TLabel").pack(side="left")
         self.combo = ttk.Combobox(bottom, textvariable=self.quant_label, state="disabled", width=22)
         self.combo.pack(side="left", padx=(6, 12))
@@ -53,12 +52,6 @@ class ModelPicker(ttk.Frame):
         if self.options is not None:
             self.options.pack(side="left")
 
-        extra = ttk.Frame(self, style="Inner.TFrame")
-        extra.grid(row=4, column=0, sticky="we", padx=10, pady=(2, 8))
-        ttk.Button(extra, text=t("gui.manual"), command=on_manual).pack(side="right")
-        # „Co ja w ogóle mam na dysku?” (etap 9a) – w 13c osobna zakładka.
-        self.found_button = ttk.Button(extra, text=t("gui.scan"), command=on_found or (lambda: None))
-        self.found_button.pack(side="right", padx=(0, 6))
 
     def _check(self) -> None:
         if self.text.get().strip():

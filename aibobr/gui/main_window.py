@@ -52,6 +52,7 @@ class MainWindow:
         self.hw = None
         self.unsupported: Optional[str] = None
         self.theme = apply_style(root, theme_name(self.c.settings.get("theme")))
+        root.protocol("WM_DELETE_WINDOW", self.close)
         root.minsize(760, 560)
         self.build()
         self.start_scan()
@@ -87,8 +88,8 @@ class MainWindow:
         self.pages["check"] = check
         self.check_page = check
         self.run_options = None
-        self.picker = ModelPicker(check.left, self.check, self.manual, self.select_quant,
-                                  self.from_disk, self.set_status, options=self._options)
+        self.picker = ModelPicker(check.left, self.check, self.select_quant, self.set_status,
+                                  options=self._options)
         self.picker.pack(fill="x", pady=(0, 8))
         self.picker.text.set(self.model_text)
         self.result = ResultView(check.left, lambda: check.wrap)
@@ -105,6 +106,16 @@ class MainWindow:
         self.meters = Meters(self.hardware.meter_box)
         self.meters.pack(fill="x", pady=(4, 6))
         self.manual_hint = ttk.Frame(self.hardware, style="Inner.TFrame")   # brak skanu → Zaawansowane
+
+        # --- Benchmark (etap 13c): modele na dysku + testy Zacharskiego
+        from aibobr.gui.widgets.bench_panel import BenchmarkPanel
+        old_bench = getattr(self, "bench", None)
+        self.bench = BenchmarkPanel(self.tabs, self.c, self.worker, self.current, self.check_from_disk,
+                                    self.set_status)
+        self.tabs.add(self.bench, text=t("bench.tab"))
+        self.pages["bench"] = self.bench
+        if old_bench is not None and old_bench.checked:
+            self.bench.select_targets(sorted(old_bench.checked))
 
         # --- Statystyka
         self.stats = StatsPanel(self.tabs, self.c.saved, self.open_saved, self.compare_saved,
@@ -174,7 +185,7 @@ class MainWindow:
         file.add_command(label=t("gui.menu.open"), command=lambda: self.picker.browse())
         file.add_command(label=t("gui.manual"), command=self.manual)
         file.add_separator()
-        file.add_command(label=t("gui.menu.quit"), command=self.root.destroy)
+        file.add_command(label=t("gui.menu.quit"), command=self.close)
         bar.add_cascade(label=t("gui.menu.file"), menu=file)
 
         settings = tk.Menu(bar, tearoff=False)
@@ -219,6 +230,7 @@ class MainWindow:
                 panel.set_scan(hw, self.c.run_settings(platform), platform, self.unsupported)
             self.run_options.set_defaults(self.c.run_settings(platform))
             self.recompute()
+            self.bench.refresh_verdicts()
 
         def done(hw):
             self.hw = hw
@@ -308,16 +320,11 @@ class MainWindow:
         self.adv_meters.set_verdict(None)
         self.adv_model_label.configure(text=t("gui.adv_no_model") if self.model is None else "")
 
-    def from_disk(self) -> None:
-        from aibobr.gui.dialogs.found_models import FoundModelsDialog
-        dialog = FoundModelsDialog(self.root, self.worker, self.c.find_models,
-                                   self.c.scan_consent, self.c.set_scan_consent)
-        self.root.wait_window(dialog)
-        if dialog.bench_result:
-            self.open_benchmark(dialog.bench_result)
-        elif dialog.result:
-            self.picker.text.set(dialog.result)
-            self.check(dialog.result)
+    def check_from_disk(self, target: str) -> None:
+        """Zakładka Benchmark → Sprawdź (dwuklik): model w zakładce Sprawdź."""
+        self.tabs.select(self.pages["check"])
+        self.picker.text.set(target)
+        self.check(target)
 
     def current(self):
         """Sprzęt i ustawienia zakładki Sprawdź: skan + kontekst / KV cache z sekcji Model."""
@@ -325,14 +332,16 @@ class MainWindow:
         return hw, self.run_options.apply(settings)
 
     def open_benchmark(self, targets: list[str]) -> None:
-        """Okno benchmarku (etap 12a) – z listy modeli na dysku albo z zakładki Sprawdź."""
-        from aibobr.gui.dialogs.benchmark import BenchmarkDialog
-        try:
-            hw, settings = self.current()
-        except ValueError:
-            messagebox.showinfo(t("bench.title"), t("stats.need_hw"), parent=self.root)
-            return
-        BenchmarkDialog(self.root, self.c, self.worker, targets, hw, settings)
+        """⏱ Benchmark w zakładce Sprawdź – przejście do zakładki Benchmark z zaznaczonym modelem."""
+        self.bench.select_targets(targets)
+        self.tabs.select(self.pages["bench"])
+
+    def close(self) -> None:
+        if self.bench.running:
+            if not messagebox.askyesno(t("bench.title"), t("bench.confirm_close"), parent=self.root):
+                return
+            self.bench.stop.set()
+        self.root.destroy()
 
     def recompute(self) -> None:
         if not hasattr(self, "adv_result") or self.run_options is None:
@@ -470,14 +479,27 @@ class MainWindow:
         self.check(item.target, quant=item.quant)
 
     # ------------------------------------------------------------------ menu
+    def _busy(self) -> bool:
+        """Trwa benchmark – przebudowa okna (język, styl) przerwałaby wyświetlanie wyników."""
+        if getattr(self, "bench", None) is not None and self.bench.running:
+            messagebox.showinfo(t("bench.title"), t("bench.wait_rebuild"), parent=self.root)
+            self.lang_var.set(str(self.c.settings.get("language") or ""))
+            self.theme_var.set(self.theme)
+            return True
+        return False
+
     def change_language(self, code: str) -> None:
         """code = "" – język systemu (zapisujemy pusty wybór, więc działa też po zmianie systemu)."""
+        if self._busy():
+            return
         set_language(code)
         self.c.settings["language"] = code
         self.c.config.save_user({"language": code})
         self.build(self.export_state())
 
     def change_theme(self, theme: str) -> None:
+        if self._busy():
+            return
         self.theme = apply_style(self.root, theme)
         self.c.settings["theme"] = self.theme
         self.c.config.save_user({"theme": self.theme})

@@ -238,43 +238,6 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertEqual(boxes["Statystyka działania"][0][1], "1")          # zielone: 1
         self.assertEqual(len(section.summary.winfo_children()), 3)          # trzy ramki pod tabelą
 
-    def test_benchmark_dialog_plan_run_and_results(self):
-        from aibobr.bench.runner import PerfResult
-        from aibobr.gui.dialogs.benchmark import BenchmarkDialog
-        w = self.window()
-        self.assertFalse(w.bench_button.winfo_ismapped())                # plik .gguf – bez benchmarku
-        targets = ["ollama:llama3.1:8b", "ollama:qwen3:8b"]
-        w.c.bench_predict = lambda tg, ctxs, hw, s: {(t_, c): ("red" if c == 32768 else "green")
-                                                     for t_ in tg for c in ctxs}
-
-        def fake_run(tg, ctxs, predicted, hw, report, stop, db=None):
-            out = []
-            for n, t_ in enumerate(tg):
-                report({"n": n + 1, "total": len(tg), "model": t_[7:], "context": ctxs[0], "step": "warmup"})
-                out.append(PerfResult(t_[7:], ctxs[0], pp_tps=800, ttft_ms=1200, tg_tps=30 + n * 10,
-                                      gpu_share=1.0, predicted="green"))
-            return out
-
-        w.c.run_benchmark = fake_run
-        asked = []
-        hw, settings = w.hardware.current()
-        d = BenchmarkDialog(self.root, w.c, w.worker, targets, hw, settings,
-                            confirm=lambda title, text: asked.append(text) or True)
-        self.pump(lambda: "Do zmierzenia" in d.plan.cget("text"), 3)
-        self.assertIn("ok.", d.plan.cget("text"))
-        self.assertIn("Kilka modeli", d.warning.cget("text"))               # ostrzeżenie autora
-        d.ctx_vars[32768].set(True)
-        d._update_plan()
-        self.assertIn("Pominięte: 2", d.plan.cget("text"))                  # 32k nie zmieści się
-        d.ctx_vars[32768].set(False)
-        d.start()
-        self.assertEqual(len(asked), 1)                                     # potwierdzenie przy kilku modelach
-        self.pump(lambda: d.summary.cget("text"), 3)
-        rows = [d.tree.item(i, "values") for i in d.tree.get_children()]
-        self.assertEqual(rows[1][5], "40,0")                                # generowanie tok/s
-        self.assertIn("qwen3:8b", d.summary.cget("text"))                   # najszybszy u Ciebie
-        d.close()
-
     def test_save_disabled_without_result(self):
         w = self.window()
         w.check(str(Path(self.tmp.name) / "nie-ma.gguf"))
@@ -318,56 +281,95 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertFalse(page.wide)
         self.assertEqual(int(page.right.grid_info()["row"]), 1)     # prawa kolumna pod lewą
 
-    def test_ollama_dialog_lists_models(self):
-        from aibobr.gui.dialogs.ollama_models import OllamaModelsDialog
-        from aibobr.gui.worker import Worker
-        models = [{"name": "qwen3:8b", "size": 5_225_000_000, "details": {"quantization_level": "Q4_K_M"}},
-                  {"name": "llama3.2:3b", "size": 2_019_000_000, "details": {"quantization_level": "Q4_K_M"}}]
-        d = OllamaModelsDialog(self.root, Worker(self.root), lambda: models)
-        self.pump(lambda: d.listbox.size() == 2, 3)
-        self.assertIn("llama3.2:3b", d.listbox.get(0))           # alfabetycznie
-        d._ok()
-        self.assertEqual(d.result, "llama3.2:3b")
+    def test_benchmark_tab_plan_run_and_log(self):
+        from aibobr.bench.runner import PerfResult
+        from aibobr.bench.ollama import Generation
+        w = self.window()
+        self.assertFalse(w.bench_button.winfo_ismapped())                # plik .gguf – bez benchmarku
+        targets = ["ollama:llama3.1:8b", "ollama:qwen3:8b"]
+        w.c.bench_predict = lambda tg, ctxs, hw, s: {(t_, c): ("red" if c == 32768 else "green")
+                                                     for t_ in tg for c in ctxs}
 
-    def test_ollama_dialog_when_ollama_is_down(self):
-        from aibobr.gui.dialogs.ollama_models import OllamaModelsDialog
-        from aibobr.gui.worker import Worker
-        from aibobr.sources.base import SourceError
+        def fake_run(tg, ctxs, predicted, hw, report, stop, db=None):
+            report({"event": "start", "version": "0.40.13", "jobs": len(tg), "busy_mb": 101})
+            out = []
+            for n, t_ in enumerate(tg, 1):
+                m = t_[7:]
+                report({"n": n, "total": len(tg), "model": m, "context": ctxs[0], "step": "prompt 1/3"})
+                report({"event": "measure", "n": n, "model": m, "context": ctxs[0], "step": "prompt 1/3",
+                        "pp": 812.0, "ttft": 1210.0, "tg": None})
+                r = PerfResult(m, ctxs[0], pp_tps=800, ttft_ms=1200, tg_tps=30 + n * 10, gpu_share=1.0,
+                               predicted="green")
+                report({"event": "result", "n": n, "total": len(tg), "result": r})
+                out.append(r)
+            return out
 
-        def down():
-            raise SourceError("ollama.not_running", "http://127.0.0.1:11434")
-        d = OllamaModelsDialog(self.root, Worker(self.root), down)
-        self.pump(lambda: "Ollama nie odpowiada" in d.status.cget("text"), 3)
-        self.assertIn("Ollama nie odpowiada", d.status.cget("text"))
-        d.destroy()
+        w.c.run_benchmark = fake_run
+        b = w.bench
+        asked = []
+        b.confirm = lambda title, text: asked.append(text) or True
+        w.open_benchmark(targets[:1])                                    # ⏱ z zakładki Sprawdź
+        self.pump(seconds=0.2)
+        self.assertEqual(w.tab, "bench")
+        b.select_targets(targets)
+        self.pump(lambda: all((t_, 1024) in b.predicted for t_ in targets), 3)
+        self.assertIn("Kilka modeli", b.warning.cget("text"))               # ostrzeżenie autora
+        b.ctx_vars[32768].set(True)
+        b._update_plan()
+        self.assertIn("Pominięte: 2", b.plan.cget("text"))                  # 32k nie zmieści się
+        b.ctx_vars[32768].set(False)
+        b._update_plan()
+        b.start()
+        self.assertEqual(len(asked), 1)                                     # potwierdzenie przy kilku modelach
+        self.pump(lambda: b.summary.cget("text"), 3)
+        rows = [b.table.item(i, "values") for i in b.table.get_children()]
+        self.assertEqual(rows[2][5], "50,0")                                # qwen3 1k: generowanie tok/s
+        self.assertEqual(rows[0][7], "gotowe")                              # kolumna Status
+        self.assertIn("qwen3:8b", b.summary.cget("text"))                   # najszybszy u Ciebie
+        log = "\n".join(b.log_lines)
+        self.assertIn("Ollama 0.40.13", log)
+        self.assertIn("101 MiB", log)
+        self.assertIn("prompt 812 tok/s", log)
+        self.assertIn("END", log)
 
-    def test_found_models_dialog_asks_first(self):
-        from aibobr.gui.dialogs.found_models import FoundModelsDialog
-        from aibobr.gui.worker import Worker
+    def test_benchmark_tab_finds_models_and_remembers(self):
         from aibobr.scan.model import FoundModel, Kind, ScanReport
-        saved, calls = [], []
+        calls = []
 
         def find(folder, stop, progress):
             calls.append(folder)
             progress(42)
-            return ScanReport(models=[
+            report = ScanReport(models=[
                 FoundModel("sdxl", Kind.IMAGE, "safetensors", 6 * 1024**3, Path("/m/sdxl.safetensors"), "folder"),
                 FoundModel("llama3.1:8b", Kind.TEXT, "GGUF", 4 * 1024**3, Path("/m/blob"), "Ollama",
                            quant="Q4_K_M", target="ollama:llama3.1:8b")])
-        d = FoundModelsDialog(self.root, Worker(self.root), find, False, saved.append)
-        self.pump(seconds=0.2)
-        self.assertEqual(calls, [])                              # bez zgody nic nie szukamy
-        d.consent_yes.invoke()
-        self.assertEqual(saved, [True])
-        self.pump(lambda: len(d.tree.get_children()) == 2, 3)
-        self.assertEqual(d.tree.item(d.tree.get_children()[0], "text"), "llama3.1:8b · Q4_K_M")
-        self.assertIn("Znaleziono 2 modeli", d.status.cget("text"))
-        d._ok()
-        self.assertEqual(d.result, "ollama:llama3.1:8b")
-
-    def test_found_button_in_both_modes(self):
+            w.c.save_found(report)
+            return report
         w = self.window()
-        self.assertTrue(w.picker.found_button.winfo_ismapped())
+        w.c.find_models = find
+        b = w.bench
+        self.assertEqual(calls, [])                              # bez kliknięcia nic nie szukamy
+        b.search()                                               # kliknięcie = zgoda
+        self.assertTrue(w.c.scan_consent)
+        self.pump(lambda: len(b.tree.get_children()) == 2, 3)
+        first = b.tree.get_children()[0]
+        self.assertEqual(b.tree.item(first, "values")[1], "llama3.1:8b · Q4_K_M")
+        self.assertEqual(b.tree.item(first, "values")[0], "☐")
+        self.assertEqual(b.tree.item(b.tree.get_children()[1], "values")[0], "")   # obraz – bez pola
+        b._toggle(first)
+        self.assertEqual(b.targets(), ["ollama:llama3.1:8b"])
+        self.assertIn("Znaleziono 2 modeli", b.scan_status.cget("text"))
+        opened = []
+        w.check_from_disk = opened.append
+        b.on_check = opened.append
+        b.tree.selection_set(first)
+        b._check()
+        self.assertEqual(opened, ["ollama:llama3.1:8b"])
+        # Nowe okno: lista z pliku, bez szukania
+        w.change_language("pl")
+        self.pump(seconds=0.3)
+        self.assertEqual(len(w.bench.tree.get_children()), 2)
+        self.assertIn("Lista z", w.bench.scan_status.cget("text"))
 
     def test_failed_detection_offers_manual_mode(self):
         w = self.window("detection_failed.json")

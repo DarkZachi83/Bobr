@@ -624,8 +624,17 @@ Zewnętrzne polecenia (`nvidia-smi`, PowerShell) mają limit czasu.
   i Windowsie; autor testuje GUI na Linuksie. Na Windowsie włączona obsługa skalowania
   ekranu (DPI), żeby okno nie było rozmazane. Gdy okna nie da się otworzyć (brak tkintera
   albo ekranu, np. przez SSH), program sam przechodzi w tryb tekstowy.
-  Układ okna (etap 13b, makieta autora): zakładki **Sprawdź | Statystyka | Zaawansowane**
-  (w 13c dojdzie „Modele na dysku” po Sprawdź), pasek stanu na dole, ikona ☀/☾ zmienia styl.
+  Układ okna (etap 13b–c, makiety autora): zakładki **Sprawdź | Benchmark | Statystyka |
+  Zaawansowane**, pasek stanu na dole, ikona ☀/☾ zmienia styl. „Wpisz dane modelu ręcznie” –
+  tylko w menu Plik.
+  **Benchmark** (13c, zamiast okien „Modele na dysku…”, „Z Ollamy…” i okna benchmarku): po lewej
+  Modele na dysku – „Szukaj modeli” (kliknięcie = zgoda), lista zapamiętana w found_models.json,
+  werdykt każdego modelu dla tego komputera, pole ☐ przy modelach z Ollamy (tylko je umie
+  zmierzyć benchmark), dwuklik / „Sprawdź” – model w zakładce Sprawdź; po prawej konfiguracja,
+  tabela wyników z kolumną Status i dziennik na żywo (kolorowe wpisy: start z wersją Ollamy
+  i pamięcią zajętą przed testem, każdy przebieg, mediana z udziałem w karcie i poborem mocy,
+  pominięcia, zwolnienie modelu), postęp z czasem do końca, „Kopiuj log”, „Zapisz log…”,
+  „Eksport CSV…”. Zamknięcie programu w trakcie – pytanie; zmiana języka i stylu – po teście.
   **Sprawdź** – po lewej Model (pole, Wklej, Wyczyść, Plik…, Sprawdź, kwantyzacja, kontekst
   i KV cache – przy obrazach rozdzielczość i liczba obrazów, „Wpisz dane modelu ręcznie…”)
   i Wynik w ramce w kolorze werdyktu (pasek, werdykt, uwagi, Zapisz / Benchmark, wyjaśnienie
