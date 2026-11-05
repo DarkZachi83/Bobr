@@ -17,7 +17,7 @@ from aibobr.calculator.memory import MissingModelData
 from aibobr.calculator.verdict import IncompleteProfileError
 from aibobr.detection.base import PlatformUnsupported
 from aibobr.gui.dialogs.manual_model import ManualModelDialog
-from aibobr.gui.theme import COLORS, VERDICT_COLORS, apply_style
+from aibobr.gui.theme import COLORS, THEMES, VERDICT_COLORS, apply_style, theme_name
 from aibobr.gui.widgets.explanation import ExplanationPanel
 from aibobr.gui.widgets.hardware_panel import HardwarePanel
 from aibobr.gui.widgets.memory_bar import MemoryBar
@@ -46,7 +46,7 @@ class MainWindow:
         self.model_text = initial_model or ""
         self.hw = None
         self.unsupported: Optional[str] = None
-        apply_style(root)
+        self.theme = apply_style(root, theme_name(self.c.settings.get("theme")))
         root.minsize(760, 560)
         self.build()
         self.start_scan()
@@ -128,7 +128,18 @@ class MainWindow:
         settings = tk.Menu(bar, tearoff=False)
         settings.add_command(label=t("gui.menu.token"), command=self.set_token)
         settings.add_command(label=t("gui.menu.update_catalog"), command=self.update_catalog)
-        lang = tk.Menu(settings, tearoff=False)
+        settings.add_separator()
+        style = tk.Menu(settings, tearoff=False)
+        self.theme_var = tk.StringVar(value=self.theme)
+        for name in THEMES:
+            style.add_radiobutton(label=t(f"gui.theme.{name}"), value=name, variable=self.theme_var,
+                                  command=lambda n=name: self.change_theme(n))
+        settings.add_cascade(label=t("gui.menu.theme"), menu=style)
+        bar.add_cascade(label=t("gui.menu.settings"), menu=settings)
+
+        # Język na wierzchu, nie w Ustawieniach – program startuje w języku systemu, a osoba,
+        # która nie zna tego języka, musi szybko znaleźć zmianę (uwaga autora).
+        lang = tk.Menu(bar, tearoff=False)
         # "" = język systemu (zapis "language": "") – powrót do automatu bez edycji pliku
         saved = str(self.c.settings.get("language") or "")
         self.lang_var = tk.StringVar(value=saved if saved in LANGUAGES else "")
@@ -138,8 +149,7 @@ class MainWindow:
         for code in LANGUAGES:
             lang.add_radiobutton(label=t(f"lang.{code}"), value=code, variable=self.lang_var,
                                  command=lambda c=code: self.change_language(c))
-        settings.add_cascade(label=t("gui.menu.language"), menu=lang)
-        bar.add_cascade(label=t("gui.menu.settings"), menu=settings)
+        bar.add_cascade(label=t("gui.menu.language"), menu=lang)
 
         help_menu = tk.Menu(bar, tearoff=False)
         help_menu.add_command(label=t("gui.menu.about"), command=self.about)
@@ -396,6 +406,15 @@ class MainWindow:
         set_language(code)
         self.c.settings["language"] = code
         self.c.config.save_user({"language": code})
+        expanded = self.explanation.expanded
+        self.build(self.hardware.export_state())
+        if expanded:
+            self.explanation.toggle()
+
+    def change_theme(self, theme: str) -> None:
+        self.theme = apply_style(self.root, theme)
+        self.c.settings["theme"] = self.theme
+        self.c.config.save_user({"theme": self.theme})
         expanded = self.explanation.expanded
         self.build(self.hardware.export_state())
         if expanded:

@@ -7,6 +7,7 @@ from typing import Callable, Optional
 
 from aibobr.i18n import fmt_gb, t
 from aibobr.sources.base import LoadedModel
+from aibobr.gui.theme import COLORS
 
 
 class ModelPicker(ttk.Frame):
@@ -77,7 +78,7 @@ class ModelPicker(ttk.Frame):
         if text:
             self.status.configure(text=text, style=f"{kind}.TLabel" if kind != "Error" else "Note.TLabel")
             if kind == "Error":
-                self.status.configure(foreground="#b42318")
+                self.status.configure(foreground=COLORS["error"])
             self.status.grid()
         else:
             self.status.grid_remove()

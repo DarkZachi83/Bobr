@@ -54,7 +54,7 @@ same program for the command line.
 
 ```
 git clone https://github.com/DarkZachi83/Bobr.git && cd Bobr
-pip install -r requirements.txt        # psutil; optional: nvidia-ml-py
+pip install -r requirements.txt        # psutil; optional: nvidia-ml-py, ttkbootstrap (window theme)
 python main.py                          # window
 ```
 
@@ -228,7 +228,7 @@ i uruchom. Plik nie ma płatnego podpisu, więc Windows SmartScreen może pokaza
 
 ```
 git clone https://github.com/DarkZachi83/Bobr.git && cd Bobr
-pip install -r requirements.txt        # psutil; opcjonalnie: nvidia-ml-py
+pip install -r requirements.txt        # psutil; opcjonalnie: nvidia-ml-py, ttkbootstrap (wygląd okna)
 python main.py                          # okno
 ```
 

@@ -19,6 +19,8 @@ class ExplanationPanel(ttk.Frame):
         self.button.pack(anchor="w", padx=9, pady=(6, 8))
         self.text = tk.Text(self, height=14, wrap="word", relief="flat", borderwidth=0,
                             background=COLORS["panel"], foreground=COLORS["text"],
+                            highlightthickness=1, highlightbackground=COLORS["border"],
+                            highlightcolor=COLORS["border"], insertbackground=COLORS["text"],
                             padx=12, pady=4, cursor="arrow", font="TkDefaultFont")
         bold = tkfont.nametofont("TkDefaultFont").copy()
         bold.configure(weight="bold")

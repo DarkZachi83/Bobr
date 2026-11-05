@@ -28,7 +28,7 @@ DATA = [
 ]
 
 
-def build(name: str, entry: str, windowed: bool) -> None:
+def build(name: str, entry: str, windowed: bool, exclude: tuple = ()) -> None:
     import PyInstaller.__main__
     args = [str(ROOT / entry), "--name", name, "--onefile", "--noconfirm", "--clean",
             "--distpath", str(ROOT / "dist"), "--workpath", str(ROOT / "build" / name),
@@ -37,6 +37,8 @@ def build(name: str, entry: str, windowed: bool) -> None:
             "--windowed" if windowed else "--console"]
     for src, dest in DATA:
         args += ["--add-data", f"{ROOT / src}{os.pathsep}{dest}"]
+    for module in exclude:
+        args += ["--exclude-module", module]
     PyInstaller.__main__.run(args)
 
 
@@ -48,7 +50,8 @@ def main() -> int:
             print("Brak PyInstallera: pip install pyinstaller")
             return 1
     build("AI-Bobr", "main.py", windowed=True)
-    build("AI-Bobr-cli", "packaging/cli_entry.py", windowed=False)
+    # Wersja tekstowa nie ma okien – bez ttkbootstrap i Pillow (kilka MB mniej).
+    build("AI-Bobr-cli", "packaging/cli_entry.py", windowed=False, exclude=("ttkbootstrap", "PIL"))
     print("\nGotowe:", ", ".join(p.name for p in sorted((ROOT / "dist").iterdir())))
     return 0
 

@@ -1,6 +1,7 @@
 {
   "_opis": "Wartości domyślne AI Bobra. Nie wpisuj tu tokenu HF – zmiany użytkownika program zapisuje w ~/.config/ai-bobr/settings.json (Windows: %APPDATA%\\AI-Bobr\\settings.json), poza repozytorium.",
   "language": "",
+  "theme": "dark",
   "default_context": 8192,
   "kv_cache_type": "f16",
   "vram_reserve_gb": 1.0,

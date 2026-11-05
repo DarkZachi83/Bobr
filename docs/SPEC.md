@@ -628,7 +628,13 @@ Zewnętrzne polecenia (`nvidia-smi`, PowerShell) mają limit czasu.
   z rozmiarami, „Wpisz dane modelu ręcznie…”) → **Twój komputer** (Automatyczny /
   Zaawansowany) → **Wynik** (pasek, werdykt, uwagi, przycisk „Wyjaśnienie”).
   Pobieranie z HF i skan idą w tle, okno nie zamarza. Menu: Plik, Ustawienia (token HF,
-  język – zmiana bez restartu, stan zostaje), Pomoc (O programie).
+  aktualizacja listy modeli, Styl: Ciemny / Jasny), **Język** (osobne menu na wierzchu – program
+  startuje w języku systemu, kto go nie zna, musi szybko znaleźć zmianę; w polskim „Język (Language)”),
+  Pomoc (O programie). Zmiana języka i stylu bez restartu, stan zostaje.
+  **Wygląd (etap 13):** ttkbootstrap 2.x (motywy `bootstrap-dark` / `bootstrap-light`), domyślnie
+  ciemny. Kolory w jednym miejscu (`gui/theme.py`, palety jasna i ciemna – na ciemnym tle jaśniejsze
+  kolory werdyktu, żeby był kontrast); pasek pamięci, menu, listy i pole wyjaśnienia biorą je z palety.
+  Bez ttkbootstrap (uruchomienie z kodu) – zwykły ttk („clam”) z tą samą paletą.
   W trybie Zaawansowanym niezmienione pola liczą się z dokładną wartością ze skanu,
   a nie z zaokrąglonego napisu – samo przełączenie trybu nie może zmienić wyniku.
   „Zapisz jako domyślne” zapisuje parametry do ustawień użytkownika (tryb Automatyczny).
@@ -676,6 +682,7 @@ Szczegóły (etap 7):
 | Python 3.10+, tkinter | wbudowane | GUI |
 | `psutil` | **wymagany** | CPU, RAM |
 | `nvidia-ml-py` | opcjonalny | VRAM i compute capability NVIDIA; bez niego `nvidia-smi`, potem tryb ręczny |
+| `ttkbootstrap==2.2.6` (+ Pillow) | opcjonalny, w .exe zawsze | wygląd okna (ciemny / jasny); bez niego zwykły ttk. Wersja okienkowa .exe ok. +6 MB, tekstowa bez zmian |
 | pobieranie z HF | wbudowane (`urllib`) | bez `requests` |
 | nagłówek .gguf | własny kod (`struct`) | pakiet `gguf` ciągnie `numpy`, a potrzebny jest tylko nagłówek |
 

@@ -14,6 +14,7 @@ from aibobr.gui.widgets.hardware_panel import parse_number
 from aibobr.i18n import t
 from aibobr.sources.base import LoadedModel, SourceError
 from aibobr.sources.manual import ManualInput, load_manual
+from aibobr.gui.theme import COLORS
 
 
 class ManualModelDialog(tk.Toplevel):
@@ -48,7 +49,7 @@ class ManualModelDialog(tk.Toplevel):
                 ttk.Combobox(body, textvariable=self.quant, values=quants.names_by_size(),
                              state="readonly", width=12).grid(row=r, column=1, sticky="w")
                 r += 1
-        self.error = ttk.Label(body, text="", foreground="#b42318", wraplength=360)
+        self.error = ttk.Label(body, text="", foreground=COLORS["error"], wraplength=360)
         self.error.grid(row=r, column=0, columnspan=2, sticky="w", pady=(8, 0))
         buttons = ttk.Frame(body)
         buttons.grid(row=r + 1, column=0, columnspan=2, sticky="e", pady=(10, 0))

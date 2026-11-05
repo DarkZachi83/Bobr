@@ -13,6 +13,7 @@ from typing import Callable, Optional
 
 from aibobr.i18n import fmt_gb, t
 from aibobr.scan.model import FoundModel, Kind, ScanReport
+from aibobr.gui.theme import COLORS
 
 ORDER = {Kind.TEXT: 0, Kind.IMAGE: 1, Kind.ADDON: 2, Kind.OTHER: 3}
 
@@ -82,7 +83,7 @@ class FoundModelsDialog(tk.Toplevel):
         self.tree.bind("<Double-Button-1>", lambda e: self._ok())
         self.tree.bind("<Return>", lambda e: self._ok())
         self.tree.bind("<<TreeviewSelect>>", lambda e: self._selected())
-        self.path_label = ttk.Label(self.body, text="", foreground="#667085", wraplength=640)
+        self.path_label = ttk.Label(self.body, text="", foreground=COLORS["muted"], wraplength=640)
         self.path_label.pack(anchor="w", pady=(4, 0))
 
         buttons = ttk.Frame(self.body)
