@@ -234,7 +234,9 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertEqual(row[3], "zmieści się")                          # Dziś
         self.assertEqual(row[4], "1. w karcie")                          # jeden model – bez ★
         self.assertEqual(row[9], "ten plik")
-        self.assertIn("zielone: 1", section.summary.cget("text"))
+        boxes = dict(section.summary_data(list(section.items.values())))
+        self.assertEqual(boxes["Statystyka działania"][0][1], "1")          # zielone: 1
+        self.assertEqual(len(section.summary.winfo_children()), 3)          # trzy ramki pod tabelą
 
     def test_benchmark_dialog_plan_run_and_results(self):
         from aibobr.bench.runner import PerfResult
