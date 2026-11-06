@@ -87,6 +87,12 @@ class OllamaBench:
         """Zwalnia model z pamięci od razu (keep_alive 0) – po teście karta jest wolna dla innych programów."""
         self.http.post_json(f"{self.host}/api/generate", {"model": model, "keep_alive": 0}, timeout=60)
 
+    def is_loaded(self, model: str) -> bool:
+        """Czy Ollama ma model w pamięci (/api/ps) – potwierdzenie zwolnienia po keep_alive 0."""
+        data = self.http.get_json(f"{self.host}/api/ps")
+        return any(m.get("name") == model or m.get("model") == model
+                   for m in (data.get("models") or []) if isinstance(data, dict))
+
     def gpu_share(self, model: str) -> Optional[float]:
         """Jaka część wczytanego modelu jest w karcie (0–1); None, gdy Ollama go nie pokazuje."""
         data = self.http.get_json(f"{self.host}/api/ps")

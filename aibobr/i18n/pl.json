@@ -529,5 +529,15 @@
   "warn.mixed_gpu_vendors": "Karty różnych producentów nie współpracują w jednym runtime – liczymy tylko grupę z większym VRAM.",
   "warn.nvidia_driver_old": "Za stary sterownik NVIDIA dla Ollamy – zaktualizuj go (550+, dla starszych kart 570+).",
   "warn.nvidia_legacy": "Starsza karta NVIDIA (Maxwell, Pascal, Volta): działa tylko z wersjami na CUDA 12 albo przez Vulkan; przyszłe wersje mogą ją pominąć.",
-  "warn.nvidia_unsupported": "Ta karta NVIDIA jest za stara dla CUDA w Ollamie i llama.cpp – może zadziałać tylko przez Vulkan."
+  "warn.nvidia_unsupported": "Ta karta NVIDIA jest za stara dla CUDA w Ollamie i llama.cpp – może zadziałać tylko przez Vulkan.",
+  "bench.mode": "Tryb jakości:",
+  "bench.mode.standard": "Standardowy",
+  "bench.mode.controlled": "Kontrolowany",
+  "bench.mode_note.standard": "Model zwalniany raz przed pakietem zadań, jedna próba na zadanie. Wynik może zależeć od stanu pamięci promptu serwera – ⚠ przy wyniku, gdy prompt przyszedł z pamięci.",
+  "bench.mode_note.controlled": "Model zwalniany przed każdą próbą (ok. 4 s więcej na próbę). Próba z promptem z pamięci albo bez potwierdzonego zwolnienia nie wchodzi do wyniku. Do porównań i publikacji.",
+  "bench.log.mode.standard": "Jakość – tryb standardowy: model zwolniony raz przed pakietem, 1 próba na zadanie.",
+  "bench.log.mode.controlled": "Jakość – tryb kontrolowany: model zwalniany przed każdą próbą, prób na zadanie: {runs}.",
+  "bench.log.release_failed": "{model} – nie zwolnił się z pamięci w limicie czasu; próba nie spełnia warunków trybu.",
+  "bench.log.invalid": "warunki niespełnione w {n} z {total} prób (pominięte)",
+  "quality.reason.no_valid": "żadna próba nie spełniła warunków trybu kontrolowanego"
 }

@@ -529,5 +529,15 @@
   "warn.mixed_gpu_vendors": "Cards from different vendors don't work together in one runtime – only the group with more VRAM counts.",
   "warn.nvidia_driver_old": "NVIDIA driver too old for Ollama – update it (550+, 570+ for older cards).",
   "warn.nvidia_legacy": "Older NVIDIA card (Maxwell, Pascal, Volta): works only with CUDA 12 builds or via Vulkan; future versions may drop it.",
-  "warn.nvidia_unsupported": "This NVIDIA card is too old for CUDA in Ollama and llama.cpp – it may only work via Vulkan."
+  "warn.nvidia_unsupported": "This NVIDIA card is too old for CUDA in Ollama and llama.cpp – it may only work via Vulkan.",
+  "bench.mode": "Quality mode:",
+  "bench.mode.standard": "Standard",
+  "bench.mode.controlled": "Controlled",
+  "bench.mode_note.standard": "The model is released once before the task set, one attempt per task. The result may depend on the server's prompt cache – ⚠ next to a result when the prompt came from the cache.",
+  "bench.mode_note.controlled": "The model is released before every attempt (about 4 s more per attempt). An attempt with a cached prompt or without a confirmed release is left out of the result. For comparisons and publishing.",
+  "bench.log.mode.standard": "Quality – standard mode: model released once before the task set, 1 attempt per task.",
+  "bench.log.mode.controlled": "Quality – controlled mode: model released before every attempt, attempts per task: {runs}.",
+  "bench.log.release_failed": "{model} – not released from memory within the time limit; the attempt does not meet the mode's conditions.",
+  "bench.log.invalid": "conditions not met in {n} of {total} attempts (left out)",
+  "quality.reason.no_valid": "no attempt met the controlled-mode conditions"
 }

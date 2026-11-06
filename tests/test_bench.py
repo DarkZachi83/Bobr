@@ -21,11 +21,17 @@ class FakeOllama:
     def __init__(self):
         self.calls = []
         self.unloaded = []
+        self.loaded = set()                              # co pokazuje /api/ps
+
+    def ps(self):
+        return {"models": [{"name": m, "size": 6_000, "size_vram": 6_000} for m in sorted(self.loaded)]}
 
     def __call__(self, payload):
         if "prompt" not in payload:                      # zwolnienie modelu (keep_alive 0)
             self.unloaded.append((payload["model"], payload["keep_alive"]))
+            self.loaded.discard(payload["model"])
             return {"done": True}
+        self.loaded.add(payload["model"])
         self.calls.append(payload)
         n = len(self.calls)
         prompt_tokens = max(10, len(payload["prompt"]) // 4)
@@ -38,7 +44,7 @@ class FakeOllama:
 def fake_bench():
     gen = FakeOllama()
     http = FakeHttp(json={f"{HOST}/api/generate": gen, f"{HOST}/api/version": {"version": "0.40.11"},
-                          f"{HOST}/api/ps": {"models": [{"name": "llama3.1:8b", "size": 6_000, "size_vram": 6_000}]}})
+                          f"{HOST}/api/ps": gen.ps})
     return OllamaBench(HOST, http), gen
 
 

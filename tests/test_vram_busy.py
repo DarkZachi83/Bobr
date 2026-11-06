@@ -90,7 +90,8 @@ class ControllerTest(unittest.TestCase):
         self.assertEqual(row["vram_busy_mb"], 1151)
 
     def test_busy_now_fresh_read_minus_ollama(self):
-        bench, _ = fake_bench()                                          # Ollama: wczytane 6000 B
+        bench, gen = fake_bench()
+        gen.loaded.add("llama3.1:8b")                                    # Ollama: wczytane 6000 B
         run = lambda args, timeout=None: "RTX 2060 SUPER, 8192, 1200, 00000000:07:00.0, 581.57, 7.5"  # noqa: E731
         self.assertEqual(self.c.vram_busy_now(pc(gpus=[DESKTOP]), bench, run), 1200 * MIB - 6000)
         no_smi = lambda args, timeout=None: None                          # noqa: E731

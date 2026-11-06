@@ -281,6 +281,23 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertFalse(page.wide)
         self.assertEqual(int(page.right.grid_info()["row"]), 1)     # prawa kolumna pod lewą
 
+    def test_benchmark_quality_mode(self):
+        """Standardowy: 1 próba (pole zablokowane); kontrolowany: 1/3/5 i tryb idzie do pomiaru."""
+        w = self.window()
+        b = w.bench
+        self.assertEqual(b.mode.get(), "standard")
+        self.assertEqual(str(b.repeats_box.cget("state")), "disabled")
+        b.repeats.set("5")
+        self.assertEqual(b.repeat_count, 1)
+        b.mode.set("controlled")
+        b._mode_changed()
+        self.assertEqual(str(b.repeats_box.cget("state")), "readonly")
+        b.repeats.set("3")
+        self.assertEqual(b.repeat_count, 3)
+        b.mode.set("standard")
+        b._mode_changed()
+        self.assertEqual((b.repeats.get(), b.repeat_count), ("1", 1))
+
     def test_benchmark_tab_plan_run_and_log(self):
         from aibobr.bench.runner import PerfResult
         from aibobr.bench.ollama import Generation
@@ -290,7 +307,7 @@ class GuiSmokeTest(unittest.TestCase):
         w.c.bench_predict = lambda tg, ctxs, hw, s: {(t_, c): ("red" if c == 32768 else "green")
                                                      for t_ in tg for c in ctxs}
 
-        def fake_run(tg, ctxs, predicted, hw, report, stop, db=None, suites=(), repeats=1):
+        def fake_run(tg, ctxs, predicted, hw, report, stop, db=None, suites=(), repeats=1, mode="standard"):
             from aibobr.bench.quality import QualityResult
             self.assertEqual(suites, ("perf", "pl_jezyk_v1", "en_format_v1"))   # domyślnie wszystkie
             report({"event": "start", "version": "0.40.13", "jobs": len(tg), "busy_mb": 101})
