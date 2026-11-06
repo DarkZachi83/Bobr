@@ -1,7 +1,17 @@
 """Testy Zacharskiego – jakość (etap 12c, SPEC §5c): polszczyzna, wiedza, JSON i kod.
 
-Czy kwantyzacja nie psuje odpowiedzi. Każde zadanie raz (temperatura 0, seed 42, myślenie
-wyłączone – odpowiedź za każdym razem ta sama), kontekst 2k. Ocena:
+Czy kwantyzacja nie psuje odpowiedzi. Temperatura 0, seed 42, myślenie wyłączone, kontekst 2k.
+
+Pamięć promptu (eksperyment kontrolny, tools/eksperyment_cache.py): odpowiedź zależy od tego,
+czy Ollama ma ten sam prompt w pamięci – liczony od zera daje inną odpowiedź niż wzięty z pamięci
+(8 z 10 par model–zadanie). Przerywnik z innym promptem NIE pomaga (test autora: dalej 48 z 49
+tokenów z pamięci – Ollama ma kilka miejsc na pamięć promptu), więc stan ustala zwolnienie modelu:
+- tryb standardowy: model zwolniony raz przed pakietem, 1 próba na zadanie (prompty w pakiecie
+  się nie powtarzają); ostrzeżenie cache_warn, gdy z pamięci przyszła ponad połowa promptu,
+- tryb kontrolowany: model zwolniony przed KAŻDĄ próbą (potwierdzone w /api/ps, z limitem
+  czasu), 1/3/5 prób; próba z prompt_eval_cached_count > 0 albo bez potwierdzonego zwolnienia
+  ma „warunki niespełnione” i nie wchodzi do wyniku. Brak pola w odpowiedzi = None (nie 0).
+Ocena:
 - regex / contains_all – pakiet polszczyzny (wzorce autora),
 - json – ŚCISŁY (cała odpowiedź to JSON) i ŁAGODNY (JSON wyjęty z ```json albo z tekstu),
 - python_syntax – tylko ast.parse i nazwy funkcji / klas. Kodu NIGDY nie uruchamiamy.
@@ -13,7 +23,8 @@ import ast
 import json
 import re
 import threading
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
 from aibobr.bench.runner import Stopped
@@ -24,6 +35,8 @@ SUITES = ("pl_jezyk_v1", "en_format_v1")
 # to inne zjawisko niż odmiana – średnia z 7 zadań mieszała je); wiedza osobno.
 SUBCATEGORIES = ("spelling", "inflection", "numerals", "aspect", "knowledge")
 REPEATS = (1, 3, 5)
+MODES = ("standard", "controlled")
+UNLOAD_TIMEOUT = 30.0                    # s – tyle czekamy, aż model zniknie z /api/ps
 
 _THINK = re.compile(r"<think>.*?</think>", re.S | re.I)
 _FENCE = re.compile(r"```[a-zA-Z0-9_+-]*\s*\n?(.*?)```", re.S)
@@ -34,6 +47,20 @@ class Verdict:
     passed: bool
     reason: str = ""                     # klucz i18n albo krótki opis (do podglądu)
     strict: Optional[bool] = None        # tylko JSON: czy przeszedł też ściśle
+
+
+@dataclass(frozen=True)
+class Attempt:
+    """Jedna próba: pełna odpowiedź i warunki, w jakich ją uzyskano."""
+    n: int                               # numer próby (1…runs)
+    text: str
+    passed: bool
+    reason: str
+    prompt_tokens: int
+    cached: Optional[int]                # prompt_eval_cached_count; None = Ollama nie podaje
+    load_seconds: float
+    released: Optional[bool]             # None – bez zwalniania przed tą próbą
+    valid: bool                          # spełnia warunki trybu – wchodzi do wyniku
 
 
 @dataclass(frozen=True)
@@ -53,6 +80,12 @@ class QualityResult:
     runs: int = 1                        # ile razy zadano to samo pytanie (powtórzenia)
     identical: int = 1                   # ile odpowiedzi identycznych z pierwszą
     passes: int = 0                      # ile przebiegów zaliczonych
+    prompt_tokens: int = 0               # długość promptu w tokenach (prompt_eval_count)
+    cached: Optional[int] = None         # najwięcej tokenów promptu z pamięci w którejś próbie; None = brak pola
+    cache_warn: bool = False             # któraś próba wzięła z pamięci ponad połowę promptu
+    mode: str = "standard"
+    invalid: int = 0                     # próby z niespełnionymi warunkami (tryb kontrolowany)
+    attempts: tuple = field(default=(), compare=False)
 
 
 def clean(text: str) -> str:
@@ -219,9 +252,13 @@ def evaluate(answer: str, ev: dict) -> Verdict:
 
 
 class QualityRunner:
-    def __init__(self, bench, suite: dict, repeats: int = 1):
+    def __init__(self, bench, suite: dict, repeats: int = 1, mode: str = "standard",
+                 unload_timeout: float = UNLOAD_TIMEOUT, sleep: Callable[[float], None] = time.sleep):
         self.bench, self.suite = bench, suite
-        self.repeats = max(1, int(repeats))
+        self.mode = mode if mode in MODES else "standard"
+        # Standardowy: kolejne próby bez zwalniania trafiłyby w pamięć promptu – zawsze jedna.
+        self.repeats = max(1, int(repeats)) if self.mode == "controlled" else 1
+        self.unload_timeout, self.sleep = unload_timeout, sleep
         cfg = suite.get("default_generation_config", {})
         self.max_tokens = int(cfg.get("max_tokens", 256))
         self.temperature = float(cfg.get("temperature", 0))
@@ -231,42 +268,77 @@ class QualityRunner:
     def tests(self) -> list[dict]:
         return list(self.suite.get("tests", ()))
 
+    def release(self, model: str) -> bool:
+        """keep_alive 0 i czekanie, aż modelu nie ma w /api/ps (samo żądanie niczego nie potwierdza)."""
+        start = time.monotonic()
+        try:
+            self.bench.unload(model)
+            while self.bench.is_loaded(model):
+                if time.monotonic() - start >= self.unload_timeout:
+                    return False
+                self.sleep(0.5)
+        except Exception:
+            return False
+        return True
+
     def run(self, model: str, report: Callable[[dict], None] = lambda e: None,
             stop: Optional[threading.Event] = None) -> list[QualityResult]:
         sid = self.suite["suite_info"]["id"]
+        controlled = self.mode == "controlled"
         out = []
+        if not controlled:
+            released = self.release(model)                 # raz przed pakietem
+            if not released:
+                report({"event": "q_release_failed", "model": model})
         for n, test in enumerate(self.tests, 1):
             if stop is not None and stop.is_set():
                 raise Stopped()
             report({"event": "q_task", "model": model, "suite": sid, "n": n, "total": len(self.tests),
                     "test": test["id"], "title": test.get("title", test["id"]), "prompt": test["prompt"]})
             chunk = lambda text: report({"event": "chunk", "text": text})     # noqa: E731
-            # Powtórzenia: to samo pytanie N razy (temperatura 0) – zgodność odpowiedzi pokazuje,
-            # że wynik to nie szum losowania. Podgląd na żywo – tylko pierwszy przebieg.
-            answers, verdicts = [], []
+            attempts = []
             for run in range(self.repeats):
                 if run and stop is not None and stop.is_set():
                     raise Stopped()
+                released = None
+                if controlled:
+                    released = self.release(model)
+                    if not released:
+                        report({"event": "q_release_failed", "model": model})
                 g = self.bench.generate(model, test["prompt"], CONTEXT, self.max_tokens,
                                         temperature=self.temperature, seed=self.seed,
                                         on_chunk=chunk if run == 0 else None)
-                answers.append(g.text)
-                verdicts.append(evaluate(g.text, test["evaluator"]))
+                v = evaluate(g.text, test["evaluator"])
+                valid = not controlled or (bool(released) and not g.prompt_cached)
+                attempts.append((Attempt(run + 1, g.text, v.passed, v.reason, g.prompt_tokens, g.prompt_cached,
+                                         g.load_seconds, released, valid), v))
                 if run:
                     report({"event": "q_repeat", "model": model, "run": run + 1, "runs": self.repeats,
-                            "same": g.text == answers[0]})
-            passes = sum(v.passed for v in verdicts)
-            verdict = verdicts[0]
-            passed = passes * 2 > len(verdicts)            # większość przebiegów
-            r = QualityResult(model, sid, test["id"], test.get("title", test["id"]), test.get("category", ""),
-                              passed, "" if passed else (verdict.reason or next(
-                                  (v.reason for v in verdicts if not v.passed), "")),
-                              answers[0], test["prompt"], strict=verdict.strict,
-                              subcategory=test.get("subcategory", ""), runs=len(answers),
-                              identical=sum(a == answers[0] for a in answers), passes=passes)
-            out.append(r)
-            report({"event": "q_result", "model": model, "result": r})
+                            "same": g.text == attempts[0][0].text})
+            out.append(self._result(model, sid, test, attempts))
+            report({"event": "q_result", "model": model, "result": out[-1]})
         return out
+
+    def _result(self, model: str, sid: str, test: dict, attempts: list) -> QualityResult:
+        good = [(a, v) for a, v in attempts if a.valid]
+        tokens = max((a.prompt_tokens for a, _ in attempts), default=0)
+        cached = [a.cached for a, _ in attempts if a.cached is not None]
+        base = dict(subcategory=test.get("subcategory", ""), prompt_tokens=tokens,
+                    cached=max(cached) if cached else None,
+                    cache_warn=any(c * 2 > tokens for c in cached) if tokens else False,
+                    mode=self.mode, invalid=len(attempts) - len(good), attempts=tuple(a for a, _ in attempts))
+        meta = (model, sid, test["id"], test.get("title", test["id"]), test.get("category", ""))
+        if not good:                                       # żadna próba nie spełniła warunków
+            first = attempts[0][0]
+            return QualityResult(*meta, False, "quality.reason.no_valid", first.text, test["prompt"],
+                                 runs=0, identical=0, passes=0, **base)
+        first, verdict = good[0]
+        passes = sum(a.passed for a, _ in good)
+        passed = passes * 2 > len(good)                    # większość ważnych prób
+        reason = "" if passed else (verdict.reason or next((a.reason for a, _ in good if not a.passed), ""))
+        return QualityResult(*meta, passed, reason, first.text, test["prompt"], strict=verdict.strict,
+                             runs=len(good), identical=sum(a.text == first.text for a, _ in good),
+                             passes=passes, **base)
 
 
 def score(results: list[QualityResult]) -> dict:

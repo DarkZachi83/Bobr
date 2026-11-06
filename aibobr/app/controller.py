@@ -336,7 +336,7 @@ class AppController:
 
     def run_benchmark(self, targets, contexts, predicted: dict, hw: HardwareProfile, report, stop,
                       db=None, now=None, bench=None, power_sampler=None, vram_busy=None,
-                      suites=("perf",), repeats: int = 1) -> list:
+                      suites=("perf",), repeats: int = 1, mode: str = "standard") -> list:
         """Testy modeli z Ollamy po kolei (nigdy kilku naraz). report(dict) – postęp i dziennik.
 
         suites: "perf" (wydajność przy długościach z contexts) i/lub pakiety jakości (etap 12c,
@@ -362,7 +362,11 @@ class AppController:
         results = []
         jobs = [j for tg in targets for j in [(tg, ("perf", c)) for c in (contexts if "perf" in suites else ())]
                 + [(tg, ("quality", sid)) for sid in quality]]
+        q_jobs = [what for _, (kind, what) in jobs if kind == "quality"]
         report({"event": "start", "version": version, "jobs": len(jobs),
+                "perf": len(jobs) - len(q_jobs), "q_suites": len(q_jobs),
+                "q_tasks": sum(len(quality[sid].get("tests", ())) for sid in q_jobs),
+                "q_runs": max(1, int(repeats)) if mode == "controlled" else 1,
                 "busy_mb": round(busy / 1024**2) if busy is not None else None})
         loaded = None                        # model w karcie: zostaje między długościami kontekstu
         chunk = lambda text: report({"event": "chunk", "text": text})      # noqa: E731
@@ -393,7 +397,7 @@ class AppController:
                         continue
                     loaded = model
                     try:
-                        out = QualityRunner(bench, quality[what], repeats).run(model, report, stop)
+                        out = QualityRunner(bench, quality[what], repeats, mode).run(model, report, stop)
                     except Stopped:
                         report({"event": "stopped", "n": n, "model": model})
                         break

@@ -45,7 +45,13 @@ CREATE TABLE IF NOT EXISTS quality (
     subcategory TEXT,
     runs INTEGER,
     identical INTEGER,
-    passes INTEGER
+    passes INTEGER,
+    prompt_tokens INTEGER,
+    prompt_cached INTEGER,
+    cache_warn INTEGER,
+    mode TEXT,
+    invalid INTEGER,
+    attempts TEXT
 );
 CREATE INDEX IF NOT EXISTS quality_model ON quality(model, suite);
 """
@@ -53,7 +59,17 @@ CREATE INDEX IF NOT EXISTS quality_model ON quality(model, suite);
 EXTRA_COLUMNS = {"power_draw_w": "REAL", "power_limit_w": "REAL", "power_max_w": "REAL",
                  "vram_busy_mb": "REAL"}       # zajęte przez system przed testem (np. pulpit)
 
-QUALITY_EXTRA = {"subcategory": "TEXT", "runs": "INTEGER", "identical": "INTEGER", "passes": "INTEGER"}
+QUALITY_EXTRA = {"subcategory": "TEXT", "runs": "INTEGER", "identical": "INTEGER", "passes": "INTEGER",
+                 "prompt_tokens": "INTEGER", "prompt_cached": "INTEGER", "cache_warn": "INTEGER",
+                 "mode": "TEXT", "invalid": "INTEGER", "attempts": "TEXT"}   # attempts: JSON, każda próba
+
+
+def _attempts_json(r) -> Optional[str]:
+    """Wszystkie próby zadania (pełne odpowiedzi, pamięć promptu, warunki) – do eksportu i analizy."""
+    import json
+    from dataclasses import asdict
+    attempts = getattr(r, "attempts", ())
+    return json.dumps([asdict(a) for a in attempts], ensure_ascii=False) if attempts else None
 
 
 class BenchDb:
@@ -95,10 +111,13 @@ class BenchDb:
             db.execute(
                 "INSERT INTO quality (measured_at, model, runtime, runtime_version, hardware, suite,"
                 " suite_version, test_id, category, passed, strict, reason, answer, subcategory, runs,"
-                " identical, passes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " identical, passes, prompt_tokens, prompt_cached, cache_warn, mode, invalid, attempts)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (measured_at, r.model, runtime, runtime_version, hardware, r.suite, suite_version, r.test_id,
                  r.category, int(r.passed), None if r.strict is None else int(r.strict), r.reason, r.answer,
-                 r.subcategory, r.runs, r.identical, r.passes))
+                 r.subcategory, r.runs, r.identical, r.passes, getattr(r, "prompt_tokens", None),
+                 getattr(r, "cached", None), int(bool(getattr(r, "cache_warn", False))),
+                 getattr(r, "mode", None), getattr(r, "invalid", 0), _attempts_json(r)))
 
     def quality_count(self) -> int:
         with closing(self._connect()) as db:

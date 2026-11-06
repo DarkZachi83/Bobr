@@ -281,6 +281,50 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertFalse(page.wide)
         self.assertEqual(int(page.right.grid_info()["row"]), 1)     # prawa kolumna pod lewą
 
+    def test_benchmark_export_quality_only(self):
+        """Zgłoszenie autora: sama jakość, bez wydajności – eksport nie może milczeć."""
+        import aibobr.gui.widgets.bench_panel as bp
+        from tests.test_export import CONTROLLED
+        w = self.window()
+        b = w.bench
+        info, saved = [], []
+        old_info, old_ask = bp.messagebox.showinfo, bp.filedialog.asksaveasfilename
+        d = tempfile.mkdtemp()
+        bp.messagebox.showinfo = lambda title, text, parent=None: info.append(text)
+        bp.filedialog.asksaveasfilename = lambda **kw: saved.append(kw) or str(Path(d) / "bobr.csv")
+        try:
+            b.export_csv()                                               # nic jeszcze nie zmierzono
+            self.assertEqual(len(info), 1)
+            self.assertEqual(saved, [])
+            b.quality = [CONTROLLED]
+            b.export_csv()
+            self.assertEqual(sorted(p.name for p in Path(d).iterdir()),
+                             ["bobr_jakosc_podsumowanie.csv", "bobr_jakosc_proby.csv"])
+        finally:
+            bp.messagebox.showinfo, bp.filedialog.asksaveasfilename = old_info, old_ask
+
+    def test_benchmark_quality_mode(self):
+        """Standardowy: 1 próba (pole zablokowane); kontrolowany: 1/3/5 i tryb idzie do pomiaru."""
+        w = self.window()
+        b = w.bench
+        self.assertEqual(b.mode.get(), "standard")
+        self.assertEqual(str(b.repeats_box.cget("state")), "disabled")
+        b.repeats.set("5")
+        self.assertEqual(b.repeat_count, 1)
+        b.mode.set("controlled")
+        b._mode_changed()
+        self.assertEqual(str(b.repeats_box.cget("state")), "readonly")
+        b.repeats.set("3")
+        self.assertEqual(b.repeat_count, 3)
+        b.mode.set("standard")
+        b._mode_changed()
+        self.assertEqual((b.repeats.get(), b.repeat_count), ("1", 1))
+        b._progress({"event": "start", "version": "0.40.13", "jobs": 1, "perf": 0, "q_suites": 1,
+                     "q_tasks": 8, "q_runs": 3})
+        line = b.log_lines[-1]
+        self.assertIn("jakość", line)
+        self.assertNotIn("rozgrzewka", line)                             # sama jakość – bez opisu wydajności
+
     def test_benchmark_tab_plan_run_and_log(self):
         from aibobr.bench.runner import PerfResult
         from aibobr.bench.ollama import Generation
@@ -290,7 +334,7 @@ class GuiSmokeTest(unittest.TestCase):
         w.c.bench_predict = lambda tg, ctxs, hw, s: {(t_, c): ("red" if c == 32768 else "green")
                                                      for t_ in tg for c in ctxs}
 
-        def fake_run(tg, ctxs, predicted, hw, report, stop, db=None, suites=(), repeats=1):
+        def fake_run(tg, ctxs, predicted, hw, report, stop, db=None, suites=(), repeats=1, mode="standard"):
             from aibobr.bench.quality import QualityResult
             self.assertEqual(suites, ("perf", "pl_jezyk_v1", "en_format_v1"))   # domyślnie wszystkie
             report({"event": "start", "version": "0.40.13", "jobs": len(tg), "busy_mb": 101})
