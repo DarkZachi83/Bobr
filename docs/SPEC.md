@@ -482,9 +482,17 @@ z identycznymi odpowiedziami; podgląd na żywo – pierwszy przebieg.
 **Pamięć promptu (0.8.1):** eksperyment kontrolny (`tools/eksperyment_cache.py`, warianty A–D:
 strumień × model zwolniony) pokazał, że strumień nie zmienia odpowiedzi, a pamięć promptu tak –
 prompt liczony od zera i wzięty z pamięci dają w 8 z 10 par model–zadanie różne odpowiedzi (w tym
-samym stanie zawsze identyczne). Dlatego przed każdą próbą idzie przerywnik: inny prompt, 1 token,
-ten sam kontekst (model się nie przeładowuje). Każda próba zapisuje `prompt_eval_cached_count`;
-brak pola = NULL. Gdy z pamięci przyszła ponad połowa promptu – ostrzeżenie przy wyniku (`cache_warn`).
+samym stanie zawsze identyczne). Przerywnik z innym promptem nie pomaga (test autora: dalej 48 z 49
+tokenów z pamięci), więc stan ustala zwolnienie modelu (keep_alive 0, potwierdzone w /api/ps):
+**tryb standardowy** (domyślny) – zwolnienie raz przed pakietem, 1 próba na zadanie, ⚠ gdy z pamięci
+przyszła ponad połowa promptu; **tryb kontrolowany** – zwolnienie przed każdą próbą, 1/3/5 prób,
+próba z `prompt_eval_cached_count > 0` albo bez potwierdzonego zwolnienia nie wchodzi do wyniku.
+Brak pola = NULL („brak danych o cache”). Baza: tryb, próby niespełniające warunków i JSON
+wszystkich prób (pełne odpowiedzi, pamięć promptu, czas wczytania, zwolnienie).
+**Eksport CSV (0.8.1):** jeden przycisk, do trzech plików – tylko te z danymi: `_wydajnosc.csv`,
+`_jakosc_proby.csv` (każda próba osobno, „Próba 1/N”, ważna, pamięć promptu, pełna odpowiedź) i
+`_jakosc_podsumowanie.csv` (werdykt większościowy osobno od próby 1, zgodne z próbą 1, najczęstsza
+odpowiedź, liczba różnych odpowiedzi, pamięć promptu min/max, ⚠). Brak danych – okienko, nie cisza.
 
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.

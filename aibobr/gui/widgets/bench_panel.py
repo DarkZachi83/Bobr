@@ -11,7 +11,6 @@ końca, kopiowanie, zapis do pliku, eksport CSV). Modele mierzymy PO KOLEI – n
 """
 from __future__ import annotations
 
-import csv
 import datetime
 import threading
 import time
@@ -23,7 +22,7 @@ from typing import Callable, Optional
 from aibobr.bench.runner import estimate_seconds
 from aibobr.gui.theme import COLORS, VERDICT_COLORS
 from aibobr.i18n import fmt_context, fmt_gb, t
-from aibobr.bench.quality import REPEATS
+from aibobr.bench.quality import MODES, REPEATS
 from aibobr.scan.model import FoundModel, Kind, ScanReport
 
 CONTEXTS = (1024, 8192, 32768)
@@ -35,7 +34,7 @@ SUITES = ("perf", "pl_jezyk_v1", "en_format_v1")    # etap 12c: wszystkie domyś
 QCOLS = ("model", "spelling", "inflection", "numerals", "aspect", "knowledge", "json_strict", "json",
          "code_strict", "code", "agree")
 QSECONDS = 1.5          # zadanie jakości – pomiar autora: gemma2:9b w karcie, 15 zadań w ok. 15 s
-QFILLER = 0.2           # przerywnik przed każdą próbą (pamięć promptu), 1 token odpowiedzi
+QRELOAD = 4.0           # tryb kontrolowany: zwolnienie + wczytanie modelu przed każdą próbą (model w karcie)
 ORDER = {Kind.TEXT: 0, Kind.IMAGE: 1, Kind.ADDON: 2, Kind.OTHER: 3}
 LEFT_WIDTH = 400
 ON, OFF = "☑", "☐"
@@ -358,6 +357,19 @@ class BenchmarkPanel(ttk.Frame):
                           state="readonly")
         rc.pack(side="left", padx=4)
         rc.bind("<<ComboboxSelected>>", lambda e: self._update_plan())
+        self.repeats_box = rc
+        # Tryb jakości (pamięć promptu): standardowy – model zwolniony raz przed pakietem, 1 próba;
+        # kontrolowany – zwolniony przed każdą próbą, 1/3/5 prób, próby z pamięcią promptu odrzucone.
+        modes = ttk.Frame(top, style="Inner.TFrame")
+        modes.pack(fill="x", pady=(4, 0))
+        ttk.Label(modes, text=t("bench.mode"), style="Panel.TLabel").pack(side="left")
+        self.mode = tk.StringVar(value="standard")
+        for m in MODES:
+            ttk.Radiobutton(modes, text=t(f"bench.mode.{m}"), value=m, variable=self.mode,
+                            style="Panel.TRadiobutton", command=self._mode_changed).pack(side="left", padx=6)
+        self.mode_note = ttk.Label(top, text="", style="Muted.TLabel", wraplength=640, justify="left")
+        self.mode_note.pack(anchor="w", fill="x")
+        self._mode_changed(update=False)
         self.plan = ttk.Label(top, text="", style="Panel.TLabel", wraplength=640, justify="left")
         self.plan.pack(anchor="w", pady=(8, 0), fill="x")
         self.warning = ttk.Label(top, text="", style="Note.TLabel", wraplength=640, justify="left")
@@ -486,6 +498,24 @@ class BenchmarkPanel(ttk.Frame):
         row = next((r for r in rows if r["context"] == ctx), None) or (rows[-1] if rows else None)
         return (row["pp_tps"], row["tg_tps"]) if row else None
 
+    @property
+    def controlled(self) -> bool:
+        return self.mode.get() == "controlled"
+
+    @property
+    def repeat_count(self) -> int:
+        return int(self.repeats.get()) if self.controlled else 1
+
+    def _mode_changed(self, update: bool = True) -> None:
+        if self.controlled:
+            self.repeats_box.configure(state="readonly")
+        else:
+            self.repeats.set("1")                    # bez zwalniania kolejne próby trafiłyby w pamięć promptu
+            self.repeats_box.configure(state="disabled")
+        self.mode_note.configure(text=t(f"bench.mode_note.{self.mode.get()}"))
+        if update:
+            self._update_plan()
+
     def _update_plan(self) -> None:
         if self.running:
             return
@@ -508,7 +538,8 @@ class BenchmarkPanel(ttk.Frame):
                     (t("bench.status.skip"),) if red else (t("bench.status.wait"),)) + ("",) * (len(QCOLS) - 2))
                 if not red:
                     qtasks += ntasks
-                    seconds += 12 + ntasks * (QSECONDS + QFILLER) * int(self.repeats.get())
+                    per_try = QSECONDS + (QRELOAD if self.controlled else 0)
+                    seconds += 12 + QRELOAD + ntasks * per_try * self.repeat_count
         for target, ctx in jobs:
             level = self.predicted.get((target, ctx))
             name = target[len("ollama:"):] if target.startswith("ollama:") else target
@@ -570,29 +601,27 @@ class BenchmarkPanel(ttk.Frame):
             self.on_status(t("bench.log.saved", path=path))
 
     def export_csv(self) -> None:
-        done = [r for r in self.results if r.tg_tps]
-        if not done:
-            self.on_status(t("bench.csv_none"))
+        """Wydajność i jakość z bieżącego przebiegu – do trzech plików (aibobr.bench.export)."""
+        from aibobr.bench import export
+        perf = [r for r in self.results if r.tg_tps]
+        quality = self.quality or [r for rs in self.qresults.values() for r in rs]
+        if not perf and not quality:
+            messagebox.showinfo(t("bench.log.csv"), t("bench.csv_none"), parent=self)
             return
-        name = f"bobr_wyniki_{datetime.datetime.now():%Y-%m-%d_%H-%M-%S}.csv"
+        name = f"bobr_{datetime.datetime.now():%Y-%m-%d_%H-%M-%S}.csv"
         path = filedialog.asksaveasfilename(parent=self, title=t("bench.log.csv"), initialfile=name,
                                             defaultextension=".csv", filetypes=[("CSV", "*.csv")])
         if not path:
             return
-        with open(path, "w", encoding="utf-8-sig", newline="") as f:
-            w = csv.writer(f, delimiter=";")
-            w.writerow([t(f"bench.col.{c}") for c in COLUMNS[:-1]] + ["W"])
-            for r in done:
-                w.writerow([r.model, r.context, r.predicted or "", _num(r.pp_tps, 0), _num(r.ttft_ms, 0),
-                            _num(r.tg_tps), f"{r.gpu_share * 100:.0f}%" if r.gpu_share is not None else "",
-                            f"{r.power_draw_w:.0f}" if r.power_draw_w else ""])
-        self.on_status(t("bench.log.saved", path=path))
+        written = export.export_all(path, perf, quality)
+        self.on_status(t("bench.log.exported", files=", ".join(p.name for p in written)))
+        self.log("INFO", t("bench.log.exported", files=", ".join(str(p) for p in written)))
 
     # ------------------------------------------------------------------ pomiar
     def start(self) -> None:
         contexts, targets = self.contexts(), self.targets()
         suites = tuple(sid for sid in SUITES if self.suite_vars[sid].get())
-        repeats = int(self.repeats.get())          # odczyt tu – zmienne Tk nie z wątku w tle
+        repeats, mode = self.repeat_count, self.mode.get()   # odczyt tu – zmienne Tk nie z wątku w tle
         if not targets or self.running or not suites or (suites == ("perf",) and not contexts):
             return
         if len(targets) > 1 and not self.confirm(t("bench.title"), t("bench.confirm_many")):
@@ -605,6 +634,8 @@ class BenchmarkPanel(ttk.Frame):
         self.hw = hw
         self.running = True
         self.results = []
+        self.quality = []
+        self.qresults.clear()                  # eksport i podgląd – tylko ten przebieg
         self.steps_done = 0
         self.started = time.monotonic()
         self.stop.clear()
@@ -619,11 +650,14 @@ class BenchmarkPanel(ttk.Frame):
         self.console.configure(state="disabled")
         self.log("START", t("bench.log.models", names=", ".join(tg[len("ollama:"):] for tg in targets),
                             contexts=", ".join(fmt_context(c) for c in contexts)))
+        if any(sid != "perf" for sid in suites):
+            self.log("INFO", t(f"bench.log.mode.{mode}", runs=repeats))
         self._clock()
         self.worker.run_with_progress(
             "bench",
             lambda report: self.c.run_benchmark(targets, contexts, self.predicted, hw, report, self.stop,
-                                                db=self.c.bench_db, suites=suites, repeats=repeats),
+                                                db=self.c.bench_db, suites=suites, repeats=repeats,
+                                                mode=mode),
             self._progress, self._done, self._failed)
 
     def _clock(self) -> None:
@@ -714,6 +748,8 @@ class BenchmarkPanel(ttk.Frame):
             reason = "" if r.passed else " – " + reason_text(r.reason)
             if r.runs > 1:
                 reason += " · " + t("bench.log.agree", same=r.identical, runs=r.runs, passes=r.passes)
+            if r.invalid:
+                reason += " · " + t("bench.log.invalid", n=r.invalid, total=r.invalid + r.runs)
             if r.cache_warn:
                 reason += " · ⚠ " + t("bench.log.cache_warn", cached=r.cached, tokens=r.prompt_tokens)
             self._preview_verdict(f"{mark} {t('bench.preview.verdict')}{reason}", r.passed,
@@ -728,6 +764,8 @@ class BenchmarkPanel(ttk.Frame):
         elif event == "q_skip":
             self._qstatus(p["model"], t("bench.status.skip"))
             self.log("WARN", t("bench.log.skip", model=p["model"], context=t(f"bench.suite.{p['suite']}")))
+        elif event == "q_release_failed":
+            self.log("WARN", t("bench.log.release_failed", model=p["model"]))
         elif event == "unload":
             self.log("INFO", t("bench.log.unload", model=p["model"]))
 
