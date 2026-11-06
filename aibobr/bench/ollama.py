@@ -22,6 +22,7 @@ class Generation:
     gen_seconds: float
     load_seconds: float
     text: str
+    prompt_cached: Optional[int] = None   # prompt_eval_cached_count: tokeny promptu z pamięci; None = Ollama nie podaje
 
     @property
     def pp_tps(self) -> Optional[float]:
@@ -79,7 +80,8 @@ class OllamaBench:
             gen_tokens=int(r.get("eval_count") or 0),
             gen_seconds=float(r.get("eval_duration") or 0) / ns,
             load_seconds=float(r.get("load_duration") or 0) / ns,
-            text=text)
+            text=text,
+            prompt_cached=None if r.get("prompt_eval_cached_count") is None else int(r["prompt_eval_cached_count"]))
 
     def unload(self, model: str) -> None:
         """Zwalnia model z pamięci od razu (keep_alive 0) – po teście karta jest wolna dla innych programów."""

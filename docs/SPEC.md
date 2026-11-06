@@ -479,6 +479,12 @@ odcięciu wstępu „Code:” i opisu pod spodem). Powód „niepoprawny JSON”
 składni. **Powtórzenia 1 / 3 / 5:** to samo pytanie N razy (temperatura 0, seed 42 – opcje
 zapytania nadpisują Modelfile), zaliczone = większość przebiegów, kolumna Zgodność = zadania
 z identycznymi odpowiedziami; podgląd na żywo – pierwszy przebieg.
+**Pamięć promptu (0.8.1):** eksperyment kontrolny (`tools/eksperyment_cache.py`, warianty A–D:
+strumień × model zwolniony) pokazał, że strumień nie zmienia odpowiedzi, a pamięć promptu tak –
+prompt liczony od zera i wzięty z pamięci dają w 8 z 10 par model–zadanie różne odpowiedzi (w tym
+samym stanie zawsze identyczne). Dlatego przed każdą próbą idzie przerywnik: inny prompt, 1 token,
+ten sam kontekst (model się nie przeładowuje). Każda próba zapisuje `prompt_eval_cached_count`;
+brak pola = NULL. Gdy z pamięci przyszła ponad połowa promptu – ostrzeżenie przy wyniku (`cache_warn`).
 
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.

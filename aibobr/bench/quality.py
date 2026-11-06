@@ -1,7 +1,14 @@
 """Testy Zacharskiego – jakość (etap 12c, SPEC §5c): polszczyzna, wiedza, JSON i kod.
 
-Czy kwantyzacja nie psuje odpowiedzi. Każde zadanie raz (temperatura 0, seed 42, myślenie
-wyłączone – odpowiedź za każdym razem ta sama), kontekst 2k. Ocena:
+Czy kwantyzacja nie psuje odpowiedzi. Temperatura 0, seed 42, myślenie wyłączone, kontekst 2k.
+
+Pamięć promptu (eksperyment kontrolny, tools/eksperyment_cache.py): odpowiedź zależy od tego,
+czy Ollama ma ten sam prompt w pamięci – liczony od zera daje inną odpowiedź niż wzięty z pamięci
+(8 z 10 par model–zadanie). Dlatego przed KAŻDĄ próbą idzie krótki przerywnik z innym promptem:
+w pamięci zostaje tylko wspólny początek szablonu czatu, jak przy nowym pytaniu w zwykłej pracy.
+Każda próba zapisuje prompt_eval_cached_count; gdy z pamięci przyszła ponad połowa promptu,
+wynik dostaje ostrzeżenie (cache_warn) zamiast cichego wliczenia.
+Ocena:
 - regex / contains_all – pakiet polszczyzny (wzorce autora),
 - json – ŚCISŁY (cała odpowiedź to JSON) i ŁAGODNY (JSON wyjęty z ```json albo z tekstu),
 - python_syntax – tylko ast.parse i nazwy funkcji / klas. Kodu NIGDY nie uruchamiamy.
@@ -24,6 +31,8 @@ SUITES = ("pl_jezyk_v1", "en_format_v1")
 # to inne zjawisko niż odmiana – średnia z 7 zadań mieszała je); wiedza osobno.
 SUBCATEGORIES = ("spelling", "inflection", "numerals", "aspect", "knowledge")
 REPEATS = (1, 3, 5)
+FILLER = "Reply with one word: OK"       # przerywnik – inny prompt niż każde zadanie
+FILLER_TOKENS = 1
 
 _THINK = re.compile(r"<think>.*?</think>", re.S | re.I)
 _FENCE = re.compile(r"```[a-zA-Z0-9_+-]*\s*\n?(.*?)```", re.S)
@@ -53,6 +62,9 @@ class QualityResult:
     runs: int = 1                        # ile razy zadano to samo pytanie (powtórzenia)
     identical: int = 1                   # ile odpowiedzi identycznych z pierwszą
     passes: int = 0                      # ile przebiegów zaliczonych
+    prompt_tokens: int = 0               # długość promptu w tokenach (prompt_eval_count)
+    cached: Optional[int] = None         # najwięcej tokenów promptu z pamięci w którejś próbie; None = brak pola
+    cache_warn: bool = False             # któraś próba wzięła z pamięci ponad połowę promptu
 
 
 def clean(text: str) -> str:
@@ -231,6 +243,11 @@ class QualityRunner:
     def tests(self) -> list[dict]:
         return list(self.suite.get("tests", ()))
 
+    def reset_cache(self, model: str) -> None:
+        """Przerywnik: krótkie zapytanie z innym promptem (ten sam kontekst – model się nie przeładowuje),
+        żeby próba nie trafiła na swój prompt w pamięci. Odpowiedź przerywnika nie jest oceniana."""
+        self.bench.generate(model, FILLER, CONTEXT, FILLER_TOKENS, temperature=self.temperature, seed=self.seed)
+
     def run(self, model: str, report: Callable[[dict], None] = lambda e: None,
             stop: Optional[threading.Event] = None) -> list[QualityResult]:
         sid = self.suite["suite_info"]["id"]
@@ -243,15 +260,19 @@ class QualityRunner:
             chunk = lambda text: report({"event": "chunk", "text": text})     # noqa: E731
             # Powtórzenia: to samo pytanie N razy (temperatura 0) – zgodność odpowiedzi pokazuje,
             # że wynik to nie szum losowania. Podgląd na żywo – tylko pierwszy przebieg.
-            answers, verdicts = [], []
+            answers, verdicts, cached, tokens = [], [], [], 0
             for run in range(self.repeats):
                 if run and stop is not None and stop.is_set():
                     raise Stopped()
+                self.reset_cache(model)
                 g = self.bench.generate(model, test["prompt"], CONTEXT, self.max_tokens,
                                         temperature=self.temperature, seed=self.seed,
                                         on_chunk=chunk if run == 0 else None)
                 answers.append(g.text)
                 verdicts.append(evaluate(g.text, test["evaluator"]))
+                tokens = max(tokens, g.prompt_tokens)
+                if g.prompt_cached is not None:
+                    cached.append(g.prompt_cached)
                 if run:
                     report({"event": "q_repeat", "model": model, "run": run + 1, "runs": self.repeats,
                             "same": g.text == answers[0]})
@@ -263,7 +284,9 @@ class QualityRunner:
                                   (v.reason for v in verdicts if not v.passed), "")),
                               answers[0], test["prompt"], strict=verdict.strict,
                               subcategory=test.get("subcategory", ""), runs=len(answers),
-                              identical=sum(a == answers[0] for a in answers), passes=passes)
+                              identical=sum(a == answers[0] for a in answers), passes=passes,
+                              prompt_tokens=tokens, cached=max(cached) if cached else None,
+                              cache_warn=any(c * 2 > tokens for c in cached) if tokens else False)
             out.append(r)
             report({"event": "q_result", "model": model, "result": r})
         return out

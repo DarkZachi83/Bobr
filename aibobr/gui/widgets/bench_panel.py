@@ -35,6 +35,7 @@ SUITES = ("perf", "pl_jezyk_v1", "en_format_v1")    # etap 12c: wszystkie domyś
 QCOLS = ("model", "spelling", "inflection", "numerals", "aspect", "knowledge", "json_strict", "json",
          "code_strict", "code", "agree")
 QSECONDS = 1.5          # zadanie jakości – pomiar autora: gemma2:9b w karcie, 15 zadań w ok. 15 s
+QFILLER = 0.2           # przerywnik przed każdą próbą (pamięć promptu), 1 token odpowiedzi
 ORDER = {Kind.TEXT: 0, Kind.IMAGE: 1, Kind.ADDON: 2, Kind.OTHER: 3}
 LEFT_WIDTH = 400
 ON, OFF = "☑", "☐"
@@ -507,7 +508,7 @@ class BenchmarkPanel(ttk.Frame):
                     (t("bench.status.skip"),) if red else (t("bench.status.wait"),)) + ("",) * (len(QCOLS) - 2))
                 if not red:
                     qtasks += ntasks
-                    seconds += 12 + ntasks * QSECONDS * int(self.repeats.get())
+                    seconds += 12 + ntasks * (QSECONDS + QFILLER) * int(self.repeats.get())
         for target, ctx in jobs:
             level = self.predicted.get((target, ctx))
             name = target[len("ollama:"):] if target.startswith("ollama:") else target
@@ -713,6 +714,8 @@ class BenchmarkPanel(ttk.Frame):
             reason = "" if r.passed else " – " + reason_text(r.reason)
             if r.runs > 1:
                 reason += " · " + t("bench.log.agree", same=r.identical, runs=r.runs, passes=r.passes)
+            if r.cache_warn:
+                reason += " · ⚠ " + t("bench.log.cache_warn", cached=r.cached, tokens=r.prompt_tokens)
             self._preview_verdict(f"{mark} {t('bench.preview.verdict')}{reason}", r.passed,
                                   {"model": r.model, "suite": r.suite, "test": r.test_id, "passed": int(r.passed),
                                    "reason": reason.lstrip(" –"), "prompt": r.prompt, "answer": r.answer})
