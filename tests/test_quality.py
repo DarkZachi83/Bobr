@@ -167,8 +167,9 @@ class RunnerTest(unittest.TestCase):
             db = BenchDb(Path(d) / "b.sqlite")
             db.add_quality(r, measured_at="t", runtime="ollama", runtime_version="x", hardware="h")
             import sqlite3
-            row = sqlite3.connect(db.path).execute(
-                "SELECT prompt_tokens, prompt_cached, cache_warn FROM quality").fetchone()
+            from contextlib import closing
+            with closing(sqlite3.connect(db.path)) as con:          # Windows: plik zamknięty przed sprzątaniem
+                row = con.execute("SELECT prompt_tokens, prompt_cached, cache_warn FROM quality").fetchone()
             self.assertEqual(row, (40, None, 0))
 
     def test_controller_saves_quality(self):
