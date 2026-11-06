@@ -205,12 +205,15 @@ class RunnerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             c = main.build_app(user_dir=Path(d) / "cfg", cache_dir=Path(d) / "cache")
             bench, gen = fake_bench()
-            out = c.run_benchmark(["ollama:llama3.1:8b"], [1024], {}, DESKTOP_3060, lambda e: None,
+            events = []
+            out = c.run_benchmark(["ollama:llama3.1:8b"], [1024], {}, DESKTOP_3060, events.append,
                                   threading.Event(), db=c.bench_db, bench=bench, vram_busy=0,
                                   suites=("perf", "en_format_v1"))
             self.assertEqual(sum(1 for r in out if isinstance(r, q.QualityResult)), 7)
             self.assertEqual(c.bench_db.quality_count(), 7)
             self.assertEqual(c.bench_db.count(), 1)
+            start = events[0]                                            # dziennik: co naprawdę mierzymy
+            self.assertEqual((start["perf"], start["q_suites"], start["q_tasks"], start["q_runs"]), (1, 1, 7, 1))
 
 
 if __name__ == "__main__":

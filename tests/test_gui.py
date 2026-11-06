@@ -319,6 +319,11 @@ class GuiSmokeTest(unittest.TestCase):
         b.mode.set("standard")
         b._mode_changed()
         self.assertEqual((b.repeats.get(), b.repeat_count), ("1", 1))
+        b._progress({"event": "start", "version": "0.40.13", "jobs": 1, "perf": 0, "q_suites": 1,
+                     "q_tasks": 8, "q_runs": 3})
+        line = b.log_lines[-1]
+        self.assertIn("jakość", line)
+        self.assertNotIn("rozgrzewka", line)                             # sama jakość – bez opisu wydajności
 
     def test_benchmark_tab_plan_run_and_log(self):
         from aibobr.bench.runner import PerfResult

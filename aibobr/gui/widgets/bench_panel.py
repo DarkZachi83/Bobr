@@ -648,8 +648,12 @@ class BenchmarkPanel(ttk.Frame):
         self.console.configure(state="normal")
         self.console.delete("1.0", "end")
         self.console.configure(state="disabled")
-        self.log("START", t("bench.log.models", names=", ".join(tg[len("ollama:"):] for tg in targets),
-                            contexts=", ".join(fmt_context(c) for c in contexts)))
+        names = ", ".join(tg[len("ollama:"):] for tg in targets)
+        if "perf" in suites:
+            self.log("START", t("bench.log.models", names=names,
+                                contexts=", ".join(fmt_context(c) for c in contexts)))
+        else:                                   # sama jakość – konteksty z pola nie są mierzone
+            self.log("START", t("bench.log.models_q", names=names))
         if any(sid != "perf" for sid in suites):
             self.log("INFO", t(f"bench.log.mode.{mode}", runs=repeats))
         self._clock()
@@ -687,7 +691,12 @@ class BenchmarkPanel(ttk.Frame):
         event = p.get("event", "step")
         ctx = fmt_context(p["context"]) if "context" in p else ""
         if event == "start":
-            self.log("INFO", t("bench.log.start", version=p.get("version") or "?", jobs=p["jobs"]))
+            perf = p.get("perf", p["jobs"])
+            parts = [t("bench.log.start_perf", jobs=perf)] if perf else []
+            if p.get("q_suites"):
+                parts.append(t("bench.log.start_quality", suites=p["q_suites"], tasks=p["q_tasks"],
+                               runs=p.get("q_runs", 1)))
+            self.log("INFO", t("bench.log.start", version=p.get("version") or "?", what=" · ".join(parts)))
             if p.get("busy_mb") is not None:
                 self.log("INFO", t("bench.log.busy", mb=p["busy_mb"]))
         elif event == "step":
