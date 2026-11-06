@@ -457,7 +457,8 @@ zwalnia model z karty (`keep_alive: 0`), także przy przejściu do następnego m
 55 W, a pod obciążeniem karta bierze 68–77 W. Ostrzeżenie w benchmarku tylko bez Dynamic Boost i gdy pobór
 nie przekroczył odczytanego limitu o ponad 5% (limit dynamiczny – także na Windows).
 
-**12c – jakość (testy Zacharskiego):** pakiety `pl_jezyk_v1` (7 zadań polszczyzny + Księga
+**12c – jakość (testy Zacharskiego):** pakiety `pl_jezyk_v1` – „Zacharski tests: Szuflandia (Polish)”,
+nawiązanie do Szuflandii z „Kingsajzu” (decyzja autora 6.11.2026) – (7 zadań polszczyzny + Księga
 henrykowska jako osobna kategoria „wiedza”) i `en_format_v1` (4 × JSON, 3 × Python). Każde zadanie
 raz: temperatura 0, seed 42, myślenie wyłączone, kontekst 2k. Ocena (`bench/quality.py`): wzorce
 autora; JSON ŚCISŁY (cała odpowiedź) i ŁAGODNY (z ```json albo z tekstu); kod – tylko `ast.parse`
