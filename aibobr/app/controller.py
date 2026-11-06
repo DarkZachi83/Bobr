@@ -362,7 +362,11 @@ class AppController:
         results = []
         jobs = [j for tg in targets for j in [(tg, ("perf", c)) for c in (contexts if "perf" in suites else ())]
                 + [(tg, ("quality", sid)) for sid in quality]]
+        q_jobs = [what for _, (kind, what) in jobs if kind == "quality"]
         report({"event": "start", "version": version, "jobs": len(jobs),
+                "perf": len(jobs) - len(q_jobs), "q_suites": len(q_jobs),
+                "q_tasks": sum(len(quality[sid].get("tests", ())) for sid in q_jobs),
+                "q_runs": max(1, int(repeats)) if mode == "controlled" else 1,
                 "busy_mb": round(busy / 1024**2) if busy is not None else None})
         loaded = None                        # model w karcie: zostaje między długościami kontekstu
         chunk = lambda text: report({"event": "chunk", "text": text})      # noqa: E731

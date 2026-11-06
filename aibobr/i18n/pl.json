@@ -65,7 +65,7 @@
   "bench.log.save": "Zapisz log…",
   "bench.log.saved": "Zapisano: {path}",
   "bench.log.skip": "{model} | {context} – pominięty: według AI Bóbra się nie zmieści.",
-  "bench.log.start": "Ollama {version} · do zmierzenia: {jobs} (model × kontekst) · rozgrzewka + 3 przebiegi, mediana.",
+  "bench.log.start": "Ollama {version} · do zmierzenia: {what}.",
   "bench.log.stopped": "Zatrzymano – zapisane są tylko ukończone pomiary.",
   "bench.log.tg": "{tg} tok/s",
   "bench.log.title": "Przebieg benchmarku",
@@ -569,5 +569,8 @@
   "export.q.distinct": "Różnych odpowiedzi",
   "export.q.cached_min": "Pamięć promptu min",
   "export.q.cached_max": "Pamięć promptu max",
-  "export.q.warn": "Ostrzeżenie (pamięć promptu)"
+  "export.q.warn": "Ostrzeżenie (pamięć promptu)",
+  "bench.log.start_perf": "wydajność – {jobs} (model × kontekst), rozgrzewka + 3 przebiegi, mediana",
+  "bench.log.start_quality": "jakość – pakiety: {suites}, zadania: {tasks}, prób na zadanie: {runs}",
+  "bench.log.models_q": "Modele: {names} · tylko jakość (kontekst 2k)"
 }

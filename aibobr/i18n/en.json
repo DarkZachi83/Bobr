@@ -65,7 +65,7 @@
   "bench.log.save": "Save log…",
   "bench.log.saved": "Saved: {path}",
   "bench.log.skip": "{model} | {context} – skipped: AI BEAVER predicts it won't fit.",
-  "bench.log.start": "Ollama {version} · to measure: {jobs} (model × context) · warm-up + 3 runs, median.",
+  "bench.log.start": "Ollama {version} · to measure: {what}.",
   "bench.log.stopped": "Stopped – only finished measurements are saved.",
   "bench.log.tg": "{tg} tok/s",
   "bench.log.title": "Benchmark log",
@@ -569,5 +569,8 @@
   "export.q.distinct": "Distinct answers",
   "export.q.cached_min": "Prompt cache min",
   "export.q.cached_max": "Prompt cache max",
-  "export.q.warn": "Warning (prompt cache)"
+  "export.q.warn": "Warning (prompt cache)",
+  "bench.log.start_perf": "performance – {jobs} (model × context), warm-up + 3 runs, median",
+  "bench.log.start_quality": "quality – suites: {suites}, tasks: {tasks}, attempts per task: {runs}",
+  "bench.log.models_q": "Models: {names} · quality only (2k context)"
 }
