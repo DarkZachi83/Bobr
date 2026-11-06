@@ -51,6 +51,7 @@
   "bench.found.size": "Size",
   "bench.found.verdict": "Verdict",
   "bench.log.agree": "{same}/{runs} identical, passed {passes}/{runs}",
+  "bench.log.cache_warn": "prompt served from the server cache ({cached} of {tokens} tokens) – the result may differ from a first-time question",
   "bench.log.autoscroll": "Auto-scroll",
   "bench.log.busy": "Card memory in use before the test: {mb} MiB (system and programs, without Ollama models).",
   "bench.log.copied": "Copied the log ({n} lines) to the clipboard.",

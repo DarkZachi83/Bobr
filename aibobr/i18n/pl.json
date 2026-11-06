@@ -51,6 +51,7 @@
   "bench.found.size": "Rozmiar",
   "bench.found.verdict": "Werdykt",
   "bench.log.agree": "{same}/{runs} identycznych, zaliczone {passes}/{runs}",
+  "bench.log.cache_warn": "prompt z pamięci serwera ({cached} z {tokens} tokenów) – wynik może się różnić od pytania zadanego pierwszy raz",
   "bench.log.autoscroll": "Auto-przewijanie",
   "bench.log.busy": "Pamięć karty zajęta przed testem: {mb} MiB (system i programy, bez modeli Ollamy).",
   "bench.log.copied": "Skopiowano dziennik ({n} wierszy) do schowka.",

@@ -110,6 +110,8 @@ class RunnerTest(unittest.TestCase):
         n = {"i": 0}
 
         def gen(payload):
+            if payload["prompt"] == q.FILLER:                            # przerywnik – nie liczymy
+                return {"response": "OK", "eval_count": 1, "eval_duration": 10**7}
             n["i"] += 1
             text = "Tomaszu" if n["i"] % 5 else "Tomku"                  # co piąta odpowiedź inna
             return {"response": text, "eval_count": 2, "eval_duration": 10**8}
@@ -121,6 +123,54 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(n["i"], 5)
         self.assertEqual(sum(e["event"] == "chunk" for e in events), 1)  # podgląd: pierwszy przebieg
         self.assertEqual(q.score([r])["agree"], (0, 1))                  # nie wszystkie identyczne
+
+    def test_filler_before_every_attempt(self):
+        """Eksperyment kontrolny: prompt z pamięci zmienia odpowiedź – przed każdą próbą przerywnik."""
+        from aibobr.bench.ollama import OllamaBench
+        prompts = []
+
+        def gen(payload):
+            prompts.append(payload["prompt"])
+            if payload["prompt"] == q.FILLER:
+                self.assertEqual(payload["options"]["num_predict"], q.FILLER_TOKENS)
+                self.assertEqual(payload["options"]["num_ctx"], q.CONTEXT)    # bez przeładowania modelu
+                self.assertFalse(payload["stream"])
+                return {"response": "OK"}
+            return {"response": "Tomaszu", "prompt_eval_count": 40, "prompt_eval_cached_count": 4}
+        bench = OllamaBench("http://h", FakeHttp(json={"http://h/api/generate": gen}))
+        two = dict(PL, tests=[TESTS["pl_vocative"], TESTS["pl_genitive_plural"]])
+        events = []
+        out = q.QualityRunner(bench, two, repeats=3).run("m", events.append)
+        task = [p for p in prompts if p != q.FILLER]
+        self.assertEqual(len(task), 6)
+        self.assertEqual(prompts, [x for p in task for x in (q.FILLER, p)])  # przerywnik, próba, przerywnik…
+        self.assertEqual((out[0].prompt_tokens, out[0].cached, out[0].cache_warn), (40, 4, False))
+        self.assertEqual(sum(e["event"] == "chunk" for e in events), 2)  # przerywnik bez podglądu
+
+    def test_cache_warning_and_missing_field(self):
+        from aibobr.bench.ollama import OllamaBench
+
+        def gen_hit(payload):                                            # serwer i tak dał prompt z pamięci
+            return {"response": "Tomaszu", "prompt_eval_count": 40, "prompt_eval_cached_count": 39}
+
+        def gen_old(payload):                                            # starsza Ollama – bez pola
+            return {"response": "Tomaszu", "prompt_eval_count": 40}
+        one = dict(PL, tests=[TESTS["pl_vocative"]])
+        r = q.QualityRunner(OllamaBench("http://h", FakeHttp(json={"http://h/api/generate": gen_hit})),
+                            one).run("m")[0]
+        self.assertEqual((r.cached, r.cache_warn), (39, True))
+        r = q.QualityRunner(OllamaBench("http://h", FakeHttp(json={"http://h/api/generate": gen_old})),
+                            one).run("m")[0]
+        self.assertEqual((r.cached, r.cache_warn), (None, False))       # brak pola to None, nie 0
+        with tempfile.TemporaryDirectory() as d:
+            from aibobr.app.bench_db import BenchDb
+            db = BenchDb(Path(d) / "b.sqlite")
+            db.add_quality(r, measured_at="t", runtime="ollama", runtime_version="x", hardware="h")
+            import sqlite3
+            from contextlib import closing
+            with closing(sqlite3.connect(db.path)) as con:          # Windows: plik zamknięty przed sprzątaniem
+                row = con.execute("SELECT prompt_tokens, prompt_cached, cache_warn FROM quality").fetchone()
+            self.assertEqual(row, (40, None, 0))
 
     def test_controller_saves_quality(self):
         import main
