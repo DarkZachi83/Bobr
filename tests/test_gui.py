@@ -281,6 +281,28 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertFalse(page.wide)
         self.assertEqual(int(page.right.grid_info()["row"]), 1)     # prawa kolumna pod lewą
 
+    def test_benchmark_export_quality_only(self):
+        """Zgłoszenie autora: sama jakość, bez wydajności – eksport nie może milczeć."""
+        import aibobr.gui.widgets.bench_panel as bp
+        from tests.test_export import CONTROLLED
+        w = self.window()
+        b = w.bench
+        info, saved = [], []
+        old_info, old_ask = bp.messagebox.showinfo, bp.filedialog.asksaveasfilename
+        d = tempfile.mkdtemp()
+        bp.messagebox.showinfo = lambda title, text, parent=None: info.append(text)
+        bp.filedialog.asksaveasfilename = lambda **kw: saved.append(kw) or str(Path(d) / "bobr.csv")
+        try:
+            b.export_csv()                                               # nic jeszcze nie zmierzono
+            self.assertEqual(len(info), 1)
+            self.assertEqual(saved, [])
+            b.quality = [CONTROLLED]
+            b.export_csv()
+            self.assertEqual(sorted(p.name for p in Path(d).iterdir()),
+                             ["bobr_jakosc_podsumowanie.csv", "bobr_jakosc_proby.csv"])
+        finally:
+            bp.messagebox.showinfo, bp.filedialog.asksaveasfilename = old_info, old_ask
+
     def test_benchmark_quality_mode(self):
         """Standardowy: 1 próba (pole zablokowane); kontrolowany: 1/3/5 i tryb idzie do pomiaru."""
         w = self.window()

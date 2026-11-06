@@ -489,6 +489,10 @@ przyszła ponad połowa promptu; **tryb kontrolowany** – zwolnienie przed każ
 próba z `prompt_eval_cached_count > 0` albo bez potwierdzonego zwolnienia nie wchodzi do wyniku.
 Brak pola = NULL („brak danych o cache”). Baza: tryb, próby niespełniające warunków i JSON
 wszystkich prób (pełne odpowiedzi, pamięć promptu, czas wczytania, zwolnienie).
+**Eksport CSV (0.8.1):** jeden przycisk, do trzech plików – tylko te z danymi: `_wydajnosc.csv`,
+`_jakosc_proby.csv` (każda próba osobno, „Próba 1/N”, ważna, pamięć promptu, pełna odpowiedź) i
+`_jakosc_podsumowanie.csv` (werdykt większościowy osobno od próby 1, zgodne z próbą 1, najczęstsza
+odpowiedź, liczba różnych odpowiedzi, pamięć promptu min/max, ⚠). Brak danych – okienko, nie cisza.
 
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.

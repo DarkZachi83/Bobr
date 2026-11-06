@@ -11,7 +11,6 @@ końca, kopiowanie, zapis do pliku, eksport CSV). Modele mierzymy PO KOLEI – n
 """
 from __future__ import annotations
 
-import csv
 import datetime
 import threading
 import time
@@ -602,23 +601,21 @@ class BenchmarkPanel(ttk.Frame):
             self.on_status(t("bench.log.saved", path=path))
 
     def export_csv(self) -> None:
-        done = [r for r in self.results if r.tg_tps]
-        if not done:
-            self.on_status(t("bench.csv_none"))
+        """Wydajność i jakość z bieżącego przebiegu – do trzech plików (aibobr.bench.export)."""
+        from aibobr.bench import export
+        perf = [r for r in self.results if r.tg_tps]
+        quality = self.quality or [r for rs in self.qresults.values() for r in rs]
+        if not perf and not quality:
+            messagebox.showinfo(t("bench.log.csv"), t("bench.csv_none"), parent=self)
             return
-        name = f"bobr_wyniki_{datetime.datetime.now():%Y-%m-%d_%H-%M-%S}.csv"
+        name = f"bobr_{datetime.datetime.now():%Y-%m-%d_%H-%M-%S}.csv"
         path = filedialog.asksaveasfilename(parent=self, title=t("bench.log.csv"), initialfile=name,
                                             defaultextension=".csv", filetypes=[("CSV", "*.csv")])
         if not path:
             return
-        with open(path, "w", encoding="utf-8-sig", newline="") as f:
-            w = csv.writer(f, delimiter=";")
-            w.writerow([t(f"bench.col.{c}") for c in COLUMNS[:-1]] + ["W"])
-            for r in done:
-                w.writerow([r.model, r.context, r.predicted or "", _num(r.pp_tps, 0), _num(r.ttft_ms, 0),
-                            _num(r.tg_tps), f"{r.gpu_share * 100:.0f}%" if r.gpu_share is not None else "",
-                            f"{r.power_draw_w:.0f}" if r.power_draw_w else ""])
-        self.on_status(t("bench.log.saved", path=path))
+        written = export.export_all(path, perf, quality)
+        self.on_status(t("bench.log.exported", files=", ".join(p.name for p in written)))
+        self.log("INFO", t("bench.log.exported", files=", ".join(str(p) for p in written)))
 
     # ------------------------------------------------------------------ pomiar
     def start(self) -> None:
@@ -637,6 +634,8 @@ class BenchmarkPanel(ttk.Frame):
         self.hw = hw
         self.running = True
         self.results = []
+        self.quality = []
+        self.qresults.clear()                  # eksport i podgląd – tylko ten przebieg
         self.steps_done = 0
         self.started = time.monotonic()
         self.stop.clear()
