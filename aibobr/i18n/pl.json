@@ -127,7 +127,7 @@
   "bench.stopped_note": "Zatrzymano – zapisane są tylko ukończone pomiary.",
   "bench.suite.en_format_v1": "JSON i kod",
   "bench.suite.perf": "Wydajność",
-  "bench.suite.pl_jezyk_v1": "Polszczyzna",
+  "bench.suite.pl_jezyk_v1": "Szuflandia (polszczyzna)",
   "bench.suites_label": "Pakiety:",
   "bench.tab": "Benchmark",
   "bench.time_line": "Czas od startu: {elapsed} · zostało ok. {left}",

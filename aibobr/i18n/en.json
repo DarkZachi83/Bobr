@@ -127,7 +127,7 @@
   "bench.stopped_note": "Stopped – only finished measurements are saved.",
   "bench.suite.en_format_v1": "JSON and code",
   "bench.suite.perf": "Performance",
-  "bench.suite.pl_jezyk_v1": "Polish",
+  "bench.suite.pl_jezyk_v1": "Szuflandia (Polish)",
   "bench.suites_label": "Suites:",
   "bench.tab": "Benchmark",
   "bench.time_line": "Elapsed: {elapsed} · about {left} left",
