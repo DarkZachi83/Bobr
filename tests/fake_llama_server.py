@@ -37,7 +37,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             return self._json({"status": "ok"})
         if self.path == "/props":
-            return self._json({"build_info": "fake", "total_slots": 1})
+            return self._json({"build_info": "fake", "total_slots": 1,
+                                "chat_template": "{{bos_token}}<user>{{ content }}<assistant>"})
 
     def do_POST(self):
         req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))

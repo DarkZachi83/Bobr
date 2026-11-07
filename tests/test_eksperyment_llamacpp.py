@@ -56,6 +56,7 @@ class FakeOllama:
                 req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 if self.path == "/api/show":
                     return self._json({"modelfile": f"FROM {gguf}\nTEMPLATE x", "details": {"family": "fake"},
+                                       "template": "{{- range .Messages }}<|im_start|>{{ .Role }}",
                                        "model_info": {"fake.block_count": 32}})
                 if req.get("keep_alive") == 0 and "prompt" not in req:
                     state.loaded.discard(req["model"])
@@ -133,18 +134,17 @@ class LlamaExperimentTest(unittest.TestCase):
         self.assertTrue(all(e["request"]["temperature"] == 0 and e["request"]["seed"] == 42 for e in raw))
         self.assertEqual({e["request"]["cache_prompt"] for e in raw}, {True, False})
 
-    def test_double_bos_stripped_and_token_counts_compared(self):
-        # „<s><user>…” po szablonie + BOS serwera: bez poprawki 2 tokeny początku
-        out, result = self.run_exp(prompt_n=6)          # pl_diacritics_restore ma w fałszywym tokenizerze 6
+    def test_token_counts_and_template_bos(self):
+        out, result = self.run_exp(prompt_n=6)
         events = [json.loads(x) for x in (out / "zdarzenia.jsonl").read_text(encoding="utf-8").splitlines()]
         tpl = next(e for e in events if e["type"] == "template")
-        self.assertTrue(tpl["bos_stripped"])
-        self.assertFalse(tpl["formatted"].startswith("<s>"))
-        self.assertEqual(tpl["token_ids"][0], 1)
-        self.assertNotEqual(tpl["token_ids"][1], 1)                  # jeden token początku, nie dwa
         s = result["summary"][0]
         self.assertEqual(s["tokeny_llama"], len(tpl["token_ids"]))
         self.assertIn(s["tokeny_jak_ollama"], ("tak", "NIE"))
+        m = result["manifest"]["modele"][MODEL]
+        self.assertEqual((m["szablon_gguf_ma_bos"], m["szablon_ollamy_ma_bos"]), (True, False))
+        self.assertEqual(el.has_bos("{{- range .Messages }}<|im_start|>{{ .Role }}"), False)
+        self.assertIsNone(el.has_bos(None))
 
     def test_first_divergence_shows_near_tie(self):
         out, result = self.run_exp()

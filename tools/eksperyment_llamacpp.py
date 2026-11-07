@@ -29,9 +29,9 @@ więc inna treść między serwerami nie jest jeszcze wynikiem. Wynikiem jest po
 Tokeny (0.8.2, pytanie z r/LocalLLaMA o logits):
 - llama.cpp: tokeny wejściowe z /tokenize (id i tekst), a przy każdej odpowiedzi n_probs: 5 –
   dla każdego wygenerowanego tokenu 5 najbardziej prawdopodobnych kandydatów (prawdopodobieństwa
-  po softmaksie, nie surowe logits). Zdublowany token początku (szablon dokleja „<s>”, a serwer
-  dodaje własny) jest usuwany przed wysłaniem; kolumna tokeny_jak_ollama mówi, czy wejście ma tyle
-  tokenów co w Ollamie – tylko wtedy porównanie między serwerami ma sens.
+  po softmaksie, nie surowe logits). Kolumna tokeny_jak_ollama mówi, czy wejście ma tyle tokenów
+  co w Ollamie – tylko wtedy porównanie między serwerami ma sens. Manifest zapisuje, czy szablon
+  z GGUF i szablon Ollamy zawierają token początku (Minitron: GGUF tak, Ollama nie).
 - Ollama: logprobs i top_logprobs w /api/generate, jeśli wersja je zwraca (inaczej null). Sekwencji
   tokenów wejściowych Ollama nie udostępnia – tylko ich liczbę.
 - Pierwsza rozbieżność: dla par, w których odpowiedź z pamięci i od zera się różni, pozycja
@@ -146,15 +146,16 @@ def tokenize(srv, text: str) -> tuple[list, list]:
     return ids, pieces
 
 
-def strip_double_bos(srv, formatted: str) -> tuple[str, list, list, bool]:
-    """Szablon czatu bywa z „<s>” na początku, a /completion i tak dodaje token początku – model
-    widzi go dwa razy (Minitron: 65 tokenów w llama.cpp, 64 w Ollamie). Usuwamy tekst z szablonu."""
-    ids, pieces = tokenize(srv, formatted)
-    if len(ids) >= 2 and ids[0] == ids[1] and pieces[0] and formatted.startswith(pieces[0]):
-        formatted = formatted[len(pieces[0]):]
-        ids, pieces = tokenize(srv, formatted)
-        return formatted, ids, pieces, True
-    return formatted, ids, pieces, False
+BOS_MARKERS = ("<s>", "<bos>", "<|begin_of_text|>", ".BOS", "bos_token")
+
+
+def has_bos(template: Optional[str]) -> Optional[bool]:
+    """Czy szablon czatu jawnie zaczyna od tokenu początku. Minitron: w GGUF „{{bos_token}}”,
+    w Ollamie (szablon przerobiony z hf.co) – brak; przez to 64 tokeny w Ollamie, 65 w llama.cpp
+    (sprawdzone w trybie raw: bez <s> 45 tokenów, z <s> 46)."""
+    if not template:
+        return None
+    return any(m in template for m in BOS_MARKERS)
 
 
 # ---------------------------------------------------------------------- llama-server
@@ -233,7 +234,8 @@ def gguf_of(http: HttpClient, host: str, model: str) -> tuple[Optional[str], Opt
             break
     info = show.get("model_info") or {}
     blocks = next((int(v) for k, v in info.items() if k.endswith(".block_count")), None)
-    return path, blocks, {"details": show.get("details"), "parameters": show.get("parameters")}
+    return path, blocks, {"details": show.get("details"), "parameters": show.get("parameters"),
+                          "template": show.get("template")}
 
 
 def readable(path: Optional[str]) -> bool:
@@ -422,6 +424,9 @@ class Experiment:
                                                               "total_slots", "chat_template") if k in props}
         except Exception:
             pass
+        # Token początku w szablonach: różnica w liczbie tokenów między serwerami (Minitron 64/65).
+        entry["szablon_gguf_ma_bos"] = has_bos((entry.get("llama_props") or {}).get("chat_template"))
+        entry["szablon_ollamy_ma_bos"] = has_bos(show.get("template"))
         try:
             for test_id in task_ids:
                 prompt = self.tests[test_id]["prompt"]
@@ -433,9 +438,9 @@ class Experiment:
                     self.echo(f"  ! /apply-template nie działa ({e}) – potrzebny nowszy llama-server.")
                     entry["status"] = "brak /apply-template"
                     return
-                formatted, ids, pieces, stripped = strip_double_bos(srv, formatted)
+                ids, pieces = tokenize(srv, formatted)
                 self.prompt_tokens.setdefault((model, test_id), {})["llama"] = len(ids)
-                self.event("template", model=model, test=test_id, formatted=formatted, bos_stripped=stripped,
+                self.event("template", model=model, test=test_id, formatted=formatted,
                            token_ids=ids, token_pieces=pieces)
                 self.echo(f"{model} · {test_id} · llama.cpp E/F")
                 self.llama_attempt(srv, model, test_id, "E", "przygotowawcza", False, formatted)
