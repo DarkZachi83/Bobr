@@ -20,3 +20,7 @@ Thumbs.db
 
 # notatki lokalne / local notes
 *.local.md
+
+# wyniki tools/eksperyment_cache.py
+eksperyment-cache-*/
+eksperyment-llamacpp-*/
