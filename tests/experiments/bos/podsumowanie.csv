@@ -1,0 +1,66 @@
+﻿model;zadanie;szablon_zaliczone;szablon_najczestsza;szablon_roznych;szablon_tokeny;raw_zaliczone;raw_najczestsza;raw_roznych;raw_tokeny;raw+bos_zaliczone;raw+bos_najczestsza;raw+bos_roznych;raw+bos_tokeny;raw_jak_szablon;bos_zmienia_odpowiedz;odpowiedz_bez_bos;odpowiedz_z_bos
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;pl_diacritics_restore;0/3;3/3;1;49;0/3;3/3;1;49;3/3;3/3;1;50;tak;TAK;Zazółć gęślą jaźń;"""Zażółć gęślą jaźń"""
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;pl_chrzaszcz_plural_past;3/3;3/3;1;52;3/3;3/3;1;52;3/3;3/3;1;53;tak;nie;Chrząszcze brzmiały w trzcinach.;Chrząszcze brzmiały w trzcinach.
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;pl_masculine_personal;3/3;3/3;1;45;3/3;3/3;1;45;3/3;3/3;1;46;tak;nie;Ci dobrzy lekarze przyszli.;Ci dobrzy lekarze przyszli.
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;pl_numeral_words;3/3;3/3;1;58;3/3;3/3;1;58;3/3;3/3;1;59;tak;nie;Dwadzieścia dwa koty siedzą na płocie.;Dwadzieścia dwa koty siedzą na płocie.
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;pl_vocative;3/3;3/3;1;32;3/3;3/3;1;32;3/3;3/3;1;33;tak;TAK;Tomaszu.;Tomaszu
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;pl_perfective_aspect;3/3;3/3;1;49;3/3;3/3;1;49;3/3;3/3;1;50;tak;TAK;napisać.;napisać
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;pl_genitive_plural;0/3;3/3;1;56;0/3;3/3;1;56;0/3;3/3;1;57;tak;nie;jabłka.;jabłka.
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;pl_henrykowska;0/3;3/3;1;64;0/3;3/3;1;64;0/3;3/3;1;65;tak;TAK;"Zdanie ""Day, ut ia pobrusa, a ti poziwai"" z Księgi henrykowskiej oznacza w tłumaczeniu na współczesną polszczyznę: ""Daj, abym ja pomielił, a ty popatrz"" lub ""Pozwól mi ja pomieleć, a ty popatrz"". Jest to prośba jednej osoby do drugiej o umożliwienie wykonania jakiejś czynności (w tym przypadku mielenia zboża na żarnach), podczas gdy druga osoba ma obserwować lub pomagać. To zdanie jest uważane za najstarszy zachowany przykład polskiego zdania w piśmie, pochodzący z XIII wieku.";"Zdanie ""Day, ut ia pobrusa, a ti poziwai"" z Księgi henrykowskiej oznacza w dosłownym tłumaczeniu: ""Daj, abym ja pomielił, a ty popatrz"", co jest prośbą jednej osoby do drugiej o pozwolenie na wykonanie jakiejś czynności (w tym przypadku mielenia zboża na żarnach), podczas gdy druga osoba ma w tym czasie obserwować. Jest to jedno z najstarszych zachowanych zdań w języku polskim, zapisane w dokumencie z 1275 roku."
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;json_hardware;3/3;3/3;1;92;3/3;3/3;1;92;3/3;3/3;1;93;tak;TAK;"```json
+{
+  ""cpu"": ""Ryzen 7 5700X"",
+  ""ram_gb"": 32,
+  ""vram_gb"": 8
+}
+```";"{
+  ""cpu"": ""Ryzen 7 5700X"",
+  ""ram_gb"": 32,
+  ""vram_gb"": 8
+}"
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;json_primes;3/3;3/3;1;26;3/3;3/3;1;26;3/3;3/3;1;27;tak;nie;[2, 3, 5, 7, 11];[2, 3, 5, 7, 11]
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;json_nested;3/3;3/3;1;57;3/3;3/3;1;57;3/3;3/3;1;58;tak;nie;"{""name"": ""Anna"", ""age"": 34, ""skills"": [""Python"", ""SQL""]}";"{""name"": ""Anna"", ""age"": 34, ""skills"": [""Python"", ""SQL""]}"
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;json_escaping;0/3;3/3;1;43;0/3;3/3;1;43;0/3;3/3;1;44;tak;nie;"{""quote"": ""She said 'hi' and left \ fast.""}";"{""quote"": ""She said 'hi' and left \ fast.""}"
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;py_palindrome;3/3;3/3;1;43;3/3;3/3;1;43;3/3;3/3;1;44;tak;nie;"Code:
+
+def is_palindrome(s):
+    s = s.replace(' ', '').lower()
+    return s == s[::-1]";"Code:
+
+def is_palindrome(s):
+    s = s.replace(' ', '').lower()
+    return s == s[::-1]"
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;py_fibonacci;3/3;3/3;1;46;3/3;3/3;1;46;3/3;3/3;1;47;tak;TAK;"def fibonacci(n):
+    fib_sequence = [0, 1]
+    for i in range(2, n):
+        fib_sequence.append(fib_sequence[i-1] + fib_sequence[i-2])
+    return fib_sequence[:n]";"def fibonacci(n):
+    fib_sequence = [0, 1]
+    while len(fib_sequence) < n:
+        fib_sequence.append(fib_sequence[-1] + fib_sequence[-2])
+    return fib_sequence[:n]"
+hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M;py_class;3/3;3/3;1;32;3/3;3/3;1;32;3/3;3/3;1;33;tak;nie;"class Stack:
+    def __init__(self):
+        self.items = []
+
+    def push(self, item):
+        self.items.append(item)
+
+    def pop(self):
+        if not self.is_empty():
+            return self.items.pop()
+
+    def is_empty(self):
+        return len(self.items) == 0";"class Stack:
+    def __init__(self):
+        self.items = []
+
+    def push(self, item):
+        self.items.append(item)
+
+    def pop(self):
+        if not self.is_empty():
+            return self.items.pop()
+
+    def is_empty(self):
+        return len(self.items) == 0"
