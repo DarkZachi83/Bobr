@@ -26,8 +26,9 @@ def free_port():
 class FakeOllama:
     """/api/tags, /api/show (FROM pliku GGUF), /api/ps, /api/generate z pamięcią promptu."""
 
-    def __init__(self, gguf: Path, share=1.0):
+    def __init__(self, gguf: Path, share=1.0, prompt_n=20, logprobs=True):
         self.loaded, self.last = set(), None
+        self.prompt_n, self.logprobs = prompt_n, logprobs
         state = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -55,6 +56,7 @@ class FakeOllama:
                 req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 if self.path == "/api/show":
                     return self._json({"modelfile": f"FROM {gguf}\nTEMPLATE x", "details": {"family": "fake"},
+                                       "template": "{{- range .Messages }}<|im_start|>{{ .Role }}",
                                        "model_info": {"fake.block_count": 32}})
                 if req.get("keep_alive") == 0 and "prompt" not in req:
                     state.loaded.discard(req["model"])
@@ -63,8 +65,15 @@ class FakeOllama:
                 hit = req["model"] in state.loaded and state.last == req["prompt"]
                 state.loaded.add(req["model"])
                 state.last = req["prompt"]
-                self._json({"response": "Zażółć gęślą jaźń" if hit else "Zazolc gesla jazn", "done": True,
-                            "prompt_eval_count": 20, "prompt_eval_cached_count": 19 if hit else 0})
+                text = "Zażółć gęślą jaźń" if hit else "Zazolc gesla jazn"
+                out = {"response": text, "done": True, "prompt_eval_count": state.prompt_n,
+                       "prompt_eval_cached_count": state.prompt_n - 1 if hit else 0}
+                if state.logprobs and req.get("logprobs"):
+                    first = ("Zażółć", -0.88, "Zazolc", -0.89) if hit else ("Zazolc", -0.88, "Zażółć", -0.89)
+                    out["logprobs"] = [{"token": first[0], "logprob": first[1],
+                                        "top_logprobs": [{"token": first[0], "logprob": first[1]},
+                                                         {"token": first[2], "logprob": first[3]}]}]
+                self._json(out)
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.host = f"http://127.0.0.1:{self.server.server_address[1]}"
@@ -81,11 +90,11 @@ def read_csv(path):
 
 
 class LlamaExperimentTest(unittest.TestCase):
-    def run_exp(self, share=1.0, models=None):
+    def run_exp(self, share=1.0, models=None, **fake_kw):
         d = Path(tempfile.mkdtemp())
         gguf = d / "model.gguf"
         gguf.write_bytes(b"GGUF")
-        fake = FakeOllama(gguf, share)
+        fake = FakeOllama(gguf, share, **fake_kw)
         self.addCleanup(fake.close)
         out = d / "out"
         exp = el.Experiment(out, FAKE_LLAMA, fake.host, port=free_port(), repeats=3, models=models,
@@ -124,6 +133,35 @@ class LlamaExperimentTest(unittest.TestCase):
         raw = [e for e in events if e["type"] == "llama_raw"]
         self.assertTrue(all(e["request"]["temperature"] == 0 and e["request"]["seed"] == 42 for e in raw))
         self.assertEqual({e["request"]["cache_prompt"] for e in raw}, {True, False})
+
+    def test_token_counts_and_template_bos(self):
+        out, result = self.run_exp(prompt_n=6)
+        events = [json.loads(x) for x in (out / "zdarzenia.jsonl").read_text(encoding="utf-8").splitlines()]
+        tpl = next(e for e in events if e["type"] == "template")
+        s = result["summary"][0]
+        self.assertEqual(s["tokeny_llama"], len(tpl["token_ids"]))
+        self.assertIn(s["tokeny_jak_ollama"], ("tak", "NIE"))
+        m = result["manifest"]["modele"][MODEL]
+        self.assertEqual((m["szablon_gguf_ma_bos"], m["szablon_ollamy_ma_bos"]), (True, False))
+        self.assertEqual(el.has_bos("{{- range .Messages }}<|im_start|>{{ .Role }}"), False)
+        self.assertIsNone(el.has_bos(None))
+
+    def test_first_divergence_shows_near_tie(self):
+        out, result = self.run_exp()
+        s = result["summary"][0]
+        self.assertEqual(s["llama_rozbieznosc_pozycja"], 0)
+        self.assertEqual(s["llama_rozbieznosc_E_top2"], "'Zażółć' 0.4120 | 'Zazolc' 0.4090")
+        self.assertEqual(s["llama_rozbieznosc_F_top2"], "'Zazolc' 0.4130 | 'Zażółć' 0.4080")
+        self.assertEqual(s["ollama_rozbieznosc_pozycja"], 0)
+        self.assertTrue(result["manifest"]["ollama_logprobs"])
+        self.assertEqual(result["manifest"]["wnioski"]["llama_rozbieznosci_z_tokenami"], 1)
+
+    def test_old_ollama_without_logprobs_is_null(self):
+        out, result = self.run_exp(logprobs=False)
+        s = result["summary"][0]
+        self.assertEqual((s["ollama_rozbieznosc_pozycja"], s["ollama_rozbieznosc_O0_top2"]), ("—", "—"))
+        self.assertFalse(result["manifest"]["ollama_logprobs"])
+        self.assertEqual(s["llama_rozbieznosc_pozycja"], 0)            # llama.cpp dalej ma dane
 
     def test_partial_offload_and_retry_when_out_of_memory(self):
         self.assertEqual(el.ngl_for(0.5, 32), 15)

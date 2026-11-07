@@ -24,3 +24,4 @@ Thumbs.db
 # wyniki tools/eksperyment_cache.py
 eksperyment-cache-*/
 eksperyment-llamacpp-*/
+eksperyment-ollama-*/
