@@ -26,6 +26,18 @@ Porównanie Ollama ↔ llama.cpp jest pomocnicze: szablony czatu i wersje silnik
 więc inna treść między serwerami nie jest jeszcze wynikiem. Wynikiem jest porównanie E ↔ F
 (ten sam serwer, ten sam stan modelu, zmienia się tylko pamięć promptu) i O0 ↔ O1.
 
+Tokeny (0.8.2, pytanie z r/LocalLLaMA o logits):
+- llama.cpp: tokeny wejściowe z /tokenize (id i tekst), a przy każdej odpowiedzi n_probs: 5 –
+  dla każdego wygenerowanego tokenu 5 najbardziej prawdopodobnych kandydatów (prawdopodobieństwa
+  po softmaksie, nie surowe logits). Zdublowany token początku (szablon dokleja „<s>”, a serwer
+  dodaje własny) jest usuwany przed wysłaniem; kolumna tokeny_jak_ollama mówi, czy wejście ma tyle
+  tokenów co w Ollamie – tylko wtedy porównanie między serwerami ma sens.
+- Ollama: logprobs i top_logprobs w /api/generate, jeśli wersja je zwraca (inaczej null). Sekwencji
+  tokenów wejściowych Ollama nie udostępnia – tylko ich liczbę.
+- Pierwsza rozbieżność: dla par, w których odpowiedź z pamięci i od zera się różni, pozycja
+  pierwszego innego tokenu i dwa najbardziej prawdopodobne tokeny w obu stanach – czy to był
+  niemal remis.
+
 Wyniki: zdarzenia.jsonl, proby.csv, podsumowanie.csv, manifest.json, llama-server-<model>.log.
 """
 from __future__ import annotations
@@ -61,6 +73,88 @@ PORT = 8089
 BATCH = 512
 START_TIMEOUT = 300.0          # s – wczytanie dużego modelu z dysku na wolniejszym komputerze
 SUITES_ORDER = ("pl_jezyk_v1", "en_format_v1")
+N_PROBS = 5
+
+
+# ---------------------------------------------------------------------- tokeny i prawdopodobieństwa
+def _p(entry: dict) -> Optional[float]:
+    if entry.get("logprob") is not None:
+        return math.exp(float(entry["logprob"]))
+    if entry.get("prob") is not None:
+        return float(entry["prob"])
+    return None
+
+
+def llama_tokens(response: dict) -> Optional[list[dict]]:
+    """completion_probabilities z llama-server → [{token, id, p, top: [(token, p), …]}]. Obsługuje
+    nowy format (logprob, top_logprobs) i stary (content, probs: tok_str/prob)."""
+    probs = response.get("completion_probabilities")
+    if not probs:
+        return None
+    out = []
+    for e in probs:
+        top = e.get("top_logprobs") or e.get("top_probs") or e.get("probs") or []
+        out.append({"token": e.get("token", e.get("content")), "id": e.get("id"), "p": _p(e),
+                    "top": [(t.get("token", t.get("tok_str")), _p(t)) for t in top]})
+    return out
+
+
+def ollama_tokens(response: dict) -> Optional[list[dict]]:
+    """logprobs z Ollamy (nowsze wersje) → ten sam kształt co llama_tokens; None, gdy brak pola."""
+    lp = response.get("logprobs")
+    if not lp:
+        return None
+    return [{"token": e.get("token"), "id": e.get("id"), "p": _p(e),
+             "top": [(t.get("token"), _p(t)) for t in (e.get("top_logprobs") or [])]} for e in lp]
+
+
+def first_divergence(a: Optional[list[dict]], b: Optional[list[dict]]) -> Optional[dict]:
+    """Pierwsza pozycja, na której wygenerowane tokeny się różnią, i dwa najbardziej
+    prawdopodobne kandydaty w obu stanach. None – brak danych albo brak różnicy."""
+    if not a or not b:
+        return None
+    for i, (x, y) in enumerate(zip(a, b)):
+        if x["token"] != y["token"]:
+            return {"pozycja": i, "a": x, "b": y}
+    if len(a) != len(b):
+        i = min(len(a), len(b))
+        return {"pozycja": i, "a": a[i] if i < len(a) else None, "b": b[i] if i < len(b) else None}
+    return None
+
+
+def top2(entry: Optional[dict]) -> str:
+    """„'tok1' 0.4120 | 'tok2' 0.4090” – czy był niemal remis."""
+    if not entry:
+        return "—"
+    top = [(t, p) for t, p in entry.get("top", []) if p is not None][:2]
+    if not top:
+        return f"{entry.get('token')!r} {entry['p']:.4f}" if entry.get("p") is not None else repr(entry.get("token"))
+    return " | ".join(f"{t!r} {p:.4f}" for t, p in top)
+
+
+def tokenize(srv, text: str) -> tuple[list, list]:
+    """/tokenize z tokenem początku tak jak /completion: (identyfikatory, teksty tokenów)."""
+    r = srv.request("POST", "/tokenize", {"content": text, "add_special": True, "with_pieces": True})
+    ids, pieces = [], []
+    for t in r.get("tokens") or []:
+        if isinstance(t, dict):
+            ids.append(t.get("id"))
+            pieces.append(t.get("piece"))
+        else:
+            ids.append(t)
+            pieces.append(None)
+    return ids, pieces
+
+
+def strip_double_bos(srv, formatted: str) -> tuple[str, list, list, bool]:
+    """Szablon czatu bywa z „<s>” na początku, a /completion i tak dodaje token początku – model
+    widzi go dwa razy (Minitron: 65 tokenów w llama.cpp, 64 w Ollamie). Usuwamy tekst z szablonu."""
+    ids, pieces = tokenize(srv, formatted)
+    if len(ids) >= 2 and ids[0] == ids[1] and pieces[0] and formatted.startswith(pieces[0]):
+        formatted = formatted[len(pieces[0]):]
+        ids, pieces = tokenize(srv, formatted)
+        return formatted, ids, pieces, True
+    return formatted, ids, pieces, False
 
 
 # ---------------------------------------------------------------------- llama-server
@@ -176,6 +270,9 @@ class Experiment:
         self.order = 0
         self._events = None
         self.servers: dict = {}
+        self.tokens: dict = {}                 # (model, zadanie, wariant, próba) → tokeny odpowiedzi
+        self.prompt_tokens: dict = {}          # (model, zadanie) → {"llama": n, "ollama": n}
+        self.ollama_logprobs: Optional[bool] = None
 
     def event(self, kind: str, **data) -> None:
         self._events.write(json.dumps({"type": kind, "time": now_iso(), **data}, ensure_ascii=False) + "\n")
@@ -214,11 +311,30 @@ class Experiment:
         test = self.tests[test_id]
         _, max_tokens, temperature, seed = self.cfg[test_id]
         t0 = time.monotonic()
+        # Jak OllamaBench.generate (te same opcje), plus logprobs – Bobr ich nie prosi.
+        payload = {"model": model, "prompt": test["prompt"], "stream": False, "think": False, "keep_alive": "5m",
+                   "logprobs": True, "top_logprobs": N_PROBS,
+                   "options": {"num_ctx": CONTEXT, "num_predict": max_tokens, "temperature": temperature,
+                               "seed": seed}}
         try:
-            g = self.bench.generate(model, test["prompt"], CONTEXT, max_tokens, temperature=temperature, seed=seed)
+            r = self.http.post_json(f"{self.host}/api/generate", payload, timeout=900)
         except Exception as e:
             return self.row("ollama", model, test_id, variant, "1/1", True, False, "", None, None, None,
                             time.monotonic() - t0, f"{type(e).__name__}: {e}")
+        toks = ollama_tokens(r)
+        if self.ollama_logprobs is None or toks:
+            self.ollama_logprobs = toks is not None
+        self.tokens[(model, test_id, variant, "1/1")] = toks
+        self.prompt_tokens.setdefault((model, test_id), {})["ollama"] = r.get("prompt_eval_count")
+        self.event("ollama_raw", model=model, test=test_id, variant=variant,
+                   request={k: v for k, v in payload.items() if k != "prompt"},
+                   response={k: v for k, v in r.items() if k not in ("context",)})
+
+        class _G:                                       # jak Generation – reszta kodu bez zmian
+            text = str(r.get("response") or "")
+            prompt_tokens = int(r.get("prompt_eval_count") or 0)
+            prompt_cached = None if r.get("prompt_eval_cached_count") is None else int(r["prompt_eval_cached_count"])
+        g = _G
         cached = g.prompt_cached
         if variant == "O0":                           # od zera: zwolnienie potwierdzone i nic z pamięci
             ok = bool(released and released[0]) and not cached
@@ -234,7 +350,7 @@ class Experiment:
         _, max_tokens, temperature, seed = self.cfg[test_id]
         cache = variant == "E"
         payload = {"prompt": formatted, "n_predict": max_tokens, "temperature": temperature, "seed": seed,
-                   "cache_prompt": cache, "stream": False}
+                   "cache_prompt": cache, "stream": False, "n_probs": N_PROBS}
         t0 = time.monotonic()
         try:
             r = srv.request("POST", "/completion", payload)
@@ -253,6 +369,7 @@ class Experiment:
             ok = processed >= prompt_tokens            # F: cały prompt liczony od nowa
         row = self.row("llama.cpp", model, test_id, variant, label, counted, ok, str(r.get("content") or ""),
                        prompt_tokens, cached, processed, time.monotonic() - t0, ngl=srv.ngl)
+        self.tokens[(model, test_id, variant, label)] = llama_tokens(r)
         self.event("llama_raw", order=row["kolejnosc"], request=payload, response=r)
         return row
 
@@ -316,7 +433,10 @@ class Experiment:
                     self.echo(f"  ! /apply-template nie działa ({e}) – potrzebny nowszy llama-server.")
                     entry["status"] = "brak /apply-template"
                     return
-                self.event("template", model=model, test=test_id, formatted=formatted)
+                formatted, ids, pieces, stripped = strip_double_bos(srv, formatted)
+                self.prompt_tokens.setdefault((model, test_id), {})["llama"] = len(ids)
+                self.event("template", model=model, test=test_id, formatted=formatted, bos_stripped=stripped,
+                           token_ids=ids, token_pieces=pieces)
                 self.echo(f"{model} · {test_id} · llama.cpp E/F")
                 self.llama_attempt(srv, model, test_id, "E", "przygotowawcza", False, formatted)
                 for n in range(1, self.repeats + 1):
@@ -360,7 +480,8 @@ class Experiment:
             finally:
                 manifest["koniec"] = now_iso()
                 self.event("end", status=manifest["status"])
-        summary = summarize(self.rows)
+        manifest["ollama_logprobs"] = self.ollama_logprobs
+        summary = summarize(self.rows, self.tokens, self.prompt_tokens)
         write_csv(self.out / "proby.csv", self.rows)
         write_csv(self.out / "podsumowanie.csv", summary)
         manifest["wnioski"] = conclusions(summary)
@@ -382,7 +503,8 @@ def _same(a: Optional[str], b: Optional[str]) -> str:
     return "—" if a is None or b is None else ("tak" if a == b else "NIE")
 
 
-def summarize(rows: list[dict]) -> list[dict]:
+def summarize(rows: list[dict], tokens: Optional[dict] = None, prompt_tokens: Optional[dict] = None) -> list[dict]:
+    tokens, prompt_tokens = tokens or {}, prompt_tokens or {}
     pairs: dict = {}
     for r in rows:
         pairs.setdefault((r["model"], r["zadanie"]), []).append(r)
@@ -398,6 +520,14 @@ def summarize(rows: list[dict]) -> list[dict]:
         cold = warm[0]["odpowiedz"] if warm else None
         o0_text = o0[0]["odpowiedz"] if o0 else None
         o1_text = o1[0]["odpowiedz"] if o1 else None
+        # Pierwsza rozbieżność: pierwsza wliczona próba E kontra pierwsza F; O0 kontra O1.
+        def toks(variant, group):
+            return tokens.get((model, test_id, variant, group[0]["proba"])) if group else None
+        div_l = first_divergence(toks("E", e), toks("F", f)) if e_text != f_text else None
+        div_o = first_divergence(toks("O0", o0), toks("O1", o1)) if o0_text != o1_text else None
+        n = prompt_tokens.get((model, test_id), {})
+        same_n = "—" if n.get("llama") is None or n.get("ollama") is None else (
+            "tak" if n["llama"] == n["ollama"] else "NIE")
         out.append({
             "model": model, "zadanie": test_id,
             "ollama_O0_zaliczona": o0[0]["zaliczona"] if o0 else "—",
@@ -411,6 +541,13 @@ def summarize(rows: list[dict]) -> list[dict]:
             "llama_F_jak_pierwsze_zapytanie": _same(f_text, cold),
             "llama_F_jak_ollama_O0": _same(f_text, o0_text),
             "llama_E_jak_ollama_O1": _same(e_text, o1_text),
+            "tokeny_llama": null(n.get("llama")), "tokeny_ollama": null(n.get("ollama")), "tokeny_jak_ollama": same_n,
+            "llama_rozbieznosc_pozycja": "—" if not div_l else div_l["pozycja"],
+            "llama_rozbieznosc_E_top2": top2(div_l["a"]) if div_l else "—",
+            "llama_rozbieznosc_F_top2": top2(div_l["b"]) if div_l else "—",
+            "ollama_rozbieznosc_pozycja": "—" if not div_o else div_o["pozycja"],
+            "ollama_rozbieznosc_O0_top2": top2(div_o["a"]) if div_o else "—",
+            "ollama_rozbieznosc_O1_top2": top2(div_o["b"]) if div_o else "—",
             "pominiete": sum(r["wliczona"] == "nie" and r["proba"] != "przygotowawcza" for r in rs),
             "skrot_E": sha(e_text) if e_text is not None else "—",
             "skrot_F": sha(f_text) if f_text is not None else "—",
@@ -430,6 +567,9 @@ def conclusions(summary: list[dict]) -> dict:
         "llama_F_stabilne": sum(s["llama_F_roznych"] == 1 for s in measured),
         "llama_E_stabilne": sum(s["llama_E_roznych"] == 1 for s in measured),
         "llama_F_jak_pierwsze_zapytanie": count("llama_F_jak_pierwsze_zapytanie", "tak"),
+        "llama_rozbieznosci_z_tokenami": sum(s["llama_rozbieznosc_pozycja"] != "—" for s in summary),
+        "ollama_rozbieznosci_z_tokenami": sum(s["ollama_rozbieznosc_pozycja"] != "—" for s in summary),
+        "par_z_ta_sama_liczba_tokenow": count("tokeny_jak_ollama", "tak"),
     }
 
 

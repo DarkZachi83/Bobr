@@ -4,7 +4,7 @@ Czy kwantyzacja nie psuje odpowiedzi. Temperatura 0, seed 42, myślenie wyłącz
 
 Pamięć promptu (eksperyment kontrolny, tools/eksperyment_cache.py): odpowiedź zależy od tego,
 czy Ollama ma ten sam prompt w pamięci – liczony od zera daje inną odpowiedź niż wzięty z pamięci
-(8 z 10 par model–zadanie). Przerywnik z innym promptem NIE pomaga (test autora: dalej 48 z 49
+(6 z 10 par model–zadanie; poprawione z błędnego „8 z 10”). Przerywnik z innym promptem NIE pomaga (test autora: dalej 48 z 49
 tokenów z pamięci – Ollama ma kilka miejsc na pamięć promptu), więc stan ustala zwolnienie modelu:
 - tryb standardowy: model zwolniony raz przed pakietem, 1 próba na zadanie (prompty w pakiecie
   się nie powtarzają); ostrzeżenie cache_warn, gdy z pamięci przyszła ponad połowa promptu,

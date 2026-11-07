@@ -481,7 +481,7 @@ zapytania nadpisują Modelfile), zaliczone = większość przebiegów, kolumna Z
 z identycznymi odpowiedziami; podgląd na żywo – pierwszy przebieg.
 **Pamięć promptu (0.8.1):** eksperyment kontrolny (`tools/eksperyment_cache.py`, warianty A–D:
 strumień × model zwolniony) pokazał, że strumień nie zmienia odpowiedzi, a pamięć promptu tak –
-prompt liczony od zera i wzięty z pamięci dają w 8 z 10 par model–zadanie różne odpowiedzi (w tym
+prompt liczony od zera i wzięty z pamięci dają w 6 z 10 par model–zadanie różne odpowiedzi (w tym
 samym stanie zawsze identyczne). Przerywnik z innym promptem nie pomaga (test autora: dalej 48 z 49
 tokenów z pamięci), więc stan ustala zwolnienie modelu (keep_alive 0, potwierdzone w /api/ps):
 **tryb standardowy** (domyślny) – zwolnienie raz przed pakietem, 1 próba na zadanie, ⚠ gdy z pamięci
