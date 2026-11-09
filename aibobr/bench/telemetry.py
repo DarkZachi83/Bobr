@@ -418,6 +418,8 @@ def stability(samples: list[tuple[float, dict]], now: float, window: float, tole
     if now - samples[0][0] < window:
         return "waiting"
     recent = [s for m, s in samples if m >= now - window]
+    if len(recent) < 2:                       # z jednej próbki nie widać zmiany
+        return "waiting"
     for key in TEMP_KEYS:
         values = [s[key] for s in recent if s.get(key) is not None]
         if values and max(values) - min(values) > tolerance:

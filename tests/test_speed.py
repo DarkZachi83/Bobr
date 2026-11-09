@@ -337,7 +337,8 @@ class SessionTest(unittest.TestCase):
         clock = Clock()
         bench = FakeBench(clock)
         runner = speed.SpeedRunner(bench, speed.build_pack(suites()), clock=clock, sleep=lambda s: None)
-        job = SpeedBenchmark(bench, runner.pack, db=db, collector=self.collector(temps), settings=self.SETTINGS,
+        settings = {**self.SETTINGS, "bench_stabilization_window_s": 0.15, "bench_stabilization_timeout_s": 0.4}
+        job = SpeedBenchmark(bench, runner.pack, db=db, collector=self.collector(temps), settings=settings,
                              runner=runner, sampler_kw={"interval": 0.02})
         job.run(["a"], runs=1)
         run = db.runs(db.sessions()[0]["id"])[0]
