@@ -16,6 +16,9 @@
 <p align="center"><img src="docs/img/app.png" width="820" alt="AI Bóbr – Llama 3.1 8B on a laptop with RTX 5050 8 GB"></p>
 <p align="center"><sub>Llama 3.1 8B (Q4_K_M) on a laptop with an RTX 5050 8 GB: fits, but with a small margin. / Llama 3.1 8B na laptopie z RTX 5050 8 GB: mieści się, ale na styk.</sub></p>
 
+<p align="center"><img src="docs/img/benchmark-monitor.png" width="820" alt="AI Bóbr – benchmark Monitor window: CPU, temperatures, memory and GPU live"></p>
+<p align="center"><sub>Benchmark on your own computer: the Monitor window shows CPU, temperatures, memory and the GPU live, with the model's answer. / Benchmark na Twoim komputerze: okno Monitor pokazuje na żywo procesor, temperatury, pamięć i kartę oraz odpowiedź modelu.</sub></p>
+
 ---
 
 ## English
@@ -151,6 +154,11 @@ models takes long and loads the computer. It also notices a laptop card held at 
 a card that shares its memory with the monitor. A **live log** shows every run, with progress and the
 time left; you can copy it, save it to a file or export the results to CSV. Results are saved on your
 computer (`benchmarks.sqlite`).
+
+[![Benchmark Monitor window: CPU, temperatures, memory and GPU live, with the model's answer](docs/img/benchmark-monitor.png)](docs/img/benchmark-monitor.png)
+
+*The **Monitor** window during a benchmark: CPU load per thread, CPU and GPU temperature, RAM and swap,
+GPU load and VRAM, and the model's answer as it is written.*
 
 ### Models on your disk
 
@@ -329,6 +337,11 @@ kilku modeli trwa długo i obciąża komputer. Zauważa też kartę w laptopie n
 która dzieli pamięć z monitorem. **Dziennik na żywo** pokazuje każdy przebieg, postęp i czas do końca;
 możesz go skopiować, zapisać do pliku albo wyeksportować wyniki do CSV. Wyniki zostają na Twoim
 komputerze (`benchmarks.sqlite`).
+
+[![Okno Monitor w trakcie benchmarku: procesor, temperatury, pamięć i karta na żywo oraz odpowiedź modelu](docs/img/benchmark-monitor.png)](docs/img/benchmark-monitor.png)
+
+*Okno **Monitor** w trakcie benchmarku: obciążenie procesora z podziałem na wątki, temperatura CPU i GPU,
+RAM i swap, obciążenie karty i VRAM oraz odpowiedź modelu pisana na żywo.*
 
 ### Modele na dysku
 

@@ -739,5 +739,7 @@
   "hist.acol.suite": "Pakiet",
   "hist.acol.test_id": "Zadanie",
   "hist.acol.passed": "Zaliczone",
-  "hist.acol.mode": "Tryb"
+  "hist.acol.mode": "Tryb",
+  "speed.log.long_retry": "{context}: wejście miało {tokens} tokenów, poza zakresem {low}–{high} – powtarzam z poprawioną długością.",
+  "speed.long_retry_short": "próba 2 (poprawiona długość wejścia)"
 }
