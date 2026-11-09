@@ -454,14 +454,18 @@ def cool_down(sampler: Sampler, settings: Optional[dict] = None, run_id: Optiona
     deadline = start + timeout
     report("bench.cooling.start", {"window": window, "tolerance": tol})
 
+    def cooling_samples():
+        # tylko próbki z tej fazy: próbka sprzed set_phase może mieć ten sam czas (Windows: zegar co ~15 ms)
+        return [(m, s) for m, s in sampler.since(start) if s.get("phase") == "cooling"]
+
     def result(status: str) -> Cooling:
-        last = sampler.since(start)
+        last = cooling_samples()
         tail = last[-1][1] if last else {}
         return Cooling(status, round(sampler.clock() - start, 1), tail.get("cpu_temp_c"), tail.get("gpu_temp_c"))
 
     while True:
         now = sampler.clock()
-        state = stability(sampler.since(start), now, window, tol)
+        state = stability(cooling_samples(), now, window, tol)
         if state in ("stable", "no_sensors"):
             return result(state)
         if now >= deadline:
