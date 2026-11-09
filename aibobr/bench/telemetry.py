@@ -439,7 +439,8 @@ class Cooling:
 
 def cool_down(sampler: Sampler, settings: Optional[dict] = None, run_id: Optional[str] = None,
               on_timeout: Optional[Callable[[], bool]] = None, stop: Optional[threading.Event] = None,
-              report: Callable[[str, dict], None] = lambda key, kw: None, poll: float = 1.0) -> Cooling:
+              report: Callable[[str, dict], None] = lambda key, kw: None,
+              poll: Optional[float] = None) -> Cooling:
     """Czeka na stabilną temperaturę. Po przekroczeniu czasu pyta `on_timeout()`: True – „Kontynuuj test”
     (wynik z ostrzeżeniem), False – „Czekaj dalej” (pytamy znowu po kolejnym takim okresie).
     Bez `on_timeout` (tryb tekstowy, decyzja autora 3a) test rusza sam, z ostrzeżeniem."""
@@ -447,6 +448,7 @@ def cool_down(sampler: Sampler, settings: Optional[dict] = None, run_id: Optiona
     window, tol, timeout = (cfg["bench_stabilization_window_s"], cfg["bench_stabilization_tolerance_c"],
                             cfg["bench_stabilization_timeout_s"])
     stop = stop or threading.Event()
+    poll = poll or min(1.0, sampler.interval)
     sampler.set_phase("cooling", run_id)
     start = sampler.clock()
     deadline = start + timeout
