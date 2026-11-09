@@ -13,5 +13,9 @@
   "margin_ratio": 0.1,
   "margin_min_gb": 1.0,
   "overhead_gb": 0.5,
-  "telemetry_retention_days": null
+  "telemetry_retention_days": null,
+  "bench_stabilization_window_s": 30,
+  "bench_stabilization_tolerance_c": 1.0,
+  "bench_stabilization_timeout_s": 300,
+  "bench_baseline_s": 10
 }

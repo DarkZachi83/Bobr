@@ -572,5 +572,13 @@
   "export.q.warn": "Ostrzeżenie (pamięć promptu)",
   "bench.log.start_perf": "wydajność – {jobs} (model × kontekst), rozgrzewka + 3 przebiegi, mediana",
   "bench.log.start_quality": "jakość – pakiety: {suites}, zadania: {tasks}, prób na zadanie: {runs}",
-  "bench.log.models_q": "Modele: {names} · tylko jakość (kontekst 2k)"
+  "bench.log.models_q": "Modele: {names} · tylko jakość (kontekst 2k)",
+  "bench.cooling.start": "Stabilizacja temperatury: czekam, aż temperatura procesora i karty zmieni się o najwyżej {tolerance} °C w ciągu {window} s.",
+  "bench.cooling.wait_more": "Czekam dalej na stabilizację temperatury.",
+  "bench.cooling.title": "Stabilizacja temperatury trwa dłużej niż oczekiwano",
+  "bench.cooling.body": "Temperatura komputera nie ustabilizowała się w przewidzianym czasie. Możesz rozpocząć test mimo tego lub poczekać na dalsze chłodzenie.",
+  "bench.cooling.continue": "Kontynuuj test",
+  "bench.cooling.continue_hint": "Wynik zostanie oznaczony ostrzeżeniem o niepełnej stabilizacji.",
+  "bench.cooling.wait": "Czekaj dalej",
+  "bench.cooling.wait_hint": "Program kontynuuje monitorowanie temperatury."
 }

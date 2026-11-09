@@ -511,6 +511,23 @@ usuwa wyłącznie stare próbki telemetrii, potem `VACUUM`; wyniki zbiorcze, wer
 ostrzeżenia i odpowiedzi zostają. Ręczne usunięcie sesji (z potwierdzeniem) kasuje jej przebiegi,
 zadania i telemetrię, archiwum nie. Przyszły moduł oceny jakości dostanie własne tabele.
 
+**Telemetria 0.9 (`aibobr/bench/telemetry.py`):** próbka co 1 s (bez dryfu), paczkami do bazy.
+Procesor: psutil – obciążenie całe i na rdzeń; temperatura pakietu tylko na Linuksie (coretemp
+„Package id 0”, k10temp/zenpower „Tctl/Tdie”); moc z Linux RAPL (`/sys/class/powercap`, od 2020 r.
+zwykle tylko dla roota – wtedy NULL). Pamięć: RAM zajęty/dostępny, swap, aktywność swap w B/s tylko
+na Linuksie (psutil na Windowsie podaje tam zawsze 0 – to nie pomiar, więc NULL). Karta NVIDIA: NVML,
+bez niego `nvidia-smi` (pola nieznane starszym sterownikom – zapytanie bez nich); obciążenie,
+temperatura, moc, taktowanie SM, VRAM, powód ograniczenia taktowania (`sw_power_cap`, `hw_thermal`…,
+„none” = nic nie ogranicza); temperatura pamięci karty zwykle N/A. Inne karty – `extra_json`.
+**Przed każdym modelem:** stabilizacja – temperatura CPU i GPU zmienia się o ≤ 1 °C w oknie 30 s
+(bez docelowej temperatury; brak obu czujników = bez czekania, status `no_sensors`), po 300 s okno
+autora „Stabilizacja temperatury trwa dłużej niż oczekiwano” (Kontynuuj test → ostrzeżenie
+`timeout_continued`; Czekaj dalej → pytamy znowu po kolejnych 300 s); w trybie tekstowym test rusza
+sam z ostrzeżeniem. Potem linia bazowa 10 próbek (średnia i maksimum, brak odczytu = NULL); w
+wynikach wartości bezwzględne i różnica względem linii bazowej. Wartości w ustawieniach:
+`bench_stabilization_window_s`, `bench_stabilization_tolerance_c`, `bench_stabilization_timeout_s`,
+`bench_baseline_s`.
+
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.
 Sprzęt testowy autora: laptop i5-13450HX + RTX 5050 8 GB + DDR5 oraz Ryzen 7 5700X + RTX 2060 SUPER 8 GB

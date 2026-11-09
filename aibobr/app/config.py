@@ -36,6 +36,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "scan_consent": False,          # zgoda na szukanie modeli na dysku (pytamy raz)
     "star_hint_shown": False,       # prośba o gwiazdkę w trybie tekstowym – tylko raz
     "telemetry_retention_days": None,   # benchmark 0.9: 30/90/180/365 albo None = bezterminowo
+    "bench_stabilization_window_s": 30,      # temperatura CPU i GPU stabilna: zmiana ≤ tolerancji w oknie
+    "bench_stabilization_tolerance_c": 1.0,
+    "bench_stabilization_timeout_s": 300,    # potem okno „Kontynuuj test / Czekaj dalej”
+    "bench_baseline_s": 10,                  # linia bazowa przed każdym modelem
 }
 
 
