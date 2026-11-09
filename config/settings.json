@@ -12,5 +12,6 @@
   },
   "margin_ratio": 0.1,
   "margin_min_gb": 1.0,
-  "overhead_gb": 0.5
+  "overhead_gb": 0.5,
+  "telemetry_retention_days": null
 }

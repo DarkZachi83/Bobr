@@ -35,6 +35,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "ollama_host": "http://127.0.0.1:11434",   # tryb Zaawansowany: modele z Ollamy
     "scan_consent": False,          # zgoda na szukanie modeli na dysku (pytamy raz)
     "star_hint_shown": False,       # prośba o gwiazdkę w trybie tekstowym – tylko raz
+    "telemetry_retention_days": None,   # benchmark 0.9: 30/90/180/365 albo None = bezterminowo
 }
 
 

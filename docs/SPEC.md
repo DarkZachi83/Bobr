@@ -494,6 +494,23 @@ wszystkich prób (pełne odpowiedzi, pamięć promptu, czas wczytania, zwolnieni
 `_jakosc_podsumowanie.csv` (werdykt większościowy osobno od próby 1, zgodne z próbą 1, najczęstsza
 odpowiedź, liczba różnych odpowiedzi, pamięć promptu min/max, ⚠). Brak danych – okienko, nie cisza.
 
+**Baza 0.9 (decyzje autora 9.11.2026):** wersja schematu w `PRAGMA user_version` (0 = do 0.8.1,
+1 = od 0.9). `perf` i `quality` zostają jako **archiwum tylko do odczytu** – zawartości nie zmieniamy,
+w interfejsie sekcja „Archiwum (przed 0.9)”. Nowe tabele benchmarku prędkości: `sessions` (jeden
+pomiar: wersje, sprzęt, liczba przebiegów, modele, ustawienia, progi), `runs` (przebieg jednego
+modelu: **surowe sumy** – tokeny i czasy generowania i promptu, TTFT mediana/maks., czasy silnika i
+rzeczywiste, narzut – oraz **werdykt z dnia testu**, która miara przesądziła, wersja i **rzeczywiste
+wartości progów** w JSON; werdykt według obecnych progów da się przeliczyć z zapisanych sum),
+`tasks` (15 zadań: tokeny, pamięć promptu, czasy, `done_reason`, odpowiedź, błąd techniczny, czy
+liczone do średnich – **bez oceny treści**), `telemetry` (próbka co 1 s z fazą: chłodzenie / linia
+bazowa / zadanie; rdzenie CPU jako JSON) i `long_context` (1k/8k: `num_ctx`, rzeczywiste tokeny
+wejścia, rezerwa, zapas, ważność). Brak odczytu = **NULL, nigdy 0**. Przed migracją kopia pliku
+`benchmarks.sqlite.bak-RRRR-MM-DD` (API kopii SQLite), migracja w jednej transakcji – błąd nic nie
+zmienia. Ustawienie `telemetry_retention_days` (30/90/180/365, domyślnie `null` = bezterminowo)
+usuwa wyłącznie stare próbki telemetrii, potem `VACUUM`; wyniki zbiorcze, werdykty, ustawienia,
+ostrzeżenia i odpowiedzi zostają. Ręczne usunięcie sesji (z potwierdzeniem) kasuje jej przebiegi,
+zadania i telemetrię, archiwum nie. Przyszły moduł oceny jakości dostanie własne tabele.
+
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.
 Sprzęt testowy autora: laptop i5-13450HX + RTX 5050 8 GB + DDR5 oraz Ryzen 7 5700X + RTX 2060 SUPER 8 GB
