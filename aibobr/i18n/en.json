@@ -572,5 +572,13 @@
   "export.q.warn": "Warning (prompt cache)",
   "bench.log.start_perf": "performance – {jobs} (model × context), warm-up + 3 runs, median",
   "bench.log.start_quality": "quality – suites: {suites}, tasks: {tasks}, attempts per task: {runs}",
-  "bench.log.models_q": "Models: {names} · quality only (2k context)"
+  "bench.log.models_q": "Models: {names} · quality only (2k context)",
+  "bench.cooling.start": "Temperature stabilisation: waiting until CPU and GPU temperature changes by at most {tolerance} °C within {window} s.",
+  "bench.cooling.wait_more": "Still waiting for the temperature to stabilise.",
+  "bench.cooling.title": "Temperature stabilisation is taking longer than expected",
+  "bench.cooling.body": "The computer's temperature did not stabilise in the expected time. You can start the test anyway or wait for further cooling.",
+  "bench.cooling.continue": "Continue test",
+  "bench.cooling.continue_hint": "The result will be marked with an incomplete-stabilisation warning.",
+  "bench.cooling.wait": "Keep waiting",
+  "bench.cooling.wait_hint": "The program keeps monitoring the temperature."
 }
