@@ -1,0 +1,361 @@
+{
+  "suite_info": {
+    "id": "scisly_v1",
+    "version": "1.0",
+    "kind": "science",
+    "name": {
+      "pl": "Test ścisły",
+      "en": "Science test"
+    },
+    "languages": [
+      "pl",
+      "en"
+    ],
+    "note": "Zadania zatwierdzone przez autora 10.11.2026. Ta sama treść i to samo sprawdzenie w obu językach; klucze JSON i nazwy funkcji po angielsku."
+  },
+  "tasks": [
+    {
+      "id": "S1",
+      "category": "arytmetyka",
+      "level": "easy",
+      "max_tokens": 32,
+      "prompt": {
+        "pl": "Oblicz 17 × 23. Podaj samą liczbę.",
+        "en": "Calculate 17 × 23. Give only the number."
+      },
+      "check": {
+        "type": "number",
+        "expected": 391
+      }
+    },
+    {
+      "id": "S2",
+      "category": "arytmetyka",
+      "level": "medium",
+      "max_tokens": 32,
+      "prompt": {
+        "pl": "Oblicz 3/4 + 5/6. Podaj wynik jako ułamek nieskracalny w postaci a/b.",
+        "en": "Calculate 3/4 + 5/6. Give the result as an irreducible fraction a/b."
+      },
+      "check": {
+        "type": "fraction",
+        "expected": "19/12"
+      }
+    },
+    {
+      "id": "S3",
+      "category": "arytmetyka",
+      "level": "hard",
+      "max_tokens": 32,
+      "prompt": {
+        "pl": "Oblicz 0,15 × 0,4 + 1/8. Podaj wynik jako ułamek dziesiętny.",
+        "en": "Calculate 0.15 × 0.4 + 1/8. Give the result as a decimal."
+      },
+      "check": {
+        "type": "number",
+        "expected": 0.185
+      }
+    },
+    {
+      "id": "S4",
+      "category": "procenty",
+      "level": "easy",
+      "max_tokens": 32,
+      "prompt": {
+        "pl": "Zamień 2,5 km na metry. Podaj samą liczbę.",
+        "en": "Convert 2.5 km to metres. Give only the number."
+      },
+      "check": {
+        "type": "number",
+        "expected": 2500
+      }
+    },
+    {
+      "id": "S5",
+      "category": "procenty",
+      "level": "medium",
+      "max_tokens": 32,
+      "prompt": {
+        "pl": "Kurtka kosztowała 240 zł. Cenę obniżono o 15%. Ile kosztuje teraz (w złotych)? Podaj samą liczbę.",
+        "en": "A jacket cost 240 PLN. The price was cut by 15%. What does it cost now (in PLN)? Give only the number."
+      },
+      "check": {
+        "type": "number",
+        "expected": 204
+      }
+    },
+    {
+      "id": "S6",
+      "category": "procenty",
+      "level": "hard",
+      "max_tokens": 32,
+      "prompt": {
+        "pl": "Cenę podniesiono o 20%, a potem obniżono o 20%. O ile procent nowa cena jest niższa od początkowej? Podaj samą liczbę.",
+        "en": "A price was raised by 20% and then cut by 20%. By what percentage is the new price lower than the original? Give only the number."
+      },
+      "check": {
+        "type": "number",
+        "expected": 4
+      }
+    },
+    {
+      "id": "S7",
+      "category": "logika",
+      "level": "easy",
+      "max_tokens": 32,
+      "prompt": {
+        "pl": "Wszystkie koty są ssakami. Mruczek jest kotem. Czy Mruczek jest ssakiem? Odpowiedz: tak albo nie.",
+        "en": "All cats are mammals. Mruczek is a cat. Is Mruczek a mammal? Answer: yes or no."
+      },
+      "check": {
+        "type": "choice",
+        "expected": {
+          "pl": "tak",
+          "en": "yes"
+        },
+        "options": {
+          "pl": [
+            "tak",
+            "nie"
+          ],
+          "en": [
+            "yes",
+            "no"
+          ]
+        }
+      }
+    },
+    {
+      "id": "S8",
+      "category": "logika",
+      "level": "medium",
+      "max_tokens": 32,
+      "prompt": {
+        "pl": "Jaka liczba jest następna w ciągu: 2, 6, 12, 20, 30, …? Podaj samą liczbę.",
+        "en": "What number comes next: 2, 6, 12, 20, 30, …? Give only the number."
+      },
+      "check": {
+        "type": "number",
+        "expected": 42
+      }
+    },
+    {
+      "id": "S9",
+      "category": "logika",
+      "level": "hard",
+      "max_tokens": 32,
+      "prompt": {
+        "pl": "Przedwczoraj był dzień następujący po poniedziałku. Jaki dzień tygodnia będzie pojutrze? Odpowiedz jednym słowem.",
+        "en": "The day before yesterday was the day after Monday. What day of the week will it be the day after tomorrow? Answer with one word."
+      },
+      "check": {
+        "type": "choice",
+        "expected": {
+          "pl": "sobota",
+          "en": "saturday"
+        },
+        "options": {
+          "pl": [
+            "poniedziałek",
+            "wtorek",
+            "środa",
+            "czwartek",
+            "piątek",
+            "sobota",
+            "niedziela"
+          ],
+          "en": [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday"
+          ]
+        }
+      }
+    },
+    {
+      "id": "S10",
+      "category": "json",
+      "level": "easy",
+      "max_tokens": 96,
+      "prompt": {
+        "pl": "Zwróć tablicę JSON z liczbami parzystymi od 2 do 10 włącznie. Zwróć tylko JSON.",
+        "en": "Return a JSON array with the even numbers from 2 to 10 inclusive. Return only the JSON."
+      },
+      "check": {
+        "type": "json",
+        "expected": [
+          2,
+          4,
+          6,
+          8,
+          10
+        ]
+      }
+    },
+    {
+      "id": "S11",
+      "category": "json",
+      "level": "medium",
+      "max_tokens": 128,
+      "prompt": {
+        "pl": "Zapisz dane jako obiekt JSON z kluczami \"name\" (tekst), \"age\" (liczba) i \"city\" (tekst): \"Ola ma 28 lat, a jej miasto to Gdynia.\" Zwróć tylko JSON.",
+        "en": "Write the data as a JSON object with keys \"name\" (string), \"age\" (number) and \"city\" (string): \"Ola is 28 years old and her city is Gdynia.\" Return only the JSON."
+      },
+      "check": {
+        "type": "json",
+        "expected": {
+          "name": "Ola",
+          "age": 28,
+          "city": "Gdynia"
+        }
+      }
+    },
+    {
+      "id": "S12",
+      "category": "json",
+      "level": "hard",
+      "max_tokens": 96,
+      "prompt": {
+        "pl": "Zwróć obiekt JSON z jednym kluczem \"path\", którego wartością jest dokładnie ten tekst: C:\\Users\\Ola. Zwróć tylko JSON.",
+        "en": "Return a JSON object with a single key \"path\" whose value is exactly this text: C:\\Users\\Ola. Return only the JSON."
+      },
+      "check": {
+        "type": "json",
+        "expected": {
+          "path": "C:\\Users\\Ola"
+        }
+      }
+    },
+    {
+      "id": "S13",
+      "category": "python",
+      "level": "easy",
+      "max_tokens": 512,
+      "prompt": {
+        "pl": "Napisz funkcję fibonacci(n), która zwraca listę pierwszych n liczb Fibonacciego, zaczynając od 0 i 1; dla n = 0 pustą listę. Zwróć tylko kod.",
+        "en": "Write a function fibonacci(n) that returns a list of the first n Fibonacci numbers, starting with 0 and 1; an empty list for n = 0. Return only the code."
+      },
+      "check": {
+        "type": "python",
+        "function": "fibonacci",
+        "tests": [
+          {
+            "args": [
+              0
+            ],
+            "expected": []
+          },
+          {
+            "args": [
+              1
+            ],
+            "expected": [
+              0
+            ]
+          },
+          {
+            "args": [
+              2
+            ],
+            "expected": [
+              0,
+              1
+            ]
+          },
+          {
+            "args": [
+              7
+            ],
+            "expected": [
+              0,
+              1,
+              1,
+              2,
+              3,
+              5,
+              8
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "S14",
+      "category": "python",
+      "level": "medium",
+      "max_tokens": 512,
+      "prompt": {
+        "pl": "Napisz funkcję Pythona is_palindrome(s), która zwraca True, jeśli tekst czytany wspak jest taki sam, ignorując wielkość liter i spacje. Zwróć tylko kod.",
+        "en": "Write a Python function is_palindrome(s) that returns True if the text reads the same backwards, ignoring case and spaces. Return only the code."
+      },
+      "check": {
+        "type": "python",
+        "function": "is_palindrome",
+        "tests": [
+          {
+            "args": [
+              "Kobyła ma mały bok"
+            ],
+            "expected": true
+          },
+          {
+            "args": [
+              "A to kanapa pana Kota"
+            ],
+            "expected": true
+          },
+          {
+            "args": [
+              "Ala ma kota"
+            ],
+            "expected": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "S15",
+      "category": "python",
+      "level": "hard",
+      "max_tokens": 512,
+      "prompt": {
+        "pl": "Napisz funkcję roman_to_int(s), która zamienia liczbę rzymską (od 1 do 3999) na liczbę całkowitą. Zwróć tylko kod.",
+        "en": "Write a function roman_to_int(s) that converts a Roman numeral (from 1 to 3999) to an integer. Return only the code."
+      },
+      "check": {
+        "type": "python",
+        "function": "roman_to_int",
+        "tests": [
+          {
+            "args": [
+              "IX"
+            ],
+            "expected": 9
+          },
+          {
+            "args": [
+              "LVIII"
+            ],
+            "expected": 58
+          },
+          {
+            "args": [
+              "MCMXCIV"
+            ],
+            "expected": 1994
+          },
+          {
+            "args": [
+              "MMMCMXCIX"
+            ],
+            "expected": 3999
+          }
+        ]
+      }
+    }
+  ]
+}

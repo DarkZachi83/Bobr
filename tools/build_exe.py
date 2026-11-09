@@ -23,6 +23,7 @@ DATA = [
     ("data/image_models.json", "data"),
     ("data/models/catalog.json", "data/models"),
     ("data/benchmarks/*.json", "data/benchmarks"),     # testy Zacharskiego (etap 12)
+    ("data/quality/*.json", "data/quality"),           # testy jakości 0.10
     ("config/settings.json", "config"),
     ("assets/aibobr.png", "assets"),
     ("assets/about.png", "assets"),
