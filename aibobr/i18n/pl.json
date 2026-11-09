@@ -699,5 +699,7 @@
   "speed.throttle.sw_thermal": "temperatura (programowo)",
   "speed.throttle.hw_thermal": "temperatura (sprzętowo)",
   "speed.throttle.hw_power_brake": "hamulec zasilania",
-  "speed.throttle.display_clocks": "ustawienie ekranu"
+  "speed.throttle.display_clocks": "ustawienie ekranu",
+  "speed.log.long_retry": "{context}: wejście miało {tokens} tokenów, poza zakresem {low}–{high} – powtarzam z poprawioną długością.",
+  "speed.long_retry_short": "próba 2 (poprawiona długość wejścia)"
 }

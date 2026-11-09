@@ -19,6 +19,7 @@ from aibobr.bench import speed, telemetry
 from aibobr.bench.runner import Stopped
 
 RECOVER_WAIT = 10.0
+END_SAMPLES = 3                                      # próbki po zakończeniu (stan po zwolnieniu)
 
 
 def now_iso() -> str:
@@ -95,9 +96,11 @@ class SpeedBenchmark:
                 "tasks": len(self.pack["tasks"]), "contexts": contexts,
                 "version": self.info.get("runtime_version")})
         reference = None
+        self.current = None                          # model w pamięci – zwolnić także po przerwaniu
         self.sampler.start()
         try:
             for model in models:
+                self.current = model
                 for run_no in range(1, runs + 1):
                     if stop.is_set():
                         raise Stopped()
@@ -111,6 +114,7 @@ class SpeedBenchmark:
                     result["runs"].append(self._one(model, run_no, runs, mine, released, recovered,
                                                     report, stop))
                 self.runner.release(model)
+                self.current = None
                 report({"event": "unload", "model": model})
         except Stopped:
             result["status"] = "stopped"
@@ -120,6 +124,13 @@ class SpeedBenchmark:
             report({"event": "s_error", "error": str(e)})
             raise
         finally:
+            if self.current is not None:             # przerwany test – model nie zostaje w karcie
+                if self.runner.release(self.current):
+                    report({"event": "unload", "model": self.current})
+            # Kilka próbek po zwolnieniu (faza „idle”, nie do bazy): Monitor kończy na prawdziwym
+            # stanie po teście (VRAM i obciążenie spadają), a nie na ostatniej chwili zadania.
+            self.sampler.set_phase("idle")
+            self.sleep(END_SAMPLES * self.sampler.interval)
             self.sampler.stop()
             if self.db is not None:
                 self.db.finish_session(self.session_id, status=result["status"], finished_at=self.stamp())
@@ -149,8 +160,11 @@ class SpeedBenchmark:
                     raise Stopped()
                 self.sampler.set_phase("long_context", rid)
                 report({"event": "s_long", "model": model, "run": run_no, "context": ctx})
-                lc = self.runner.long_context(model, ctx, run_no,
-                                              on_chunk=lambda text: report({"event": "chunk", "text": text}))
+                lc = self.runner.long_context(
+                    model, ctx, run_no, on_chunk=lambda text: report({"event": "chunk", "text": text}),
+                    on_retry=lambda tokens, low, high, c=ctx: report({"event": "s_long_retry", "model": model,
+                                                                       "context": c, "tokens": tokens,
+                                                                       "low": low, "high": high}))
                 longs.append(lc)
                 report({"event": "s_long_done", "model": model, "run": run_no, "result": lc})
         except Stopped:

@@ -16,6 +16,9 @@
 <p align="center"><img src="docs/img/app.png" width="820" alt="AI Bóbr – Llama 3.1 8B on a laptop with RTX 5050 8 GB"></p>
 <p align="center"><sub>Llama 3.1 8B (Q4_K_M) on a laptop with an RTX 5050 8 GB: fits, but with a small margin. / Llama 3.1 8B na laptopie z RTX 5050 8 GB: mieści się, ale na styk.</sub></p>
 
+<p align="center"><img src="docs/img/benchmark-monitor.png" width="820" alt="AI Bóbr – benchmark Monitor window: CPU, temperatures, memory and GPU live"></p>
+<p align="center"><sub>Benchmark on your own computer: the Monitor window shows CPU, temperatures, memory and the GPU live, with the model's answer. / Benchmark na Twoim komputerze: okno Monitor pokazuje na żywo procesor, temperatury, pamięć i kartę oraz odpowiedź modelu.</sub></p>
+
 ---
 
 ## English

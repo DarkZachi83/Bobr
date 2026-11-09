@@ -699,5 +699,7 @@
   "speed.throttle.sw_thermal": "temperature (software)",
   "speed.throttle.hw_thermal": "temperature (hardware)",
   "speed.throttle.hw_power_brake": "power brake",
-  "speed.throttle.display_clocks": "display setting"
+  "speed.throttle.display_clocks": "display setting",
+  "speed.log.long_retry": "{context}: the input had {tokens} tokens, outside {low}–{high} – repeating with a corrected length.",
+  "speed.long_retry_short": "attempt 2 (corrected input length)"
 }

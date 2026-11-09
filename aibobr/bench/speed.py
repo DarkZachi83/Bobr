@@ -333,7 +333,8 @@ class SpeedRunner:
 
     # -------------------------------------------------------------- długi kontekst
     def long_context(self, model: str, num_ctx: int, run: int = 0,
-                     on_chunk: Callable[[str], None] = lambda s: None) -> dict:
+                     on_chunk: Callable[[str], None] = lambda s: None,
+                     on_retry: Callable[[int, int, int], None] = lambda tokens, low, high: None) -> dict:
         """Wejście dopasowane do tokenizatora modelu: najpierw krótka próbka (ile znaków na token),
         potem pomiar właściwy; poza zakresem 80–95% – jedna poprawka z rzeczywistego wyniku."""
         usable = num_ctx - LONG_RESERVE - LONG_MARGIN
@@ -359,6 +360,7 @@ class SpeedRunner:
                     break
                 cpt = len(text) / g.prompt_tokens                       # poprawka z rzeczywistego wyniku
                 calibration["chars_per_token"] = round(cpt, 3)
+                on_retry(g.prompt_tokens, low, high)
         except Stopped:
             raise
         except Exception as e:
