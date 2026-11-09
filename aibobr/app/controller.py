@@ -343,7 +343,7 @@ class AppController:
 
     def run_speed_benchmark(self, targets, hw: HardwareProfile, report, stop, *, runs: int = 1,
                             contexts=(1024, 8192), db=None, bench=None, collector=None, on_timeout=None,
-                            sampler_kw=None, runner=None) -> dict:
+                            sampler_kw=None, runner=None, skip_contexts=None) -> dict:
         """Benchmark prędkości 0.9 (SPEC §5c): modele z Ollamy po kolei, `runs` przebiegów każdego,
         telemetria co 1 s, wynik do bazy (sessions/runs/tasks/telemetry/long_context).
         on_timeout – pytanie po przekroczeniu czasu stabilizacji (GUI); None = test rusza sam."""
@@ -359,7 +359,9 @@ class AppController:
             db = self.bench_db
         job = SpeedBenchmark(bench, self.speed_pack(), db=db, collector=collector, settings=self.settings,
                              info=info, on_timeout=on_timeout, sampler_kw=sampler_kw, runner=runner)
-        return job.run(models, runs, contexts, report, stop)
+        skip = {m[len(OLLAMA_PREFIX):] if m.startswith(OLLAMA_PREFIX) else m: v
+                for m, v in (skip_contexts or {}).items()}
+        return job.run(models, runs, contexts, report, stop, skip_contexts=skip)
 
     def run_benchmark(self, targets, contexts, predicted: dict, hw: HardwareProfile, report, stop,
                       db=None, now=None, bench=None, power_sampler=None, vram_busy=None,

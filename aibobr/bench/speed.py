@@ -40,7 +40,8 @@ DEFAULT_THRESHOLDS = {"gen_tps": [30.0, 15.0, 6.0], "ttft_s": [1.0, 3.0, 8.0]}
 
 # Sprawdzenia wiarygodności (tabela zatwierdzona 9.11.2026)
 FEW_TOKENS = 20               # odpowiedź krótsza – dopisek „mało tokenów”, do średniej wchodzi
-MIN_TOTAL_TOKENS = 300        # łącznie mniej – ostrzeżenie przy werdykcie
+MIN_TOTAL_TOKENS = 300        # łącznie mniej – ostrzeżenie „ograniczona podstawa pomiaru” (tylko pakiet 15 zadań)
+MIN_TOTAL_GEN_S = 5.0         # …albo łącznie krócej generowania (decyzja autora 9.11.2026); werdykt bez zmian
 MAX_OVERHEAD = 0.20           # narzut poza silnikiem (czas rzeczywisty − total_duration) / czas rzeczywisty
 MAX_ERRORS = 2                # więcej błędów wykonania na 15 zadań – „brak wiarygodnego wyniku”
 MAX_TPS = 5000.0              # prędkość generowania ponad – błąd pomiaru czasu
@@ -225,8 +226,8 @@ def summarize(tasks: list[TaskResult], th: dict = DEFAULT_THRESHOLDS) -> dict:
            "load_wall_ms": median([t.load_wall_ms for t in tasks]),
            "tasks_counted": len(gen), "tasks_error": len(errors)}
     warnings = []
-    if gen_tokens < MIN_TOTAL_TOKENS:
-        warnings.append("few_tokens_total")
+    if gen_tokens < MIN_TOTAL_TOKENS or gen_ms < MIN_TOTAL_GEN_S * 1000:
+        warnings.append("limited_basis")
     if overhead is not None and overhead > MAX_OVERHEAD:
         warnings.append("overhead")
     if any(t.error is None and not t.released for t in tasks):

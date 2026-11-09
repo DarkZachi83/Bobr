@@ -78,10 +78,13 @@ class SpeedBenchmark:
 
     # -------------------------------------------------------------- przebieg
     def run(self, models: list[str], runs: int = 1, contexts: tuple = (),
-            report: Callable[[dict], None] = lambda e: None, stop: Optional[threading.Event] = None) -> dict:
+            report: Callable[[dict], None] = lambda e: None, stop: Optional[threading.Event] = None,
+            skip_contexts: Optional[dict] = None) -> dict:
+        """skip_contexts: model → długości, których nie mierzymy (AI Bóbr: nie zmieści się)."""
         stop = stop or threading.Event()
         runs = max(1, int(runs))
         contexts = [int(c) for c in contexts]
+        skip_contexts = skip_contexts or {}
         session = self._session_row(models, runs, contexts)
         self.session_id = self.db.start_session(**session) if self.db is not None else speed_id()
         collector = self.collector or telemetry.default_collector()
@@ -104,7 +107,8 @@ class SpeedBenchmark:
                     recovered = self._recovered(reference, stop)
                     report({"event": "s_release", "model": model, "run": run_no, "released": released,
                             "recovered": recovered})
-                    result["runs"].append(self._one(model, run_no, runs, contexts, released, recovered,
+                    mine = [c for c in contexts if c not in skip_contexts.get(model, ())]
+                    result["runs"].append(self._one(model, run_no, runs, mine, released, recovered,
                                                     report, stop))
                 self.runner.release(model)
                 report({"event": "unload", "model": model})

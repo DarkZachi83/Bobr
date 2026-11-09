@@ -121,3 +121,75 @@ def export_all(path: str | Path, perf=(), quality=()) -> list[Path]:
                                                    "prompt_tokens", "warn", "reason")], summary_rows(quality))
         written.append(out)
     return written
+
+
+# ------------------------------------------------------------------ benchmark prędkości 0.9
+EXPORT_SCHEMA_VERSION = 1
+RUN_COLS = ("id", "model", "run_no", "started_at", "finished_at", "status", "verdict", "verdict_measure",
+            "gen_level", "ttft_level", "gen_tokens_total", "gen_ms_total", "gen_tps", "ttft_wall_median_ms",
+            "ttft_wall_max_ms", "pp_tokens_total", "pp_ms_total", "pp_tps", "load_ms", "load_wall_ms",
+            "engine_ms_total", "wall_ms_total", "overhead_ratio", "tasks_counted", "tasks_error", "num_ctx",
+            "gpu_share", "stabilization", "cooling_seconds", "thresholds_version", "thresholds_json",
+            "warnings_json", "baseline_json")
+TASK_COLS = ("task_no", "task_id", "category", "started_at", "num_ctx", "num_predict", "prompt_tokens",
+             "prompt_cached", "gen_tokens", "load_ms", "prompt_eval_ms", "eval_ms", "total_ms", "ttft_wall_ms",
+             "wall_ms", "done_reason", "error", "counted_gen", "counted_pp", "flags_json", "prompt_text",
+             "response_text")
+LONG_COLS = ("num_ctx", "target_tokens", "reserve_tokens", "prompt_tokens", "prompt_cached", "gen_tokens",
+             "free_tokens", "prompt_eval_ms", "eval_ms", "pp_tps", "tg_tps", "ttft_wall_ms", "gpu_share",
+             "done_reason", "valid", "invalid_reason", "calibration_json", "error")
+TELEMETRY_COLS = ("run_id", "t", "phase", "task_no", "cpu_pct", "cpu_cores_json", "cpu_temp_c", "cpu_power_w",
+                  "ram_used_mb", "ram_available_mb", "swap_used_mb", "swap_in_bps", "swap_out_bps",
+                  "gpu_util_pct", "gpu_temp_c", "gpu_power_w", "gpu_clock_mhz", "vram_used_mb", "vram_total_mb",
+                  "vram_temp_c", "gpu_throttle", "extra_json")
+
+
+def exact(value) -> str:
+    """Wartość bez zaokrąglania (decyzja autora: eksport zachowuje dokładną liczbę); przecinek
+    dziesiętny dla Excela z polskimi ustawieniami; brak = pusta komórka (NULL), nie 0."""
+    if value is None:
+        return ""
+    if isinstance(value, float):
+        return repr(value).replace(".", t("bench.decimal"))
+    return str(value)
+
+
+def session_folder(session: dict) -> str:
+    """benchmark_2026-11-09_1432_a3f9c2e1 – data, godzina i 8 znaków identyfikatora (bez nadpisywania)."""
+    stamp = (session.get("started_at") or "")[:16].replace("T", "_").replace(":", "")
+    return f"benchmark_{stamp}_{session['id'][:8]}"
+
+
+def export_session(db, session_id: str, parent: str | Path) -> Path:
+    """Folder z werdykt.csv, zadania.csv, dlugi_kontekst.csv, telemetria.csv i manifest.json."""
+    import json
+    session = db.session(session_id)
+    if session is None:
+        raise KeyError(session_id)
+    folder = Path(parent) / session_folder(session)
+    folder.mkdir(parents=True, exist_ok=True)
+    runs = db.runs(session_id)
+    _write(folder / "werdykt.csv", list(RUN_COLS), ([exact(r.get(c)) for c in RUN_COLS] for r in runs))
+    _write(folder / "zadania.csv", ["run_id", "model", "run_no", *TASK_COLS],
+           ([r["id"], r["model"], r["run_no"], *(exact(x.get(c)) for c in TASK_COLS)]
+            for r in runs for x in db.tasks(r["id"])))
+    _write(folder / "dlugi_kontekst.csv", ["run_id", "model", "run_no", *LONG_COLS],
+           ([r["id"], r["model"], r["run_no"], *(exact(x.get(c)) for c in LONG_COLS)]
+            for r in runs for x in db.long_context(r["id"])))
+    _write(folder / "telemetria.csv", list(TELEMETRY_COLS),
+           ([exact(s.get(c)) for c in TELEMETRY_COLS] for s in db.telemetry(session_id=session_id)))
+
+    def parsed(value):
+        try:
+            return json.loads(value) if isinstance(value, str) else value
+        except ValueError:
+            return value
+    manifest = {"export_schema_version": EXPORT_SCHEMA_VERSION, "db_schema_version": db.schema_version(),
+                "session": {k: parsed(v) if k.endswith("_json") else v for k, v in session.items()},
+                "runs": [{"id": r["id"], "model": r["model"], "run_no": r["run_no"], "verdict": r["verdict"],
+                          "thresholds_version": r["thresholds_version"],
+                          "thresholds": parsed(r["thresholds_json"])} for r in runs],
+                "files": ["werdykt.csv", "zadania.csv", "dlugi_kontekst.csv", "telemetria.csv"],
+                "note": t("speed.disclaimer")}
+    (folder / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    return folder

@@ -5,9 +5,11 @@ Lewa kolumna: Modele na dysku – szukanie po kliknięciu (zgoda raz), lista zap
 uruchomieniami, werdykt AI Bóbra dla każdego modelu, pole ☐ do zaznaczenia modeli z Ollamy
 (benchmark umie tylko je – llama-server i LM Studio w 12d). Dwuklik / „Sprawdź” – model
 w zakładce Sprawdź.
-Prawa: konfiguracja (konteksty, plan, ostrzeżenia, Start / Zatrzymaj), pod nią przesuwany
-podział: tabela wyników z kolumną Status i dziennik na żywo (kolory wpisów, postęp, czas do
-końca, kopiowanie, zapis do pliku, eksport CSV). Modele mierzymy PO KOLEI – nigdy kilka naraz.
+Prawa (0.9, benchmark prędkości): przebiegi 1/3/5, długi kontekst 1k/8k/32k, plan, Start /
+Zatrzymaj; pod nią zakładki Wydajność (werdykt z 15 zadań z podstawą, TTFT, prompt z 1k, długi
+kontekst z TTFT i oceną informacyjną; dwuklik – szczegóły) i Odpowiedzi (podgląd, bez oceny),
+dziennik na żywo i eksport sesji do folderu. Okno Monitor – telemetria i odpowiedź na żywo.
+Modele mierzymy PO KOLEI – nigdy kilka naraz.
 """
 from __future__ import annotations
 
@@ -19,22 +21,22 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Callable, Optional
 
-from aibobr.bench.runner import estimate_seconds
+from aibobr.gui import speed_format as sf
 from aibobr.gui.theme import COLORS, VERDICT_COLORS
 from aibobr.i18n import fmt_context, fmt_gb, t
-from aibobr.bench.quality import MODES, REPEATS
 from aibobr.scan.model import FoundModel, Kind, ScanReport
 
 CONTEXTS = (1024, 8192, 32768)
 DEFAULT_ON = {1024, 8192}                  # 32k na życzenie – na słabszym sprzęcie trwa długo
-COLUMNS = ("model", "context", "predicted", "pp", "ttft", "tg", "gpu", "status")
-WIDTHS = {"model": 150, "context": 62, "predicted": 95, "pp": 88, "ttft": 70, "tg": 112, "gpu": 70,
-          "status": 95}
-SUITES = ("perf", "pl_jezyk_v1", "en_format_v1")    # etap 12c: wszystkie domyślnie zaznaczone
-QCOLS = ("model", "spelling", "inflection", "numerals", "aspect", "knowledge", "json_strict", "json",
-         "code_strict", "code", "agree")
-QSECONDS = 1.5          # zadanie jakości – pomiar autora: gemma2:9b w karcie, 15 zadań w ok. 15 s
-QRELOAD = 4.0           # tryb kontrolowany: zwolnienie + wczytanie modelu przed każdą próbą (model w karcie)
+RUNS = (1, 3, 5)                           # domyślnie 1 (decyzja autora); 3 i 5 – pomiar rozrzutu
+COLUMNS = ("model", "run", "verdict", "gen", "ttft", "pp", "l1024", "l8192", "l32768", "notes")
+WIDTHS = {"model": 170, "run": 40, "verdict": 120, "gen": 270, "ttft": 130, "pp": 240, "l1024": 220,
+          "l8192": 220, "l32768": 220, "notes": 240}
+ACOLS = ("model", "run", "task", "tokens", "tps", "flags")
+AWIDTHS = {"model": 120, "run": 40, "task": 160, "tokens": 60, "tps": 70, "flags": 140}
+LEVEL_COLORS = {"fast": "#53d6a0", "useful": "#66c9fa", "slow": "#f5c65f", "too_slow": "#ff8282"}
+TASKS = 15
+COOL_EST, TASK_EST, LONG_EST = 60.0, 7.0, 12.0
 ORDER = {Kind.TEXT: 0, Kind.IMAGE: 1, Kind.ADDON: 2, Kind.OTHER: 3}
 LEFT_WIDTH = 400
 ON, OFF = "☑", "☐"
@@ -74,15 +76,17 @@ class BenchmarkPanel(ttk.Frame):
         self.seen = 0
         self.scanning = False
         self.running = False
-        self.results: list = []
+        self.run_results: list = []                # przebiegi ostatniej sesji (wynik silnika)
+        self.result_rows: dict = {}                # wiersz tabeli → przebieg (szczegóły)
+        self.session_id: Optional[str] = None       # do eksportu
+        self.current_run: Optional[tuple] = None
+        self.ask = None                             # okno stabilizacji z wątku pomiaru
         self.log_lines: list[str] = []
-        self.quality: list = []
-        self.qresults: dict[str, list] = {}           # model → odpowiedzi (podgląd po teście)
         self.started = 0.0
         self.estimated = 0.0
         self.steps_total = 0
         self.steps_done = 0
-        self.job_rows: dict = {}                   # (model, kontekst) → wiersz tabeli
+        self.job_rows: dict = {}                   # (model, przebieg) → wiersz tabeli
         self.columnconfigure(0, weight=0, minsize=LEFT_WIDTH)
         self.columnconfigure(1, weight=1)
         self.rowconfigure(0, weight=1)
@@ -325,51 +329,28 @@ class BenchmarkPanel(ttk.Frame):
         order = [m.target for m in sorted(self.rows.values(), key=lambda m: m.name.lower())]
         return [tg for tg in order if tg in self.checked]
 
-    # ================================================================== benchmark
+    # ================================================================== benchmark prędkości (0.9)
     def _build_bench(self) -> None:
         top = ttk.Frame(self.right, style="Panel.TFrame", padding=10)
         top.pack(fill="x")
         ttk.Label(top, text=t("bench.title"), style="Title.TLabel").pack(anchor="w")
-        what = ttk.Label(top, text=t("bench.what"), style="Muted.TLabel", wraplength=640, justify="left")
+        what = ttk.Label(top, text=t("speed.what"), style="Muted.TLabel", wraplength=640, justify="left")
         what.pack(anchor="w", fill="x", pady=(2, 6))
         what.bind("<Configure>", lambda e: what.configure(wraplength=max(300, e.width)))
         opts = ttk.Frame(top, style="Inner.TFrame")
         opts.pack(fill="x")
-        ttk.Label(opts, text=t("bench.contexts"), style="Panel.TLabel").pack(side="left")
+        ttk.Label(opts, text=t("speed.runs"), style="Panel.TLabel").pack(side="left")
+        self.runs = tk.IntVar(value=1)
+        for n in RUNS:
+            ttk.Radiobutton(opts, text=str(n), value=n, variable=self.runs, style="Panel.TRadiobutton",
+                            command=self._update_plan).pack(side="left", padx=4)
+        ttk.Label(opts, text="   " + t("speed.long"), style="Panel.TLabel").pack(side="left")
         self.ctx_vars = {}
         for ctx in CONTEXTS:
             var = tk.BooleanVar(value=ctx in DEFAULT_ON)
             ttk.Checkbutton(opts, text=fmt_context(ctx), variable=var, style="Panel.TCheckbutton",
-                            command=self._update_plan).pack(side="left", padx=6)
+                            command=self._update_plan).pack(side="left", padx=4)
             self.ctx_vars[ctx] = var
-        suites = ttk.Frame(top, style="Inner.TFrame")
-        suites.pack(fill="x", pady=(4, 0))
-        ttk.Label(suites, text=t("bench.suites_label"), style="Panel.TLabel").pack(side="left")
-        self.suite_vars = {}
-        for sid in SUITES:
-            var = tk.BooleanVar(value=True)
-            ttk.Checkbutton(suites, text=t(f"bench.suite.{sid}"), variable=var, style="Panel.TCheckbutton",
-                            command=self._update_plan).pack(side="left", padx=6)
-            self.suite_vars[sid] = var
-        ttk.Label(suites, text="   " + t("bench.repeats"), style="Panel.TLabel").pack(side="left")
-        self.repeats = tk.StringVar(value="1")
-        rc = ttk.Combobox(suites, textvariable=self.repeats, values=[str(r) for r in REPEATS], width=3,
-                          state="readonly")
-        rc.pack(side="left", padx=4)
-        rc.bind("<<ComboboxSelected>>", lambda e: self._update_plan())
-        self.repeats_box = rc
-        # Tryb jakości (pamięć promptu): standardowy – model zwolniony raz przed pakietem, 1 próba;
-        # kontrolowany – zwolniony przed każdą próbą, 1/3/5 prób, próby z pamięcią promptu odrzucone.
-        modes = ttk.Frame(top, style="Inner.TFrame")
-        modes.pack(fill="x", pady=(4, 0))
-        ttk.Label(modes, text=t("bench.mode"), style="Panel.TLabel").pack(side="left")
-        self.mode = tk.StringVar(value="standard")
-        for m in MODES:
-            ttk.Radiobutton(modes, text=t(f"bench.mode.{m}"), value=m, variable=self.mode,
-                            style="Panel.TRadiobutton", command=self._mode_changed).pack(side="left", padx=6)
-        self.mode_note = ttk.Label(top, text="", style="Muted.TLabel", wraplength=640, justify="left")
-        self.mode_note.pack(anchor="w", fill="x")
-        self._mode_changed(update=False)
         self.plan = ttk.Label(top, text="", style="Panel.TLabel", wraplength=640, justify="left")
         self.plan.pack(anchor="w", pady=(8, 0), fill="x")
         self.warning = ttk.Label(top, text="", style="Note.TLabel", wraplength=640, justify="left")
@@ -393,34 +374,52 @@ class BenchmarkPanel(ttk.Frame):
         split.add(self.results_tabs, weight=2)
         res = ttk.Frame(self.results_tabs, style="Panel.TFrame", padding=8)
         self.results_tabs.add(res, text=t("bench.res.perf"))
-        qres = ttk.Frame(self.results_tabs, style="Panel.TFrame", padding=8)
-        self.results_tabs.add(qres, text=t("bench.res.quality"))
-        self.qtable = ttk.Treeview(qres, columns=QCOLS, show="headings", height=6)
-        for col in QCOLS:
-            self.qtable.heading(col, text=t(f"bench.qcol.{col}"))
-            self.qtable.column(col, width=150 if col == "model" else 78, minwidth=50, anchor="w",
-                               stretch=col == "model")
-        self.qtable.pack(fill="both", expand=True)
-        self.qtable.bind("<Double-Button-1>", lambda e: self.show_answers())
-        qhint = ttk.Label(qres, text=t("bench.qhint"), style="Muted.TLabel", wraplength=500, justify="left")
-        qhint.pack(anchor="w", fill="x", pady=(4, 0))
-        qhint.bind("<Configure>", lambda e: qhint.configure(wraplength=max(200, e.width)))
-        self.qrows: dict[str, str] = {}                       # model → wiersz tabeli Jakość
-        self.table = ttk.Treeview(res, columns=COLUMNS, show="headings", height=6)
+        ans = ttk.Frame(self.results_tabs, style="Panel.TFrame", padding=8)
+        self.results_tabs.add(ans, text=t("speed.answers"))
+        box = ttk.Frame(res, style="Inner.TFrame")
+        box.pack(fill="both", expand=True)
+        self.table = ttk.Treeview(box, columns=COLUMNS, show="headings", height=6)
         for col in COLUMNS:
-            self.table.heading(col, text=t(f"bench.col.{col}"))
-            self.table.column(col, width=WIDTHS[col], minwidth=50, anchor="w", stretch=col == "model")
-        for level, color in VERDICT_COLORS.items():
-            self.table.tag_configure(level.value, foreground=color)
+            self.table.heading(col, text=fmt_context(int(col[1:])) if col.startswith("l") else t(f"speed.col.{col}"))
+            self.table.column(col, width=WIDTHS.get(col, 150), minwidth=50, anchor="w",
+                              stretch=col in ("model", "notes"))
+        for name, color in LEVEL_COLORS.items():
+            self.table.tag_configure(name, foreground=color)
         self.table.tag_configure("skip", foreground=COLORS["muted"])
-        scroll = ttk.Scrollbar(res, orient="vertical", command=self.table.yview)
-        self.table.configure(yscrollcommand=scroll.set)
+        scroll = ttk.Scrollbar(box, orient="vertical", command=self.table.yview)
+        xscroll = ttk.Scrollbar(res, orient="horizontal", command=self.table.xview)
+        self.table.configure(yscrollcommand=scroll.set, xscrollcommand=xscroll.set)
         self.table.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
+        xscroll.pack(fill="x")
+        self.table.bind("<Double-Button-1>", lambda e: self.show_details())
+        hint = ttk.Label(res, text=t("speed.hint"), style="Muted.TLabel", wraplength=500, justify="left")
+        hint.pack(anchor="w", fill="x", pady=(4, 0))
+        hint.bind("<Configure>", lambda e: hint.configure(wraplength=max(200, e.width)))
+
+        apane = ttk.Panedwindow(ans, orient="horizontal")
+        apane.pack(fill="both", expand=True)
+        alist = ttk.Frame(apane, style="Inner.TFrame")
+        apane.add(alist, weight=2)
+        self.answers = ttk.Treeview(alist, columns=ACOLS, show="headings", height=6, selectmode="browse")
+        for col in ACOLS:
+            self.answers.heading(col, text=t(f"speed.acol.{col}"))
+            self.answers.column(col, width=AWIDTHS[col], minwidth=40, anchor="w", stretch=col == "task")
+        ascroll = ttk.Scrollbar(alist, orient="vertical", command=self.answers.yview)
+        self.answers.configure(yscrollcommand=ascroll.set)
+        self.answers.pack(side="left", fill="both", expand=True)
+        ascroll.pack(side="right", fill="y")
+        self.answers.bind("<<TreeviewSelect>>", lambda e: self._show_answer())
+        self.answer_text = tk.Text(apane, wrap="word", font="TkFixedFont", height=8, background="#11171d",
+                                   foreground="#cfd8e3", relief="flat", padx=10, pady=8, state="disabled")
+        self.answer_text.tag_configure("head", foreground="#66c9fa")
+        self.answer_text.tag_configure("prompt", foreground="#9bacc0")
+        apane.add(self.answer_text, weight=3)
+        self.answer_rows: dict[str, tuple] = {}
 
         log = ttk.Frame(split, style="Panel.TFrame", padding=8)
         split.add(log, weight=3)
-        self.preview_window = None             # okno „Podgląd” – tworzone przy pierwszym Starcie
+        self.monitor = None                    # okno „Monitor” – tworzone przy pierwszym Starcie
         head = ttk.Frame(log, style="Inner.TFrame")
         head.pack(fill="x")
         ttk.Label(head, text=t("bench.log.title"), style="Title.TLabel").pack(side="left")
@@ -431,10 +430,10 @@ class BenchmarkPanel(ttk.Frame):
         tools.pack(fill="x", pady=(4, 0))
         ttk.Button(tools, text=t("bench.log.copy"), command=self.copy_log).pack(side="left")
         ttk.Button(tools, text=t("bench.log.save"), command=self.save_log).pack(side="left", padx=6)
-        ttk.Button(tools, text=t("bench.log.csv"), command=self.export_csv).pack(side="left")
-        self.restore_button = ttk.Button(tools, text=t("bench.preview.restore"), command=self.show_preview)
+        ttk.Button(tools, text=t("speed.export"), command=self.export_session).pack(side="left")
+        self.restore_button = ttk.Button(tools, text=t("bench.preview.restore"), command=self.show_monitor)
         self.restore_button.pack(side="right")
-        ttk.Label(tools, text=t("bench.preview.title") + ":", style="Panel.TLabel").pack(side="right", padx=6)
+        ttk.Label(tools, text=t("speed.monitor.title") + ":", style="Panel.TLabel").pack(side="right", padx=6)
         self.restore_button.state(["disabled"])
         line = ttk.Frame(log, style="Inner.TFrame")
         line.pack(fill="x", pady=(6, 2))
@@ -460,7 +459,6 @@ class BenchmarkPanel(ttk.Frame):
         for tag, color in LOG_COLORS.items():
             self.console.tag_configure(tag, foreground=color)
         self.console.tag_configure("time", foreground="#7c90a4")
-        self.bind("<Configure>", lambda e: None)
 
     def contexts(self) -> list[int]:
         return [c for c in CONTEXTS if self.ctx_vars[c].get()]
@@ -486,93 +484,66 @@ class BenchmarkPanel(ttk.Frame):
         self.worker.run("bench_predict", lambda: self.c.bench_predict(missing, CONTEXTS, hw, settings),
                         done, lambda e: done({}))
 
-    def _measured(self, model: str, ctx: int):
-        db = getattr(self.c, "bench_db", None)
-        if db is None:
-            return None
-        try:
-            hw, _ = self.current()
-            rows = db.latest(model, self.c.hardware_text(hw))
-        except Exception:
-            return None
-        row = next((r for r in rows if r["context"] == ctx), None) or (rows[-1] if rows else None)
-        return (row["pp_tps"], row["tg_tps"]) if row else None
+    @staticmethod
+    def _model_name(target: str) -> str:
+        return target[len("ollama:"):] if target.startswith("ollama:") else target
 
-    @property
-    def controlled(self) -> bool:
-        return self.mode.get() == "controlled"
-
-    @property
-    def repeat_count(self) -> int:
-        return int(self.repeats.get()) if self.controlled else 1
-
-    def _mode_changed(self, update: bool = True) -> None:
-        if self.controlled:
-            self.repeats_box.configure(state="readonly")
-        else:
-            self.repeats.set("1")                    # bez zwalniania kolejne próby trafiłyby w pamięć promptu
-            self.repeats_box.configure(state="disabled")
-        self.mode_note.configure(text=t(f"bench.mode_note.{self.mode.get()}"))
-        if update:
-            self._update_plan()
+    def _plan_jobs(self) -> tuple[list[str], dict, list[str]]:
+        """(modele do testu, model → pomijane długości, pominięte modele) wg przewidywania AI Bóbra:
+        „nie zmieści się” przy 1k – model pomijamy; przy dłuższym kontekście – tylko ten pomiar."""
+        run, skip, skipped = [], {}, []
+        for tg in self.targets():
+            if self.predicted.get((tg, min(CONTEXTS))) == "red":
+                skipped.append(tg)
+                continue
+            run.append(tg)
+            red = [c for c in self.contexts() if self.predicted.get((tg, c)) == "red"]
+            if red:
+                skip[tg] = red
+        return run, skip, skipped
 
     def _update_plan(self) -> None:
         if self.running:
             return
         targets = self.targets()
+        run, skip, skipped = self._plan_jobs()
+        runs = int(self.runs.get())
         self.table.delete(*self.table.get_children())
         self.job_rows.clear()
-        perf = self.suite_vars["perf"].get()
-        quality = [sid for sid in SUITES[1:] if self.suite_vars[sid].get()]
-        jobs = [(tg, c) for tg in targets for c in (self.contexts() if perf else ())]
-        seconds, skipped = 0.0, 0
-        self.qrows.clear()
-        self.qtable.delete(*self.qtable.get_children())
-        qtasks = 0
-        if quality:
-            ntasks = sum(len(self.c.quality_suite(sid).get("tests", ())) for sid in quality)
-            for tg in targets:
-                name = tg[len("ollama:"):] if tg.startswith("ollama:") else tg
-                red = self.predicted.get((tg, min(CONTEXTS))) == "red"
-                self.qrows[name] = self.qtable.insert("", "end", values=(name,) + (
-                    (t("bench.status.skip"),) if red else (t("bench.status.wait"),)) + ("",) * (len(QCOLS) - 2))
-                if not red:
-                    qtasks += ntasks
-                    per_try = QSECONDS + (QRELOAD if self.controlled else 0)
-                    seconds += 12 + QRELOAD + ntasks * per_try * self.repeat_count
-        for target, ctx in jobs:
-            level = self.predicted.get((target, ctx))
-            name = target[len("ollama:"):] if target.startswith("ollama:") else target
-            if level == "red":
-                skipped += 1
-                values = (name, fmt_context(ctx), t("bench.pred.red"), "", "", "", "", t("bench.status.skip"))
-                self.job_rows[(name, ctx)] = self.table.insert("", "end", values=values, tags=("skip",))
+        seconds = 0.0
+        for tg in targets:
+            name = self._model_name(tg)
+            if tg in skipped:
+                self.job_rows[(name, 1)] = self.table.insert(
+                    "", "end", values=(name, "–", t("bench.status.skip")) + ("",) * (len(COLUMNS) - 3), tags=("skip",))
                 continue
-            seconds += estimate_seconds(ctx, level, measured=self._measured(name, ctx))
-            values = (name, fmt_context(ctx), t(f"bench.pred.{level}") if level else "?", "", "", "", "",
-                      t("bench.status.wait"))
-            self.job_rows[(name, ctx)] = self.table.insert("", "end", values=values,
-                                                           tags=(level,) if level else ())
+            ctxs = [c for c in self.contexts() if c not in skip.get(tg, ())]
+            seconds += runs * estimate(ctxs)
+            for n in range(1, runs + 1):
+                values = [name, str(n), t("bench.status.wait")] + [""] * (len(COLUMNS) - 3)
+                for c in skip.get(tg, ()):
+                    values[COLUMNS.index(f"l{c}")] = t("bench.status.skip")
+                self.job_rows[(name, n)] = self.table.insert("", "end", values=values)
         self.estimated = seconds
         minutes = max(1, round(seconds / 60))
         if not targets:
             self.plan.configure(text=t("bench.none_checked"))
         else:
-            text = t("bench.plan", jobs=len(jobs) - skipped, minutes=minutes)
-            if quality:
-                text = t("bench.plan_q", jobs=len(jobs) - skipped, tasks=qtasks, minutes=minutes)
+            ctx = ", ".join(fmt_context(c) for c in self.contexts()) or "—"
+            text = t("speed.plan", models=len(run), runs=runs, contexts=ctx, minutes=minutes)
             if skipped:
-                text += " " + t("bench.plan_skipped", n=skipped)
+                text += " " + t("speed.plan_skipped", n=len(skipped))
             self.plan.configure(text=text)
         warnings = []
-        if len(targets) > 1:
+        if len(run) > 1:
             warnings.append(t("bench.warn_many", minutes=minutes))
         from aibobr.app.controller import power_source
         if power_source() == "battery":
             warnings.append(t("bench.warn_battery"))
         self.warning.configure(text="\n".join("⚠ " + w for w in warnings))
-        self.steps_total = (len(jobs) - skipped) * 7 + qtasks
-        self.start_button.state(["!disabled"] if len(jobs) > skipped or qtasks else ["disabled"])
+        self.steps_total = sum(runs * (2 + TASKS + len([c for c in self.contexts() if c not in skip.get(tg, ())]))
+                               for tg in run)
+        self.start_button.state(["!disabled"] if run else ["disabled"])
 
     # ------------------------------------------------------------------ dziennik
     def log(self, kind: str, text: str) -> None:
@@ -600,42 +571,38 @@ class BenchmarkPanel(ttk.Frame):
             Path(path).write_text("\n".join(self.log_lines) + "\n", encoding="utf-8")
             self.on_status(t("bench.log.saved", path=path))
 
-    def export_csv(self) -> None:
-        """Wydajność i jakość z bieżącego przebiegu – do trzech plików (aibobr.bench.export)."""
+    def export_session(self) -> None:
+        """Ostatnia sesja do folderu: werdykt, zadania, długi kontekst, telemetria, manifest.json."""
         from aibobr.bench import export
-        perf = [r for r in self.results if r.tg_tps]
-        quality = self.quality or [r for rs in self.qresults.values() for r in rs]
-        if not perf and not quality:
-            messagebox.showinfo(t("bench.log.csv"), t("bench.csv_none"), parent=self)
+        db = getattr(self.c, "bench_db", None)
+        if not self.session_id or db is None or db.session(self.session_id) is None:
+            messagebox.showinfo(t("speed.export"), t("bench.csv_none"), parent=self)
             return
-        name = f"bobr_{datetime.datetime.now():%Y-%m-%d_%H-%M-%S}.csv"
-        path = filedialog.asksaveasfilename(parent=self, title=t("bench.log.csv"), initialfile=name,
-                                            defaultextension=".csv", filetypes=[("CSV", "*.csv")])
-        if not path:
+        parent = filedialog.askdirectory(parent=self, title=t("speed.export"), mustexist=True)
+        if not parent:
             return
-        written = export.export_all(path, perf, quality)
-        self.on_status(t("bench.log.exported", files=", ".join(p.name for p in written)))
-        self.log("INFO", t("bench.log.exported", files=", ".join(str(p) for p in written)))
+        folder = export.export_session(db, self.session_id, parent)
+        self.on_status(t("speed.exported", path=str(folder)))
+        self.log("INFO", t("speed.exported", path=str(folder)))
 
     # ------------------------------------------------------------------ pomiar
     def start(self) -> None:
-        contexts, targets = self.contexts(), self.targets()
-        suites = tuple(sid for sid in SUITES if self.suite_vars[sid].get())
-        repeats, mode = self.repeat_count, self.mode.get()   # odczyt tu – zmienne Tk nie z wątku w tle
-        if not targets or self.running or not suites or (suites == ("perf",) and not contexts):
+        contexts, (run, skip, skipped) = self.contexts(), self._plan_jobs()
+        runs = int(self.runs.get())             # odczyt tu – zmienne Tk nie z wątku w tle
+        if not run or self.running:
             return
-        if len(targets) > 1 and not self.confirm(t("bench.title"), t("bench.confirm_many")):
+        if len(run) > 1 and not self.confirm(t("bench.title"), t("bench.confirm_many")):
             return
         try:
             hw, _ = self.current()
         except ValueError:
             messagebox.showinfo(t("bench.title"), t("stats.need_hw"), parent=self)
             return
+        from aibobr.gui.dialogs.cooling import ThreadsafeAsk
         self.hw = hw
         self.running = True
-        self.results = []
-        self.quality = []
-        self.qresults.clear()                  # eksport i podgląd – tylko ten przebieg
+        self.run_results = []
+        self.session_id = None
         self.steps_done = 0
         self.started = time.monotonic()
         self.stop.clear()
@@ -643,25 +610,21 @@ class BenchmarkPanel(ttk.Frame):
         self.stop_button.state(["!disabled"])
         self.summary.configure(text="")
         self.log_lines.clear()
-        self.show_preview()                    # podgląd jako osobne okno (uwaga autora)
-        self.preview_window.clear()
+        self.answers.delete(*self.answers.get_children())
+        self.answer_rows.clear()
+        self.show_monitor()                    # osobne okno (decyzja autora 4a)
+        self.monitor.clear()
         self.console.configure(state="normal")
         self.console.delete("1.0", "end")
         self.console.configure(state="disabled")
-        names = ", ".join(tg[len("ollama:"):] for tg in targets)
-        if "perf" in suites:
-            self.log("START", t("bench.log.models", names=names,
-                                contexts=", ".join(fmt_context(c) for c in contexts)))
-        else:                                   # sama jakość – konteksty z pola nie są mierzone
-            self.log("START", t("bench.log.models_q", names=names))
-        if any(sid != "perf" for sid in suites):
-            self.log("INFO", t(f"bench.log.mode.{mode}", runs=repeats))
+        for tg in skipped:
+            self.log("WARN", t("speed.log.skip", model=self._model_name(tg)))
+        self.ask = ThreadsafeAsk(self.winfo_toplevel(), stop=self.stop)
         self._clock()
         self.worker.run_with_progress(
             "bench",
-            lambda report: self.c.run_benchmark(targets, contexts, self.predicted, hw, report, self.stop,
-                                                db=self.c.bench_db, suites=suites, repeats=repeats,
-                                                mode=mode),
+            lambda report: self.c.run_speed_benchmark(run, hw, report, self.stop, runs=runs, contexts=contexts,
+                                                      on_timeout=self.ask, skip_contexts=skip),
             self._progress, self._done, self._failed)
 
     def _clock(self) -> None:
@@ -673,152 +636,224 @@ class BenchmarkPanel(ttk.Frame):
         self.times.configure(text=t("bench.time_line", elapsed=_clock(elapsed), left=_clock(left)))
         self.after(500, self._clock)
 
-    def _status(self, model: str, ctx: int, text: str) -> None:
-        iid = self.job_rows.get((model, ctx))
+    def _step(self) -> None:
+        self.steps_done += 1
+        share = min(1.0, self.steps_done / self.steps_total) if self.steps_total else 0
+        self.bar.configure(value=share * 100)
+        self.percent.configure(text=f"{share * 100:.0f}%")
+
+    def _status(self, model: str, run: int, text: str) -> None:
+        iid = self.job_rows.get((model, run))
         if iid:
             values = list(self.table.item(iid, "values"))
-            values[-1] = text
+            values[COLUMNS.index("verdict")] = text
             self.table.item(iid, values=values)
             self.table.see(iid)
 
-    def _step_text(self, step: str) -> str:
-        if step == "warmup":
-            return t("bench.step.warmup")
-        kind, n = step.split()
-        return t(f"bench.step.{kind}", n=n)
+    def _phase(self, text: str) -> None:
+        self.stage.configure(text=text)
+        if self.monitor is not None and self.monitor.winfo_exists():
+            self.monitor.set_phase(text)
 
     def _progress(self, p: dict) -> None:
-        event = p.get("event", "step")
-        ctx = fmt_context(p["context"]) if "context" in p else ""
-        if event == "start":
-            perf = p.get("perf", p["jobs"])
-            parts = [t("bench.log.start_perf", jobs=perf)] if perf else []
-            if p.get("q_suites"):
-                parts.append(t("bench.log.start_quality", suites=p["q_suites"], tasks=p["q_tasks"],
-                               runs=p.get("q_runs", 1)))
-            self.log("INFO", t("bench.log.start", version=p.get("version") or "?", what=" · ".join(parts)))
-            if p.get("busy_mb") is not None:
-                self.log("INFO", t("bench.log.busy", mb=p["busy_mb"]))
-        elif event == "step":
-            step = self._step_text(p["step"])
-            self.steps_done += 1
-            share = min(1.0, self.steps_done / self.steps_total) if self.steps_total else 0
-            self.bar.configure(value=share * 100)
-            self.percent.configure(text=f"{share * 100:.0f}%")
-            self.stage.configure(text=t("bench.progress", n=p["n"], total=p["total"], model=p["model"],
-                                        context=ctx, step=step))
-            self._status(p["model"], p["context"], step)
-            self.log("RUN", f"{p['model']} | {ctx} | {step}")
-        elif event == "measure":
-            step = self._step_text(p["step"])
-            if p["step"].startswith("prompt"):
-                text = t("bench.log.pp", pp=_num(p["pp"], 0), ttft=_num(p["ttft"], 0))
+        event = p.get("event")
+        m = self.monitor if self.monitor is not None and self.monitor.winfo_exists() else None
+        if event == "telemetry":
+            if m:
+                m.sample(p["sample"])
+        elif event == "s_start":
+            self.session_id = p["session_id"]
+            self.log("START", t("speed.log.start", version=p.get("version") or "?", models=", ".join(p["models"]),
+                                runs=p["runs"], tasks=p["tasks"],
+                                contexts=", ".join(fmt_context(c) for c in p["contexts"]) or "—"))
+            self.log("INFO", t("speed.disclaimer"))
+        elif event == "s_release":
+            self.current_run = (p["model"], p["run"])
+            self._status(p["model"], p["run"], t("speed.status.release"))
+            self.log("INFO", t("speed.log.release", model=p["model"], run=p["run"],
+                               released=t("export.yes") if p["released"] else t("export.no"),
+                               recovered=t("speed.unknown") if p["recovered"] is None else
+                               t("export.yes") if p["recovered"] else t("export.no")))
+        elif event == "s_cooling":
+            if p.get("key") == "bench.cooling.start":
+                text = t("bench.cooling.start", tolerance=sf.num(p["tolerance"]), window=sf.num(p["window"], 0))
+                self.log("INFO", text)
+                self._phase(t("speed.phase.cooling"))
+                if self.current_run:
+                    self._status(*self.current_run, t("speed.status.cooling"))
             else:
-                text = t("bench.log.tg", tg=_num(p["tg"]))
-            self.log("RESULT", f"{p['model']} | {ctx} | {step}: {text}")
-        elif event == "result":
-            r = p["result"]
-            gpu = "–" if r.gpu_share is None else f"{r.gpu_share * 100:.0f}%"
-            iid = self.job_rows.get((r.model, r.context))
-            if iid:
-                self.table.item(iid, values=(r.model, fmt_context(r.context),
-                                             t(f"bench.pred.{r.predicted}") if r.predicted else "?",
-                                             _num(r.pp_tps, 0), _num(r.ttft_ms, 0), _num(r.tg_tps), gpu,
-                                             t("bench.status.done")))
-            text = t("bench.log.result", pp=_num(r.pp_tps, 0), ttft=_num(r.ttft_ms, 0),
-                     tg=_num(r.tg_tps), gpu=gpu)
-            if r.power_draw_w:
-                text += " · " + t("bench.log.power", w=f"{r.power_draw_w:.0f}")
-            self.log("OK", f"{r.model} | {fmt_context(r.context)} | {text}")
-        elif event == "skip":
-            self._status(p["model"], p["context"], t("bench.status.skip"))
-            self.log("WARN", t("bench.log.skip", model=p["model"], context=ctx))
-        elif event == "stopped":
-            self._status(p["model"], p["context"], t("bench.status.stopped"))
-            self.log("WARN", t("bench.log.stopped"))
-        elif event == "p_task":
-            self._preview_start(f"{p['model']} | {ctx} | {self._step_text(p['step'])}", p["prompt"])
+                self.log("WARN", t(p["key"]))
+        elif event == "s_cooled":
+            c = p["cooling"]
+            self._step()
+            self.log("WARN" if c.warning else "OK", t("speed.log.cooled", status=t(f"speed.stab.{c.status}"),
+                                                      seconds=sf.num(c.seconds, 0), cpu=sf.num(c.cpu_temp_c, 0),
+                                                      gpu=sf.num(c.gpu_temp_c, 0)))
+            self._phase(t("speed.phase.baseline"))
+            self._status(p["model"], p["run"], t("speed.status.baseline"))
+        elif event == "s_baseline":
+            self._step()
+            mean = p["baseline"]["mean"]
+            self.log("INFO", t("speed.log.baseline", cpu=sf.num(mean.get("cpu_pct")),
+                               gpu=sf.num(mean.get("gpu_util_pct")), vram=sf.num(mean.get("vram_used_mb"), 0)))
+        elif event == "s_task":
+            self._step()
+            label = t("speed.phase.task", model=p["model"], n=p["n"], total=p["total"], task=p["task"])
+            self._phase(label)
+            if self.current_run:
+                self._status(*self.current_run, f"{p['n']}/{p['total']}")
+            if m:
+                m.start(label, p["prompt"])
         elif event == "chunk":
-            self._preview_add(p["text"])
-        elif event == "q_task":
-            self.steps_done += 1
-            share = min(1.0, self.steps_done / self.steps_total) if self.steps_total else 0
-            self.bar.configure(value=share * 100)
-            self.percent.configure(text=f"{share * 100:.0f}%")
-            suite = t(f"bench.suite.{p['suite']}")
-            label = f"{p['model']} | {suite} | {p['n']}/{p['total']} {p['title']}"
-            self.stage.configure(text=label)
-            self._qstatus(p["model"], f"{suite} {p['n']}/{p['total']}")
-            self._preview_start(label, p["prompt"])
-            self.log("RUN", label)
-        elif event == "q_result":
+            if m:
+                m.add(p["text"])
+        elif event == "s_task_done":
             r = p["result"]
-            mark = "✓" if r.passed else "✗"
-            reason = "" if r.passed else " – " + reason_text(r.reason)
-            if r.runs > 1:
-                reason += " · " + t("bench.log.agree", same=r.identical, runs=r.runs, passes=r.passes)
-            if r.invalid:
-                reason += " · " + t("bench.log.invalid", n=r.invalid, total=r.invalid + r.runs)
-            if r.cache_warn:
-                reason += " · ⚠ " + t("bench.log.cache_warn", cached=r.cached, tokens=r.prompt_tokens)
-            self._preview_verdict(f"{mark} {t('bench.preview.verdict')}{reason}", r.passed,
-                                  {"model": r.model, "suite": r.suite, "test": r.test_id, "passed": int(r.passed),
-                                   "reason": reason.lstrip(" –"), "prompt": r.prompt, "answer": r.answer})
-            self.log("OK" if r.passed else "WARN", f"{r.model} | {mark} {r.title}{reason}")
-        elif event == "q_done":
-            self._quality_row(p["model"], p["results"])
-            ok = sum(r.passed for r in p["results"])
-            self.log("OK", t("bench.log.q_done", model=p["model"], suite=t(f"bench.suite.{p['suite']}"),
-                             ok=ok, total=len(p["results"])))
-        elif event == "q_skip":
-            self._qstatus(p["model"], t("bench.status.skip"))
-            self.log("WARN", t("bench.log.skip", model=p["model"], context=t(f"bench.suite.{p['suite']}")))
-        elif event == "q_release_failed":
-            self.log("WARN", t("bench.log.release_failed", model=p["model"]))
+            state = (t(f"speed.error.{r.error.split(':')[0]}") if r.error else sf.flags(r)) or "ok"
+            self.log("RESULT" if not r.error else "WARN",
+                     t("speed.log.task", n=r.task_no, total=p["total"], task=r.task_id, tps=sf.num(sf.task_tps(r)),
+                       tokens=r.gen_tokens or 0, ttft=sf.ms(r.ttft_wall_ms), state=state))
+        elif event == "s_long":
+            self._step()
+            label = t("speed.phase.long", model=p["model"], context=fmt_context(p["context"]))
+            self._phase(label)
+            if m:
+                m.start(label, t("speed.long_prompt"))
+        elif event == "s_long_done":
+            lc = p["result"]
+            self.log("RESULT" if lc.get("valid") else "WARN",
+                     f"{p['model']} | {fmt_context(lc['num_ctx'])}: {sf.long_cell(lc_run(lc), lc['num_ctx'], self._th())}"
+                     + (" · " + t("speed.log.long_input", tokens=sf.num(lc.get("prompt_tokens"), 0),
+                                  ctx=sf.num(lc["num_ctx"], 0)) if lc.get("prompt_tokens") else ""))
+        elif event == "s_run_done":
+            self._run_done(p["result"])
         elif event == "unload":
             self.log("INFO", t("bench.log.unload", model=p["model"]))
+        elif event == "stopped":
+            if self.current_run:
+                self._status(*self.current_run, t("bench.status.stopped"))
+            self.log("WARN", t("bench.log.stopped"))
+        elif event == "s_error":
+            self.log("ERROR", p.get("error", ""))
 
-    def _done(self, results: list) -> None:
+    def _th(self) -> dict:
+        from aibobr.bench import speed
+        return speed.thresholds_of(self.c.settings)
+
+    def _run_done(self, r: dict) -> None:
+        self.run_results.append(r)
+        th = self._th()
+        values = {"model": r["model"], "run": str(r["run_no"]), "verdict": sf.verdict(r), "gen": sf.generation(r),
+                  "ttft": sf.ttft(r), "pp": sf.prompt_main(r), "notes": sf.warnings(r) or "—"}
+        for c in CONTEXTS:
+            values[f"l{c}"] = sf.long_cell(r, c, th)
+        iid = self.job_rows.get((r["model"], r["run_no"]))
+        row = [values[c] for c in COLUMNS]
+        tags = (r.get("verdict"),) if r.get("verdict") else ()
+        if iid:
+            old = self.table.item(iid, "values")
+            for c in CONTEXTS:                                 # „pominięty” zostaje
+                i = COLUMNS.index(f"l{c}")
+                if old[i] == t("bench.status.skip"):
+                    row[i] = old[i]
+            self.table.item(iid, values=row, tags=tags)
+        else:
+            iid = self.table.insert("", "end", values=row, tags=tags)
+            self.job_rows[(r["model"], r["run_no"])] = iid
+        self.result_rows[iid] = r
+        self.log("OK" if r.get("status") == "finished" else "WARN",
+                 t("speed.log.verdict", model=r["model"], run=r["run_no"], verdict=sf.verdict(r),
+                   gen=sf.generation(r), ttft=sf.ttft(r)))
+        if sf.warnings(r):
+            self.log("WARN", sf.warnings(r))
+        for task in r.get("tasks") or ():
+            aid = self.answers.insert("", "end", values=(r["model"], r["run_no"], task.task_id, task.gen_tokens or 0,
+                                                         sf.num(sf.task_tps(task)),
+                                                         (t(f"speed.error.{task.error.split(':')[0]}")
+                                                          if task.error else sf.flags(task))))
+            self.answer_rows[aid] = (r["model"], task)
+
+    def _show_answer(self) -> None:
+        sel = self.answers.selection()
+        if not sel or sel[0] not in self.answer_rows:
+            return
+        model, task = self.answer_rows[sel[0]]
+        self.answer_text.configure(state="normal")
+        self.answer_text.delete("1.0", "end")
+        self.answer_text.insert("end", f"{model} · {task.task_id}\n", ("head",))
+        self.answer_text.insert("end", t("bench.preview.prompt") + "\n", ("head",))
+        self.answer_text.insert("end", task.prompt_text + "\n\n", ("prompt",))
+        self.answer_text.insert("end", t("bench.preview.answer") + "\n", ("head",))
+        self.answer_text.insert("end", (task.response_text or "").strip() or "–")
+        if task.error:
+            self.answer_text.insert("end", "\n\n⚠ " + task.error)
+        self.answer_text.configure(state="disabled")
+
+    def show_details(self) -> None:
+        sel = self.table.selection()
+        r = self.result_rows.get(sel[0]) if sel else None
+        if r is None:
+            return
+        win = tk.Toplevel(self)
+        win.title(t("speed.details_title", model=r["model"], run=r["run_no"]))
+        win.geometry("820x640")
+        text = tk.Text(win, wrap="none", font="TkFixedFont", background="#11171d", foreground="#cfd8e3",
+                       relief="flat", padx=12, pady=10)
+        scroll = ttk.Scrollbar(win, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+        text.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
+        text.insert("end", sf.details(r, self._th()))
+        text.configure(state="disabled")
+        self.details_window = win
+
+    def _done(self, result: dict) -> None:
         self.running = False
-        from aibobr.bench.quality import QualityResult
-        self.quality = [r for r in results if isinstance(r, QualityResult) and not r.skipped]
-        results = [r for r in results if not isinstance(r, QualityResult)]
-        self.results = results
+        self._close_ask()
         if not self.winfo_exists():
             return
         self.stop_button.state(["disabled"])
         self.start_button.state(["!disabled"])
-        done = [r for r in results if r.tg_tps]
         elapsed = time.monotonic() - self.started
         took = t("bench.took", min=int(elapsed // 60), sec=int(elapsed % 60),
                  est=max(1, round(self.estimated / 60)))
-        stopped = any(r.stopped for r in results)
+        stopped = result.get("status") == "stopped"
         self.stage.configure(text=t("bench.stopped_note") if stopped else t("bench.saved"))
+        if self.monitor is not None and self.monitor.winfo_exists():
+            self.monitor.set_phase(t("speed.phase.done"))
         self.times.configure(text=took)
         if not stopped:
             self.bar.configure(value=100)
             self.percent.configure(text="100%")
-        self._power_warning(done)
-        if len({r.model for r in done}) >= 2:
-            best = max(done, key=lambda r: r.tg_tps)
-            self.summary.configure(text=t("bench.fastest", model=best.model, tps=_num(best.tg_tps),
-                                          context=fmt_context(best.context)))
+        self._summary()
         self.log("END", took)
 
-    def _power_warning(self, done: list) -> None:
-        from aibobr.bench.power import capped_during_test
-        gpu = next((g for g in self.hw.gpus if g.selected and g.power_capped), None)
-        peaks = [r.power_draw_w for r in done if r.power_draw_w]
-        if not peaks or not capped_during_test(gpu, max(peaks)):
-            return
-        import sys
-        key = "bench.power_capped_linux" if sys.platform.startswith("linux") else "bench.power_capped_other"
-        text = t(key, draw=f"{max(peaks):.0f}", limit=f"{gpu.power_limit_w:.0f}", max=f"{gpu.power_max_w:.0f}")
-        self.warning.configure(text="⚠ " + text)
-        self.log("WARN", text)
+    def _summary(self) -> None:
+        from aibobr.bench import speed
+        models = []
+        for r in self.run_results:
+            if r["model"] not in models:
+                models.append(r["model"])
+        parts = []
+        for model in models:
+            runs = [r for r in self.run_results if r["model"] == model]
+            rng = speed.spread(runs)
+            if rng and len(runs) > 1:
+                parts.append(t("speed.spread", model=model, runs=len(runs), low=sf.num(rng[0]), high=sf.num(rng[1])))
+        if parts:
+            self.summary.configure(text=" · ".join(parts))
+            for p in parts:
+                self.log("INFO", p + " – " + t("speed.spread_note"))
+
+    def _close_ask(self) -> None:
+        ask = getattr(self, "ask", None)
+        if ask is not None:
+            ask.close()
+            self.ask = None
 
     def _failed(self, e: BaseException) -> None:
         self.running = False
+        self._close_ask()
         if not self.winfo_exists():
             return
         self.stop_button.state(["disabled"])
@@ -828,79 +863,22 @@ class BenchmarkPanel(ttk.Frame):
         self.stage.configure(text=text)
         self.log("ERROR", text)
 
-    # ------------------------------------------------------------------ podgląd i jakość (12c)
-    def show_preview(self) -> None:
-        """„Przywróć” – okno podglądu znowu na wierzchu (w trakcie testu i po nim)."""
-        from aibobr.gui.widgets.preview_window import PreviewWindow
-        if self.preview_window is None or not self.preview_window.winfo_exists():
-            self.preview_window = PreviewWindow(self, self.on_status)
-        self.preview_window.show()
+    # ------------------------------------------------------------------ Monitor
+    def show_monitor(self) -> None:
+        """„Przywróć” – okno Monitor znowu na wierzchu (w trakcie testu i po nim)."""
+        from aibobr.gui.widgets.monitor_window import MonitorWindow
+        if self.monitor is None or not self.monitor.winfo_exists():
+            self.monitor = MonitorWindow(self, self.on_status)
+        self.monitor.show()
         self.restore_button.state(["!disabled"])
 
-    def _preview_start(self, title: str, prompt: str) -> None:
-        if self.preview_window is not None and self.preview_window.winfo_exists():
-            self.preview_window.start(title, prompt)
 
-    def _preview_add(self, text: str) -> None:
-        if self.preview_window is not None and self.preview_window.winfo_exists():
-            self.preview_window.add(text)
-
-    def _preview_verdict(self, text: str, ok: bool, row: dict = None) -> None:
-        if self.preview_window is not None and self.preview_window.winfo_exists():
-            self.preview_window.verdict(text, ok, row)
-
-    def _qstatus(self, model: str, text: str) -> None:
-        iid = self.qrows.get(model)
-        if iid and model not in self.qresults:          # wyniki pierwszego pakietu zostają widoczne
-            self.qtable.item(iid, values=(model, text) + ("",) * (len(QCOLS) - 2))
-
-    def _quality_row(self, model: str, results: list) -> None:
-        from aibobr.bench.quality import score
-        self.qresults[model] = self.qresults.get(model, []) + list(results)
-        sc = score(self.qresults[model])
-
-        def cell(key):
-            return f"{sc[key][0]}/{sc[key][1]}" if key in sc else "–"
-        values = (model,) + tuple(cell(c) for c in QCOLS[1:])
-        iid = self.qrows.get(model)
-        if iid:
-            self.qtable.item(iid, values=values)
-        else:
-            self.qrows[model] = self.qtable.insert("", "end", values=values)
-
-    def show_answers(self) -> None:
-        """Dwuklik w tabeli Jakość: wszystkie zadania i odpowiedzi modelu z oceną."""
-        sel = self.qtable.selection()
-        if not sel:
-            return
-        model = self.qtable.item(sel[0], "values")[0]
-        results = self.qresults.get(model)
-        if not results:
-            return
-        win = tk.Toplevel(self)
-        win.title(t("bench.answers_title", model=model))
-        win.geometry("760x620")
-        text = tk.Text(win, wrap="word", font="TkFixedFont", background="#11171d", foreground="#cfd8e3",
-                       relief="flat", padx=12, pady=10)
-        scroll = ttk.Scrollbar(win, orient="vertical", command=text.yview)
-        text.configure(yscrollcommand=scroll.set)
-        text.pack(side="left", fill="both", expand=True)
-        scroll.pack(side="right", fill="y")
-        for tag, color in (("head", "#66c9fa"), ("prompt", "#9bacc0"), ("ok", "#53d6a0"), ("bad", "#ff8282")):
-            text.tag_configure(tag, foreground=color)
-        for r in results:
-            mark = "✓" if r.passed else "✗"
-            reason = "" if r.passed else " – " + reason_text(r.reason)
-            text.insert("end", f"{mark} {r.title}{reason}\n", ("ok" if r.passed else "bad",))
-            text.insert("end", r.prompt + "\n", ("prompt",))
-            text.insert("end", (r.answer.strip() or "–") + "\n\n")
-        text.configure(state="disabled")
-        self.answers_window = win
+def lc_run(lc: dict) -> dict:
+    """Jeden pomiar długiego kontekstu jako „przebieg” – do wspólnego formatowania komórki."""
+    return {"long_context": [lc]}
 
 
-def reason_text(reason: str) -> str:
-    """„quality.reason.no_function:fibonacci” → tekst z tłumaczeń z argumentem."""
-    if not reason:
-        return ""
-    key, _, arg = reason.partition(":")
-    return t(key, arg=arg) if key.startswith("quality.") else reason
+def estimate(contexts: list[int]) -> float:
+    """Szacunek jednego przebiegu jednego modelu w s: chłodzenie (zależy od komputera, przyjmujemy
+    ok. 1 min) + linia bazowa + 15 zadań (zwolnienie, wczytanie, odpowiedź) + długi kontekst."""
+    return COOL_EST + 10 + TASKS * TASK_EST + sum(LONG_EST + c / 1000 * 2.5 for c in contexts)

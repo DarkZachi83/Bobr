@@ -281,125 +281,143 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertFalse(page.wide)
         self.assertEqual(int(page.right.grid_info()["row"]), 1)     # prawa kolumna pod lewą
 
-    def test_benchmark_export_quality_only(self):
-        """Zgłoszenie autora: sama jakość, bez wydajności – eksport nie może milczeć."""
-        import aibobr.gui.widgets.bench_panel as bp
-        from tests.test_export import CONTROLLED
+    def speed_run(self, model, run_no, tps=60.0, ttft8k=4350.0):
+        from aibobr.bench import speed
+        from tests.test_speed import task
+        tasks = [task(n, gen_tokens=200, eval_ms=200 / tps * 1000, ttft_wall_ms=50.0 + n) for n in range(1, 16)]
+        tasks[0].response_text = "Zażółć gęślą jaźń"
+        summary = speed.summarize(tasks)
+        warnings = summary.pop("warnings")
+        longs = [{"num_ctx": 1024, "prompt_tokens": 769, "gen_tokens": 128, "pp_tps": 1849.6, "tg_tps": 55.9,
+                  "ttft_wall_ms": 430.0, "valid": 1},
+                 {"num_ctx": 8192, "prompt_tokens": 7238, "gen_tokens": 128, "pp_tps": 1667.5, "tg_tps": 45.2,
+                  "ttft_wall_ms": ttft8k, "valid": 1}]
+        return {"id": f"r{run_no}", "model": model, "run_no": run_no, **summary, "warnings_json": warnings,
+                "thresholds_json": speed.DEFAULT_THRESHOLDS, "stabilization": "stable", "cooling_seconds": 146.0,
+                "baseline_json": {"samples": 10, "mean": {"cpu_pct": 7.3, "vram_used_mb": 91.0}},
+                "tasks": tasks, "long_context": longs}
+
+    def test_benchmark_speed_run_monitor_and_answers(self):
+        from aibobr.bench.telemetry import Cooling
         w = self.window()
         b = w.bench
-        info, saved = [], []
-        old_info, old_ask = bp.messagebox.showinfo, bp.filedialog.asksaveasfilename
-        d = tempfile.mkdtemp()
-        bp.messagebox.showinfo = lambda title, text, parent=None: info.append(text)
-        bp.filedialog.asksaveasfilename = lambda **kw: saved.append(kw) or str(Path(d) / "bobr.csv")
-        try:
-            b.export_csv()                                               # nic jeszcze nie zmierzono
-            self.assertEqual(len(info), 1)
-            self.assertEqual(saved, [])
-            b.quality = [CONTROLLED]
-            b.export_csv()
-            self.assertEqual(sorted(p.name for p in Path(d).iterdir()),
-                             ["bobr_jakosc_podsumowanie.csv", "bobr_jakosc_proby.csv"])
-        finally:
-            bp.messagebox.showinfo, bp.filedialog.asksaveasfilename = old_info, old_ask
-
-    def test_benchmark_quality_mode(self):
-        """Standardowy: 1 próba (pole zablokowane); kontrolowany: 1/3/5 i tryb idzie do pomiaru."""
-        w = self.window()
-        b = w.bench
-        self.assertEqual(b.mode.get(), "standard")
-        self.assertEqual(str(b.repeats_box.cget("state")), "disabled")
-        b.repeats.set("5")
-        self.assertEqual(b.repeat_count, 1)
-        b.mode.set("controlled")
-        b._mode_changed()
-        self.assertEqual(str(b.repeats_box.cget("state")), "readonly")
-        b.repeats.set("3")
-        self.assertEqual(b.repeat_count, 3)
-        b.mode.set("standard")
-        b._mode_changed()
-        self.assertEqual((b.repeats.get(), b.repeat_count), ("1", 1))
-        b._progress({"event": "start", "version": "0.40.13", "jobs": 1, "perf": 0, "q_suites": 1,
-                     "q_tasks": 8, "q_runs": 3})
-        line = b.log_lines[-1]
-        self.assertIn("jakość", line)
-        self.assertNotIn("rozgrzewka", line)                             # sama jakość – bez opisu wydajności
-
-    def test_benchmark_tab_plan_run_and_log(self):
-        from aibobr.bench.runner import PerfResult
-        from aibobr.bench.ollama import Generation
-        w = self.window()
-        self.assertFalse(w.bench_button.winfo_ismapped())                # plik .gguf – bez benchmarku
         targets = ["ollama:llama3.1:8b", "ollama:qwen3:8b"]
-        w.c.bench_predict = lambda tg, ctxs, hw, s: {(t_, c): ("red" if c == 32768 else "green")
+        w.c.bench_predict = lambda tg, ctxs, hw, s: {(t_, c): ("red" if t_.endswith("qwen3:8b") else "green")
                                                      for t_ in tg for c in ctxs}
+        calls = []
 
-        def fake_run(tg, ctxs, predicted, hw, report, stop, db=None, suites=(), repeats=1, mode="standard"):
-            from aibobr.bench.quality import QualityResult
-            self.assertEqual(suites, ("perf", "pl_jezyk_v1", "en_format_v1"))   # domyślnie wszystkie
-            report({"event": "start", "version": "0.40.13", "jobs": len(tg), "busy_mb": 101})
-            q = QualityResult(tg[0][7:], "pl_jezyk_v1", "pl_vocative", "Wołacz", "language_integrity",
-                              False, "quality.reason.pattern", "Tomasz", "Podaj wołacz…",
-                              subcategory="inflection")
-            report({"event": "q_task", "model": tg[0][7:], "suite": "pl_jezyk_v1", "n": 1, "total": 1,
-                    "test": "pl_vocative", "title": "Wołacz", "prompt": "Podaj wołacz…"})
-            report({"event": "chunk", "text": "Tomasz"})
-            report({"event": "q_result", "model": tg[0][7:], "result": q})
-            report({"event": "q_done", "model": tg[0][7:], "suite": "pl_jezyk_v1", "results": [q]})
+        def fake_run(run, hw, report, stop, runs=1, contexts=(), on_timeout=None, skip_contexts=None):
+            calls.append((run, runs, contexts, on_timeout))
+            report({"event": "s_start", "session_id": "abc12345", "models": ["llama3.1:8b"], "runs": runs,
+                    "tasks": 15, "contexts": contexts, "version": "0.40.15"})
             out = []
-            for n, t_ in enumerate(tg, 1):
-                m = t_[7:]
-                report({"n": n, "total": len(tg), "model": m, "context": ctxs[0], "step": "prompt 1/3"})
-                report({"event": "measure", "n": n, "model": m, "context": ctxs[0], "step": "prompt 1/3",
-                        "pp": 812.0, "ttft": 1210.0, "tg": None})
-                r = PerfResult(m, ctxs[0], pp_tps=800, ttft_ms=1200, tg_tps=30 + n * 10, gpu_share=1.0,
-                               predicted="green")
-                report({"event": "result", "n": n, "total": len(tg), "result": r})
+            for n in range(1, runs + 1):
+                report({"event": "s_release", "model": "llama3.1:8b", "run": n, "released": True, "recovered": True})
+                report({"event": "s_cooling", "key": "bench.cooling.start", "window": 30, "tolerance": 1.0})
+                report({"event": "telemetry", "sample": {"cpu_pct": 7.0, "cpu_cores_json": [5.0, 90.0],
+                                                         "gpu_temp_c": 43.0, "cpu_temp_c": None,
+                                                         "vram_used_mb": 91.0, "vram_total_mb": 8151.0,
+                                                         "gpu_throttle": "sw_power_cap"}})
+                report({"event": "s_cooled", "model": "llama3.1:8b", "run": n,
+                        "cooling": Cooling("stable", 146.0, 56.0, 43.0)})
+                report({"event": "s_baseline", "model": "llama3.1:8b", "run": n,
+                        "baseline": {"mean": {"cpu_pct": 7.3, "gpu_util_pct": 0.0, "vram_used_mb": 91.0}}})
+                r = self.speed_run("llama3.1:8b", n, tps=60.0 - n)
+                report({"event": "s_task", "model": "llama3.1:8b", "n": 1, "total": 15, "task": "pl_diacritics_restore",
+                        "prompt": "Przywróć znaki…"})
+                report({"event": "chunk", "text": "Zażółć"})
+                report({"event": "s_task_done", "model": "llama3.1:8b", "n": 1, "total": 15, "result": r["tasks"][0]})
+                report({"event": "s_long_done", "model": "llama3.1:8b", "run": n, "result": r["long_context"][1]})
+                report({"event": "s_run_done", "model": "llama3.1:8b", "run": n, "runs": runs, "result": r})
                 out.append(r)
-            return out
+            report({"event": "s_done", "status": "finished", "session_id": "abc12345"})
+            return {"session_id": "abc12345", "runs": out, "status": "finished"}
 
-        w.c.run_benchmark = fake_run
-        b = w.bench
+        w.c.run_speed_benchmark = fake_run
         asked = []
         b.confirm = lambda title, text: asked.append(text) or True
-        w.open_benchmark(targets[:1])                                    # ⏱ z zakładki Sprawdź
-        self.pump(seconds=0.2)
-        self.assertEqual(w.tab, "bench")
         b.select_targets(targets)
         self.pump(lambda: all((t_, 1024) in b.predicted for t_ in targets), 3)
-        self.assertIn("Kilka modeli", b.warning.cget("text"))               # ostrzeżenie autora
-        b.ctx_vars[32768].set(True)
+        b.runs.set(3)
         b._update_plan()
-        self.assertIn("Pominięte: 2", b.plan.cget("text"))                  # 32k nie zmieści się
-        b.ctx_vars[32768].set(False)
-        b._update_plan()
+        self.assertIn("Pominięte (nie zmieszczą się): 1", b.plan.cget("text"))
+        self.assertEqual(len(b.table.get_children()), 4)                     # 3 przebiegi + pominięty
         b.start()
-        self.assertEqual(len(asked), 1)                                     # potwierdzenie przy kilku modelach
-        self.pump(lambda: b.summary.cget("text"), 3)
-        rows = [b.table.item(i, "values") for i in b.table.get_children()]
-        self.assertEqual(rows[2][5], "50,0")                                # qwen3 1k: generowanie tok/s
-        self.assertEqual(rows[0][7], "gotowe")                              # kolumna Status
-        self.assertIn("qwen3:8b", b.summary.cget("text"))                   # najszybszy u Ciebie
+        self.assertEqual(asked, [])                                          # jeden model – bez pytania
+        self.pump(lambda: not b.running, 5)
+        run, runs, contexts, on_timeout = calls[0]
+        self.assertEqual((run, runs, contexts), (["ollama:llama3.1:8b"], 3, [1024, 8192]))
+        self.assertIsNotNone(on_timeout)                                     # okno stabilizacji z wątku
+        rows = {b.table.item(i, "values")[1]: b.table.item(i, "values") for i in b.table.get_children()}
+        col = {c: i for i, c in enumerate(b.table["columns"])}
+        first = rows["1"]
+        self.assertEqual(first[col["verdict"]], "🟢 Szybko")
+        self.assertEqual(first[col["gen"]], "59,0 tok/s z 3 000 tokenów w 50,8 s")
+        self.assertEqual(first[col["pp"]], "1 850 tok/s (wejście 769 tokenów)")
+        self.assertEqual(first[col["l8192"]], "45,2 tok/s · TTFT 4,35 s 🟡")        # rzeczywisty TTFT, ocena info
+        self.assertEqual(first[col["l32768"]], "—")
+        self.assertIn("57,0–59,0 tok/s", b.summary.cget("text"))             # rozrzut 3 przebiegów
         log = "\n".join(b.log_lines)
-        self.assertIn("Ollama 0.40.13", log)
-        self.assertIn("101 MiB", log)
-        self.assertIn("prompt 1/3: 812 tok/s", log)
-        self.assertIn("END", log)
-        self.assertIn("✗ Wołacz – brak oczekiwanej formy", log)
-        pw = b.preview_window                                               # osobne okno (uwaga autora)
-        self.assertIn("Tomasz", pw.content())                               # podgląd odpowiedzi
-        pw.protocol("WM_DELETE_WINDOW")
-        pw.withdraw()                                                       # zamknięcie tylko chowa
-        self.assertTrue(pw.winfo_exists())
-        b.show_preview()                                                    # „Przywróć”
-        self.assertEqual(pw.state(), "normal")
-        self.assertEqual(pw.rows[0]["answer"], "Tomasz")                    # do eksportu CSV
-        qrow = b.qtable.item(b.qrows["llama3.1:8b"], "values")
-        self.assertEqual(qrow[2], "0/1")                                    # Fleksja
-        b.qtable.selection_set(b.qrows["llama3.1:8b"])
-        b.show_answers()
-        self.assertIn("Tomasz", b.answers_window.winfo_children()[0].get("1.0", "end"))
-        b.answers_window.destroy()
+        self.assertIn("Ollama 0.40.15", log)
+        self.assertIn("qwen3:8b: pominięty", log)
+        self.assertIn("nie dowód stabilności", log)
+        self.assertIn("Stabilizacja: ustabilizowana po 146 s", log)
+        m = b.monitor                                                        # osobne okno (decyzja 4a)
+        self.assertIn("Zażółć", m.content())
+        self.assertIn("limit mocy", m.throttle.cget("text"))
+        self.assertIn("Pomiar aktywności swap niedostępny", m.values.cget("text"))
+        m.withdraw()                                                         # zamknięcie tylko chowa
+        self.assertTrue(m.winfo_exists())
+        b.show_monitor()                                                     # „Monitor: Przywróć”
+        self.assertEqual(m.state(), "normal")
+        self.assertEqual(len(b.answers.get_children()), 45)                  # 3 × 15 odpowiedzi
+        first_answer = b.answers.get_children()[0]
+        b.answers.selection_set(first_answer)
+        b._show_answer()
+        self.assertIn("Zażółć gęślą jaźń", b.answer_text.get("1.0", "end"))
+        b.table.selection_set(b.job_rows[("llama3.1:8b", 1)])
+        b.show_details()
+        text = b.details_window.winfo_children()[0].get("1.0", "end")
+        self.assertIn("Obie miary", text)
+        self.assertIn("informacyjnie", text)
+        self.assertIn("Prompt w pakiecie", text)
+        b.details_window.destroy()
+
+    def test_benchmark_missing_1k_and_export_session(self):
+        import aibobr.gui.widgets.bench_panel as bp
+        from aibobr.gui import speed_format as sf
+        w = self.window()
+        b = w.bench
+        r = self.speed_run("m", 1)
+        r["long_context"] = [{"num_ctx": 1024, "valid": 0, "invalid_reason": "possible_truncation"}]
+        self.assertEqual(sf.prompt_main(r), "Pomiar 1k niedostępny")              # bez podstawiania pakietu
+        self.assertEqual(sf.long_cell(r, 1024, {"gen_tps": [30, 15, 6], "ttft_s": [1, 3, 8]}),
+                         "Brak danych (możliwe obcięcie wejścia)")
+        info = []
+        old_info, old_ask = bp.messagebox.showinfo, bp.filedialog.askdirectory
+        d = tempfile.mkdtemp()
+        bp.messagebox.showinfo = lambda title, text, parent=None: info.append(text)
+        bp.filedialog.askdirectory = lambda **kw: d
+        try:
+            b.export_session()                                               # nic jeszcze nie zmierzono
+            self.assertEqual(len(info), 1)
+            db = w.c.bench_db
+            b.session_id = db.start_session(started_at="2026-11-09T14:32:00+01:00")
+            rid = db.start_run(b.session_id, model="m", run_no=1, started_at="2026-11-09T14:33:00+01:00",
+                               gen_tps=54.21, verdict="fast", thresholds_json={"gen_tps": [30, 15, 6]})
+            db.add_task(rid, task_no=1, task_id="t", response_text="odp", eval_ms=1234.5678)
+            b.export_session()
+            folder = next(Path(d).iterdir())
+            self.assertEqual(folder.name, f"benchmark_2026-11-09_1432_{b.session_id[:8]}")
+            self.assertEqual(sorted(p.name for p in folder.iterdir()),
+                             ["dlugi_kontekst.csv", "manifest.json", "telemetria.csv", "werdykt.csv", "zadania.csv"])
+            import json
+            manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["export_schema_version"], 1)
+            self.assertEqual(manifest["runs"][0]["thresholds"], {"gen_tps": [30, 15, 6]})
+            self.assertIn("1234,5678", (folder / "zadania.csv").read_text(encoding="utf-8-sig"))   # bez zaokrągleń
+        finally:
+            bp.messagebox.showinfo, bp.filedialog.askdirectory = old_info, old_ask
 
     def test_benchmark_tab_finds_models_and_remembers(self):
         from aibobr.scan.model import FoundModel, Kind, ScanReport
