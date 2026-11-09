@@ -234,7 +234,7 @@
   "expl.where.ram": "on the card and in RAM (slower)",
   "expl.where.ram_only": "in RAM",
   "expl.where.vram": "entirely on the card",
-  "gui.about_text": "Will this language model run on your computer, and how fast?\n\nRafał Zacharski together with Claude (Anthropic)\nMIT license",
+  "gui.about_text": "Will this language model run on your computer, and how fast?\n\nRafał Zacharski together with Claude (Anthropic)\nGPL-3.0 license",
   "gui.add_gpu": "+ Add a card",
   "gui.adv_computer": "Hardware and settings (entered manually)",
   "gui.adv_intro": "The same model as on the Check tab, calculated for the hardware and settings you enter on the right – e.g. “what if I had a 16 GB card?”. The Check tab always uses your computer.",

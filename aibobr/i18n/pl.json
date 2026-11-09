@@ -234,7 +234,7 @@
   "expl.where.ram": "w karcie i RAM (wolniej)",
   "expl.where.ram_only": "w RAM",
   "expl.where.vram": "w całości w karcie",
-  "gui.about_text": "Czy ten model językowy pójdzie na Twoim komputerze i jak szybko?\n\nRafał Zacharski razem z Claude (Anthropic)\nLicencja MIT",
+  "gui.about_text": "Czy ten model językowy pójdzie na Twoim komputerze i jak szybko?\n\nRafał Zacharski razem z Claude (Anthropic)\nLicencja GPL-3.0",
   "gui.add_gpu": "+ Dodaj kartę",
   "gui.adv_computer": "Sprzęt i ustawienia (wpisane ręcznie)",
   "gui.adv_intro": "Ten sam model co w zakładce Sprawdź, policzony dla sprzętu i ustawień wpisanych ręcznie po prawej – np. „co by było z kartą 16 GB?”. Zakładka Sprawdź liczy zawsze dla Twojego komputera.",

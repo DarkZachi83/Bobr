@@ -26,6 +26,7 @@ DATA = [
     ("config/settings.json", "config"),
     ("assets/aibobr.png", "assets"),
     ("assets/about.png", "assets"),
+    ("LICENSE", "."),                                  # GPL-3.0: tekst licencji razem z programem
 ]
 
 
