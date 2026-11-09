@@ -142,8 +142,7 @@ class MonitorWindow(tk.Toplevel):
             chart.grid(row=i // 2, column=i % 2, sticky="nsew", padx=3, pady=3)
         self.gpu_line = ttk.Label(body, text="", style="Muted.TLabel")
         self.gpu_line.pack(anchor="w", pady=(4, 0))
-        self.throttle = ttk.Label(body, text="", style="Note.TLabel")
-        self.throttle.pack(anchor="w")
+        self.throttle = ttk.Label(body, text="", style="Note.TLabel")   # widoczny tylko, gdy karta zwalnia
 
         self.task = ttk.Label(body, text=t("bench.preview.empty"), style="Title.TLabel", wraplength=860)
         self.task.pack(anchor="w", fill="x", pady=(10, 0))
@@ -192,6 +191,10 @@ class MonitorWindow(tk.Toplevel):
         active = [r for r in (reasons or "").split(",") if r and r not in ("none", "gpu_idle")]
         self.throttle.configure(text="⚠ " + t("speed.monitor.throttle", reasons=", ".join(
             t(f"speed.throttle.{r}") for r in active)) if active else "")
+        if active and not self.throttle.winfo_manager():
+            self.throttle.pack(anchor="w", after=self.gpu_line)
+        elif not active and self.throttle.winfo_manager():
+            self.throttle.pack_forget()
 
     @staticmethod
     def _swap_io(s: dict) -> str:

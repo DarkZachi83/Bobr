@@ -152,6 +152,11 @@ a card that shares its memory with the monitor. A **live log** shows every run, 
 time left; you can copy it, save it to a file or export the results to CSV. Results are saved on your
 computer (`benchmarks.sqlite`).
 
+[![Benchmark Monitor window: CPU, temperatures, memory and GPU live, with the model's answer](docs/img/benchmark-monitor.png)](docs/img/benchmark-monitor.png)
+
+*The **Monitor** window during a benchmark: CPU load per thread, CPU and GPU temperature, RAM and swap,
+GPU load and VRAM, and the model's answer as it is written.*
+
 ### Models on your disk
 
 The **Benchmark** tab (or `--scan [FOLDER]`) lists the models you already have – from Ollama,
@@ -329,6 +334,11 @@ kilku modeli trwa długo i obciąża komputer. Zauważa też kartę w laptopie n
 która dzieli pamięć z monitorem. **Dziennik na żywo** pokazuje każdy przebieg, postęp i czas do końca;
 możesz go skopiować, zapisać do pliku albo wyeksportować wyniki do CSV. Wyniki zostają na Twoim
 komputerze (`benchmarks.sqlite`).
+
+[![Okno Monitor w trakcie benchmarku: procesor, temperatury, pamięć i karta na żywo oraz odpowiedź modelu](docs/img/benchmark-monitor.png)](docs/img/benchmark-monitor.png)
+
+*Okno **Monitor** w trakcie benchmarku: obciążenie procesora z podziałem na wątki, temperatura CPU i GPU,
+RAM i swap, obciążenie karty i VRAM oraz odpowiedź modelu pisana na żywo.*
 
 ### Modele na dysku
 
