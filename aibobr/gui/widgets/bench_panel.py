@@ -376,6 +376,10 @@ class BenchmarkPanel(ttk.Frame):
         self.results_tabs.add(res, text=t("bench.res.perf"))
         ans = ttk.Frame(self.results_tabs, style="Panel.TFrame", padding=8)
         self.results_tabs.add(ans, text=t("speed.answers"))
+        from aibobr.gui.widgets.history_view import HistoryView
+        self.history = HistoryView(self.results_tabs, self.c, self.on_status)
+        self.results_tabs.add(self.history, text=t("hist.tab"))
+        self.results_tabs.bind("<<NotebookTabChanged>>", lambda e: self._tab_changed())
         box = ttk.Frame(res, style="Inner.TFrame")
         box.pack(fill="both", expand=True)
         self.table = ttk.Treeview(box, columns=COLUMNS, show="headings", height=6)
@@ -459,6 +463,11 @@ class BenchmarkPanel(ttk.Frame):
         for tag, color in LOG_COLORS.items():
             self.console.tag_configure(tag, foreground=color)
         self.console.tag_configure("time", foreground="#7c90a4")
+
+    def _tab_changed(self) -> None:
+        """Historia czyta bazę dopiero po otwarciu zakładki (baza powstaje przy pierwszym użyciu)."""
+        if self.results_tabs.select() == str(self.history):
+            self.history.refresh()
 
     def contexts(self) -> list[int]:
         return [c for c in CONTEXTS if self.ctx_vars[c].get()]
@@ -827,6 +836,8 @@ class BenchmarkPanel(ttk.Frame):
             self.percent.configure(text="100%")
         self._summary()
         self.log("END", took)
+        if self.results_tabs.select() == str(self.history):
+            self.history.refresh()
 
     def _summary(self) -> None:
         from aibobr.bench import speed

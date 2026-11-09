@@ -52,7 +52,7 @@ def verdict(run: dict) -> str:
 def generation(run: dict) -> str:
     b = speed.basis(run)
     if b is None:
-        return t("speed.no_data")
+        return t("speed.no_data") if run.get("gen_tps") is None else f"{num(run['gen_tps'])} tok/s"
     return t("speed.gen_basis", tps=num(b["tps"]), tokens=num(b["tokens"], 0), seconds=num(b["seconds"]))
 
 

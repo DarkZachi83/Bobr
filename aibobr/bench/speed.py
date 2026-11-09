@@ -403,7 +403,7 @@ def _round(value: Optional[float], digits: int) -> Optional[float]:
 
 def basis(run: dict) -> Optional[dict]:
     """Podstawa werdyktu do pokazania: tok/s, tokeny, sekundy (np. „54,2 tok/s z 1 214 tokenów w 22,4 s”)."""
-    if run.get("gen_tps") is None:
+    if run.get("gen_tps") is None or run.get("gen_ms_total") is None or run.get("gen_tokens_total") is None:
         return None
     return {"tps": run["gen_tps"], "tokens": run["gen_tokens_total"], "seconds": round(run["gen_ms_total"] / 1000, 1)}
 
