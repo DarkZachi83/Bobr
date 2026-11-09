@@ -146,14 +146,71 @@ same settings. Everything stays in a file on your computer.
 
 ### Benchmark – Zacharski tests
 
-On the **Benchmark** tab, tick models installed in **Ollama** and measure their real speed:
-prompt processing (tokens/s, time to first token) and generation (tokens/s) at 1k and 8k context
-(32k on request), with a warm-up and the median of 3 runs. AI Bóbr shows its prediction next to each
-measurement, skips models that won't fit, measures one model at a time and warns that testing several
-models takes long and loads the computer. It also notices a laptop card held at a low power limit and
-a card that shares its memory with the monitor. A **live log** shows every run, with progress and the
-time left; you can copy it, save it to a file or export the results to CSV. Results are saved on your
-computer (`benchmarks.sqlite`).
+The **Benchmark** tab answers two practical questions: **will this model run on my computer, and how
+fast?** Tick models installed in **Ollama**, choose 1, 3 or 5 runs and the long-context lengths
+(1k and 8k, 32k on request), and press Start. Models are measured one at a time; models that won't
+fit are skipped.
+
+**What happens before every run:** the previous model is released (confirmed by Ollama) and AI Bóbr
+checks that GPU memory is back to where it was; it waits until the CPU and GPU temperature stop
+changing (at most 1 °C in 30 s – if it takes longer than 5 minutes, you decide whether to start
+anyway, and the result gets a warning); then it records a 10-second **baseline** of the idle computer.
+
+**The test:** 15 short tasks (Polish, JSON, Python code) at 2k context. Before each task the model is
+released and loaded again, so no task reuses the prompt memory of the previous one. **We rate speed,
+not the content of the answers** – answers are saved so you can read them on the **Answers** tab, but
+nothing is graded. What is checked is the measurement itself: the number of generated tokens, the
+generation time and execution errors.
+
+**The verdict** – 🟢 Fast, 🔵 Usable, 🟡 Slow, 🔴 Too slow – is the worse of two ratings:
+
+| | 🟢 Fast | 🔵 Usable | 🟡 Slow | 🔴 Too slow |
+|---|---|---|---|---|
+| Generation | ≥ 30 tok/s | 15–30 tok/s | 6–15 tok/s | < 6 tok/s |
+| Time to first token (median) | ≤ 1 s | 1–3 s | 3–8 s | > 8 s |
+
+Next to the verdict you always see its basis, e.g. *"61.2 tok/s from 578 tokens in 9.4 s"*. Generation
+is a weighted mean (all tokens ÷ all generation time); the time to first token is measured by the
+program itself, not taken from the engine. The thresholds can be changed in the settings file
+(`bench_thresholds`); every result keeps the thresholds it was rated with.
+
+**Long context** is a separate section and does not change the verdict. What counts is the real length
+of the input, not the configured context size: AI Bóbr fits the text to the model's tokenizer (input
+≈ 90 % of the context, room left for the answer) and measures prompt processing, generation *after*
+the long input and the real time to first token. Example from the author's laptop (RTX 4060 8 GB,
+Bielik-Minitron 7B Q4_K_M): generation 56 tok/s after 1k, 45 tok/s after 8k; at 8k the first token comes
+after about 4 s – fine for short questions, noticeable when you paste a long document.
+
+**Monitor** – a separate window opened with the test: phase, CPU load per thread, CPU and GPU
+temperature, RAM and swap, GPU load, power, clock and VRAM, the reason the GPU limits its clock, and the
+model's answer as it is written. Closing it only hides it.
+
+**Results and history.** Double-click a result for details (all 15 tasks, the long context, the
+baseline, the thresholds). The **History** tab lists earlier sessions with the verdict on the test day
+and, optionally, *by current thresholds* (shown only where it differs). Sessions can be exported to a
+folder (`werdykt.csv`, `zadania.csv`, `dlugi_kontekst.csv`, `telemetria.csv`, `manifest.json`; exact
+values, a missing reading is an empty cell, never 0) or deleted. Results from versions before 0.9 stay
+untouched in **Archive (before 0.9)**. Everything is stored on your computer (`benchmarks.sqlite`; a
+backup is made before the database is upgraded). Detailed telemetry can be kept for 30–365 days or
+forever (`telemetry_retention_days`); results and verdicts are always kept.
+
+**How to read it.** A single run is a performance sample under these conditions, not proof of
+stability. Three or five runs show the spread (e.g. *61.2–61.5 tok/s*) – a measure of spread, not
+proof of repeatability. Close heavy programs and plug in the laptop before testing.
+
+**What the Monitor can read on your system:**
+
+| | Linux | Windows |
+|---|---|---|
+| CPU load (total and per thread), RAM, swap | ✓ | ✓ |
+| CPU temperature | ✓ (coretemp, k10temp) | ✗ not available |
+| CPU power | only with access to RAPL (usually root) | ✗ not available |
+| Swap activity (in/out per second) | ✓ | ✗ shown as *"Swap activity measurement unavailable"* |
+| NVIDIA GPU: load, temperature, power, clock, VRAM, clock limit reason | ✓ | ✓ |
+| GPU memory temperature | usually not reported by consumer cards | the same |
+
+A missing sensor never stops the test: temperature stabilisation is skipped when no temperature is
+available, and the missing value is recorded as "no data", not as zero.
 
 [![Benchmark Monitor window: CPU, temperatures, memory and GPU live, with the model's answer](docs/img/benchmark-monitor.png)](docs/img/benchmark-monitor.png)
 
@@ -182,6 +239,7 @@ python -m unittest discover -s tests -t .     # GUI tests run when a display exi
 python tools/try_source.py <link or .gguf>    # what the program reads from a model
 python tools/try_detection.py [--json]        # what it detects on this PC (JSON = test profile)
 python tools/calibrate.py                     # predictions vs. real memory use in Ollama
+python tools/pomiar_predkosci.py <model> [--runs 3]   # speed benchmark from the terminal (separate database)
 python main.py --fake-hw tests/fake_hardware/windows_amd_rx7900xtx.json   # pretend hardware
 python tools/build_catalog.py                 # rebuild the model list from catalog_sources.txt
 python tools/build_exe.py                     # PyInstaller build (CI does this for v* tags)
@@ -329,14 +387,72 @@ model ponownie z tymi samymi ustawieniami. Wszystko zostaje w pliku na Twoim kom
 
 ### Benchmark – testy Zacharskiego
 
-W zakładce **Benchmark** zaznaczasz modele zainstalowane w **Ollamie** i mierzysz ich prawdziwą szybkość
-na Twoim komputerze: przetwarzanie promptu (tokeny/s, czas do pierwszego tokenu) i generowanie (tokeny/s) przy
-kontekście 1k i 8k (32k na życzenie), z rozgrzewką i medianą z 3 przebiegów. Obok pomiaru AI Bóbr pokazuje
-swoje przewidywanie, pomija modele, które się nie zmieszczą, mierzy modele po kolei i ostrzega, że test
-kilku modeli trwa długo i obciąża komputer. Zauważa też kartę w laptopie na niskim limicie mocy i kartę,
-która dzieli pamięć z monitorem. **Dziennik na żywo** pokazuje każdy przebieg, postęp i czas do końca;
-możesz go skopiować, zapisać do pliku albo wyeksportować wyniki do CSV. Wyniki zostają na Twoim
-komputerze (`benchmarks.sqlite`).
+Zakładka **Benchmark** odpowiada na dwa praktyczne pytania: **czy ten model uruchomi się na moim
+komputerze i jak szybko będzie działał?** Zaznaczasz modele zainstalowane w **Ollamie**, wybierasz 1, 3
+albo 5 przebiegów i długości długiego kontekstu (1k i 8k, 32k na życzenie), a potem klikasz Start.
+Modele są mierzone po kolei; te, które się nie zmieszczą, są pomijane.
+
+**Co dzieje się przed każdym przebiegiem:** poprzedni model jest zwalniany (Ollama to potwierdza), a AI
+Bóbr sprawdza, czy pamięć karty wróciła do stanu sprzed testu; czeka, aż temperatura procesora i karty
+przestanie się zmieniać (najwyżej 1 °C w 30 s – jeśli trwa to dłużej niż 5 minut, decydujesz, czy
+zacząć mimo to, a wynik dostaje ostrzeżenie); potem zapisuje 10-sekundową **linię bazową** komputera
+w spoczynku.
+
+**Test:** 15 krótkich zadań (polszczyzna, JSON, kod w Pythonie) przy kontekście 2k. Przed każdym
+zadaniem model jest zwalniany i wczytywany od nowa, więc żadne zadanie nie korzysta z pamięci promptu
+poprzedniego. **Oceniamy prędkość, nie treść odpowiedzi** – odpowiedzi są zapisane i można je przeczytać
+w zakładce **Odpowiedzi**, ale nic nie jest oceniane. Pilnujemy samego pomiaru: liczby wygenerowanych
+tokenów, czasu generowania i błędów wykonania.
+
+**Werdykt** – 🟢 Szybko, 🔵 Użytecznie, 🟡 Wolno, 🔴 Zbyt wolno – to gorsza z dwóch ocen:
+
+| | 🟢 Szybko | 🔵 Użytecznie | 🟡 Wolno | 🔴 Zbyt wolno |
+|---|---|---|---|---|
+| Generowanie | ≥ 30 tok/s | 15–30 tok/s | 6–15 tok/s | < 6 tok/s |
+| Czas do pierwszego tokenu (mediana) | ≤ 1 s | 1–3 s | 3–8 s | > 8 s |
+
+Przy werdykcie zawsze widać jego podstawę, np. *„61,2 tok/s z 578 tokenów w 9,4 s”*. Generowanie to
+średnia ważona (wszystkie tokeny ÷ cały czas generowania); czas do pierwszego tokenu mierzy sam
+program, nie bierzemy go z silnika. Progi można zmienić w pliku ustawień (`bench_thresholds`); każdy
+wynik pamięta progi, według których go oceniono.
+
+**Długi kontekst** to osobna sekcja i nie zmienia werdyktu. Liczy się rzeczywista długość wejścia, nie
+ustawiony rozmiar kontekstu: AI Bóbr dopasowuje tekst do tokenizatora modelu (wejście ≈ 90% kontekstu,
+z miejscem na odpowiedź) i mierzy przetwarzanie promptu, generowanie *po* długim wejściu i rzeczywisty
+czas do pierwszego tokenu. Przykład z laptopa autora (RTX 4060 8 GB, Bielik-Minitron 7B Q4_K_M):
+generowanie 56 tok/s po 1k, 45 tok/s po 8k; przy 8k pierwszy token pojawia się po ok. 4 s – przy
+krótkich pytaniach nie ma to znaczenia, przy wklejeniu długiego dokumentu czekanie jest odczuwalne.
+
+**Monitor** – osobne okno otwierane razem z testem: faza, obciążenie procesora z podziałem na wątki,
+temperatura CPU i GPU, RAM i swap, obciążenie, moc, taktowanie i VRAM karty, powód ograniczenia
+taktowania i odpowiedź modelu pisana na żywo. Zamknięcie tylko je chowa.
+
+**Wyniki i historia.** Dwuklik na wyniku pokazuje szczegóły (wszystkie 15 zadań, długi kontekst, linię
+bazową, progi). Zakładka **Historia** pokazuje wcześniejsze sesje z werdyktem z dnia testu i – na
+życzenie – *według obecnych progów* (tylko tam, gdzie wychodzi inny). Sesję można wyeksportować do
+folderu (`werdykt.csv`, `zadania.csv`, `dlugi_kontekst.csv`, `telemetria.csv`, `manifest.json`; wartości
+bez zaokrągleń, brak odczytu to pusta komórka, nigdy 0) albo usunąć. Wyniki z wersji sprzed 0.9 zostają
+bez zmian w **Archiwum (przed 0.9)**. Wszystko jest zapisane na Twoim komputerze (`benchmarks.sqlite`;
+przed aktualizacją bazy program robi jej kopię). Szczegółową telemetrię można trzymać 30–365 dni albo
+bezterminowo (`telemetry_retention_days`); wyniki i werdykty zostają zawsze.
+
+**Jak to czytać.** Pojedynczy przebieg to próbka wydajności w tych warunkach, nie dowód stabilności.
+Trzy albo pięć przebiegów pokazuje rozrzut (np. *61,2–61,5 tok/s*) – to pomiar rozrzutu, nie dowód
+powtarzalności. Przed testem zamknij ciężkie programy i podłącz laptopa do zasilacza.
+
+**Co Monitor potrafi odczytać w Twoim systemie:**
+
+| | Linux | Windows |
+|---|---|---|
+| Obciążenie procesora (całe i na wątek), RAM, swap | ✓ | ✓ |
+| Temperatura procesora | ✓ (coretemp, k10temp) | ✗ niedostępna |
+| Moc procesora | tylko z dostępem do RAPL (zwykle root) | ✗ niedostępna |
+| Aktywność swap (odczyt/zapis na sekundę) | ✓ | ✗ widać *„Pomiar aktywności swap niedostępny”* |
+| Karta NVIDIA: obciążenie, temperatura, moc, taktowanie, VRAM, powód ograniczenia taktowania | ✓ | ✓ |
+| Temperatura pamięci karty | karty konsumenckie zwykle jej nie podają | tak samo |
+
+Brak czujnika nigdy nie zatrzymuje testu: stabilizacja temperatury jest pomijana, gdy żadna temperatura
+nie jest dostępna, a brakująca wartość jest zapisana jako „brak danych”, nie jako zero.
 
 [![Okno Monitor w trakcie benchmarku: procesor, temperatury, pamięć i karta na żywo oraz odpowiedź modelu](docs/img/benchmark-monitor.png)](docs/img/benchmark-monitor.png)
 
@@ -361,6 +477,7 @@ się z internetem sam z siebie. Sprawdzany model zawsze pochodzi z Twojego linku
 ### Dla programistów
 
 Polecenia jak w części angielskiej (testy, `tools/try_source.py`, `tools/try_detection.py`,
+`tools/pomiar_predkosci.py` – benchmark prędkości z terminala, do osobnej bazy,
 `--fake-hw`, `tools/build_catalog.py`, `tools/build_exe.py`). Decyzje projektowe:
 [docs/SPEC.md](docs/SPEC.md). Zmienione ustawienia i token Hugging Face są zapisywane poza
 repozytorium (`~/.config/ai-bobr/`, `%APPDATA%\AI-Bobr\`).
