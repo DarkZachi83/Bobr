@@ -300,6 +300,8 @@ class AppController:
         if self._bench_db is None and self.saved is not None:
             from aibobr.app.bench_db import BenchDb
             self._bench_db = BenchDb(self.saved.path.parent / "benchmarks.sqlite")
+            # tylko szczegółowe próbki telemetrii; domyślnie (None) bezterminowo
+            self._bench_db.prune_telemetry(self.settings.get("telemetry_retention_days"))
         return self._bench_db
 
     def bench_suite(self) -> dict:
