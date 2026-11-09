@@ -528,6 +528,26 @@ wynikach wartości bezwzględne i różnica względem linii bazowej. Wartości w
 `bench_stabilization_window_s`, `bench_stabilization_tolerance_c`, `bench_stabilization_timeout_s`,
 `bench_baseline_s`.
 
+**Benchmark prędkości 0.9 (`aibobr/bench/speed.py`, `session.py`):** pakiet `speed_v1` = 15 zadań
+z `pl_jezyk_v1` i `en_format_v1` (prompty i limity tokenów 256/512) przy kontekście 2k, **bez oceny
+treści** (odpowiedź zapisana do podglądu). Każde zadanie: zwolnienie (potwierdzone w /api/ps) →
+puste zapytanie wczytujące z tym samym `num_ctx` (czas wczytania osobno) → zadanie strumieniowo
+(TTFT rzeczywisty = do pierwszego kawałka, zegar aplikacji) → sprawdzenie pamięci promptu i czy
+model nie zniknął. Czasy silnika (`load/prompt_eval/eval/total_duration`) osobno od rzeczywistych.
+Generowanie = średnia ważona (wszystkie tokeny / cały czas generowania), prompt = tylko zadania
+policzone od zera, TTFT = mediana i najgorszy (bez zadań z wczytywaniem w trakcie). Sprawdzenia:
+brak tokenów / zły czas / błąd wykonania – poza średnią; tokeny z pamięci – poza prędkością promptu;
+< 20 tokenów – dopisek; < 300 łącznie – ostrzeżenie; narzut > 20% – ostrzeżenie; > 2 błędy na 15 –
+„brak wiarygodnego wyniku”. **Werdykt** (progi `bench_thresholds`): generowanie ≥ 30 / ≥ 15 / ≥ 6 tok/s,
+TTFT ≤ 1 / ≤ 3 / ≤ 8 s → Szybko / Użytecznie / Wolno / Zbyt wolno; werdykt = gorsza z dwóch ocen,
+zapisana miara, która przesądziła (`gen`, `ttft`, `both`). **Długi kontekst** (osobna sekcja): krótka
+próbka ustala, ile znaków przypada na token u tego modelu, wejście celuje w 90% (`num_ctx` − 128 −
+32), ważne przy 80–95% (`num_ctx` − 128) – inaczej jedna poprawka z rzeczywistego wyniku, potem
+„wejście za krótkie” / „możliwe obcięcie”; generowanie 128 tokenów PO długim wejściu. Zapis:
+`num_ctx`, rzeczywiste tokeny wejścia, rezerwa, zapas, kalibracja. Przed przebiegiem: zwolnienie +
+VRAM jak przed sesją (± 300 MB), stabilizacja, linia bazowa. `tools/pomiar_predkosci.py` – to samo
+z terminala, do osobnej bazy.
+
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.
 Sprzęt testowy autora: laptop i5-13450HX + RTX 5050 8 GB + DDR5 oraz Ryzen 7 5700X + RTX 2060 SUPER 8 GB

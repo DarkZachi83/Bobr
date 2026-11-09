@@ -418,6 +418,8 @@ def stability(samples: list[tuple[float, dict]], now: float, window: float, tole
     if now - samples[0][0] < window:
         return "waiting"
     recent = [s for m, s in samples if m >= now - window]
+    if len(recent) < 2:                       # z jednej próbki nie widać zmiany
+        return "waiting"
     for key in TEMP_KEYS:
         values = [s[key] for s in recent if s.get(key) is not None]
         if values and max(values) - min(values) > tolerance:
@@ -439,7 +441,8 @@ class Cooling:
 
 def cool_down(sampler: Sampler, settings: Optional[dict] = None, run_id: Optional[str] = None,
               on_timeout: Optional[Callable[[], bool]] = None, stop: Optional[threading.Event] = None,
-              report: Callable[[str, dict], None] = lambda key, kw: None, poll: float = 1.0) -> Cooling:
+              report: Callable[[str, dict], None] = lambda key, kw: None,
+              poll: Optional[float] = None) -> Cooling:
     """Czeka na stabilną temperaturę. Po przekroczeniu czasu pyta `on_timeout()`: True – „Kontynuuj test”
     (wynik z ostrzeżeniem), False – „Czekaj dalej” (pytamy znowu po kolejnym takim okresie).
     Bez `on_timeout` (tryb tekstowy, decyzja autora 3a) test rusza sam, z ostrzeżeniem."""
@@ -447,19 +450,24 @@ def cool_down(sampler: Sampler, settings: Optional[dict] = None, run_id: Optiona
     window, tol, timeout = (cfg["bench_stabilization_window_s"], cfg["bench_stabilization_tolerance_c"],
                             cfg["bench_stabilization_timeout_s"])
     stop = stop or threading.Event()
+    poll = poll or min(1.0, sampler.interval)
     sampler.set_phase("cooling", run_id)
     start = sampler.clock()
     deadline = start + timeout
     report("bench.cooling.start", {"window": window, "tolerance": tol})
 
+    def cooling_samples():
+        # tylko próbki z tej fazy: próbka sprzed set_phase może mieć ten sam czas (Windows: zegar co ~15 ms)
+        return [(m, s) for m, s in sampler.since(start) if s.get("phase") == "cooling"]
+
     def result(status: str) -> Cooling:
-        last = sampler.since(start)
+        last = cooling_samples()
         tail = last[-1][1] if last else {}
         return Cooling(status, round(sampler.clock() - start, 1), tail.get("cpu_temp_c"), tail.get("gpu_temp_c"))
 
     while True:
         now = sampler.clock()
-        state = stability(sampler.since(start), now, window, tol)
+        state = stability(cooling_samples(), now, window, tol)
         if state in ("stable", "no_sensors"):
             return result(state)
         if now >= deadline:

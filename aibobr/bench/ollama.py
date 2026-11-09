@@ -23,6 +23,8 @@ class Generation:
     load_seconds: float
     text: str
     prompt_cached: Optional[int] = None   # prompt_eval_cached_count: tokeny promptu z pamięci; None = Ollama nie podaje
+    total_seconds: Optional[float] = None  # total_duration – cały czas zapytania po stronie silnika
+    done_reason: Optional[str] = None      # „stop” (model skończył) / „length” (limit tokenów)
 
     @property
     def pp_tps(self) -> Optional[float]:
@@ -81,7 +83,18 @@ class OllamaBench:
             gen_seconds=float(r.get("eval_duration") or 0) / ns,
             load_seconds=float(r.get("load_duration") or 0) / ns,
             text=text,
-            prompt_cached=None if r.get("prompt_eval_cached_count") is None else int(r["prompt_eval_cached_count"]))
+            prompt_cached=None if r.get("prompt_eval_cached_count") is None else int(r["prompt_eval_cached_count"]),
+            total_seconds=float(r["total_duration"]) / ns if r.get("total_duration") is not None else None,
+            done_reason=str(r["done_reason"]) if r.get("done_reason") else None)
+
+    def load(self, model: str, num_ctx: int) -> Optional[float]:
+        """Wczytuje model bez liczenia promptu (puste zapytanie) z tym samym num_ctx, co zadanie –
+        inny num_ctx to ponowne wczytanie. Zwraca load_duration silnika w s (None – brak pola)."""
+        r = self.http.post_json(f"{self.host}/api/generate",
+                                {"model": model, "keep_alive": "5m", "options": {"num_ctx": num_ctx}},
+                                timeout=TIMEOUT)
+        value = r.get("load_duration") if isinstance(r, dict) else None
+        return float(value) / 1e9 if value is not None else None
 
     def unload(self, model: str) -> None:
         """Zwalnia model z pamięci od razu (keep_alive 0) – po teście karta jest wolna dla innych programów."""

@@ -336,6 +336,31 @@ class AppController:
         from aibobr import resources
         return json.loads(resources.path("data", "benchmarks", f"{suite_id}.json").read_text(encoding="utf-8"))
 
+    def speed_pack(self) -> dict:
+        """Benchmark prędkości 0.9: 15 zadań z pakietów polszczyzny i formatu (bez oceniania treści)."""
+        from aibobr.bench import speed
+        return speed.build_pack([self.quality_suite("pl_jezyk_v1"), self.quality_suite("en_format_v1")])
+
+    def run_speed_benchmark(self, targets, hw: HardwareProfile, report, stop, *, runs: int = 1,
+                            contexts=(1024, 8192), db=None, bench=None, collector=None, on_timeout=None,
+                            sampler_kw=None, runner=None) -> dict:
+        """Benchmark prędkości 0.9 (SPEC §5c): modele z Ollamy po kolei, `runs` przebiegów każdego,
+        telemetria co 1 s, wynik do bazy (sessions/runs/tasks/telemetry/long_context).
+        on_timeout – pytanie po przekroczeniu czasu stabilizacji (GUI); None = test rusza sam."""
+        from aibobr import __version__
+        from aibobr.bench.ollama import OllamaBench
+        from aibobr.bench.session import SpeedBenchmark
+        from aibobr.sources.factory import OLLAMA_PREFIX
+        bench = bench or OllamaBench(self.ollama_host())
+        models = [t[len(OLLAMA_PREFIX):] if t.startswith(OLLAMA_PREFIX) else t for t in targets]
+        info = {"app_version": __version__, "runtime_version": bench.version(), "hardware": self.hardware_text(hw),
+                "power": power_source()}
+        if db is None:
+            db = self.bench_db
+        job = SpeedBenchmark(bench, self.speed_pack(), db=db, collector=collector, settings=self.settings,
+                             info=info, on_timeout=on_timeout, sampler_kw=sampler_kw, runner=runner)
+        return job.run(models, runs, contexts, report, stop)
+
     def run_benchmark(self, targets, contexts, predicted: dict, hw: HardwareProfile, report, stop,
                       db=None, now=None, bench=None, power_sampler=None, vram_busy=None,
                       suites=("perf",), repeats: int = 1, mode: str = "standard") -> list:

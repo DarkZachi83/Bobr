@@ -40,6 +40,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "bench_stabilization_tolerance_c": 1.0,
     "bench_stabilization_timeout_s": 300,    # potem okno „Kontynuuj test / Czekaj dalej”
     "bench_baseline_s": 10,                  # linia bazowa przed każdym modelem
+    # werdykt prędkości (progi autora 9.11.2026): generowanie tok/s ≥ (szybko, użytecznie, wolno),
+    # TTFT s ≤ (szybko, użytecznie, wolno); poza nimi – zbyt wolno
+    "bench_thresholds": {"gen_tps": [30.0, 15.0, 6.0], "ttft_s": [1.0, 3.0, 8.0]},
 }
 
 
