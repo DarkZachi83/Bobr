@@ -548,6 +548,21 @@ próbka ustala, ile znaków przypada na token u tego modelu, wejście celuje w 9
 VRAM jak przed sesją (± 300 MB), stabilizacja, linia bazowa. `tools/pomiar_predkosci.py` – to samo
 z terminala, do osobnej bazy.
 
+**Okno 0.9 (PR `gui-monitor`, decyzje autora 9.11.2026):** zakładka Benchmark – przebiegi 1/3/5
+(domyślnie 1), długi kontekst 1k/8k/32k; zakładki wyników **Wydajność** (werdykt z podstawą, TTFT
+mediana/najgorszy, główny prompt z pomiaru 1k – brak/nieważny → „Pomiar 1k niedostępny”, bez
+podstawiania krótkich promptów; 1k/8k/32k – generowanie po długim wejściu i rzeczywisty
+`ttft_wall_ms` z oceną informacyjną; brak → „Brak danych (powód)”; dwuklik – szczegóły z 15 zadaniami,
+linią bazową i progami z dnia testu) i **Odpowiedzi** (podgląd, bez oceny). Ostrzeżenie
+„ograniczona podstawa pomiaru”: < 300 tokenów **lub** < 5 s generowania w pakiecie 15 zadań
+(werdykt bez zmian). Okno **Monitor** (dawny „Podgląd” wchłonięty): faza, bieżące wartości,
+wykresy 2 min (CPU z paskiem wątków, temperatury, pamięć, karta), powód ograniczenia taktowania,
+zadanie i odpowiedź na żywo; zamknięcie chowa, „Monitor: Przywróć” w dzienniku. Zakładka „Jakość”
+zniknęła z okna (kod oceniania zostaje na przyszły moduł jakości). **Eksport sesji** do folderu
+`benchmark_RRRR-MM-DD_GGMM_<id8>`: `werdykt.csv`, `zadania.csv`, `dlugi_kontekst.csv`,
+`telemetria.csv` (wartości bez zaokrągleń, NULL = pusta komórka) i `manifest.json`
+(`export_schema_version: 1`, progi z dnia testu).
+
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.
 Sprzęt testowy autora: laptop i5-13450HX + RTX 5050 8 GB + DDR5 oraz Ryzen 7 5700X + RTX 2060 SUPER 8 GB

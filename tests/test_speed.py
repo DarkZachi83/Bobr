@@ -104,7 +104,12 @@ class ValidityTest(unittest.TestCase):
 
     def test_summary_warnings_and_unreliable(self):
         s = speed.summarize([task(1, gen_tokens=100, wall_ms=3000.0)])
-        self.assertEqual(set(s["warnings"]), {"few_tokens_total", "overhead"})      # 100 < 300; narzut 30%
+        self.assertEqual(set(s["warnings"]), {"limited_basis", "overhead"})         # 100 < 300; narzut 30%
+        self.assertEqual(s["verdict"], "fast")                                       # ostrzeżenie nie zmienia werdyktu
+        quick = [task(n, gen_tokens=400, eval_ms=1000.0) for n in (1, 2, 3)]         # 1 200 tokenów w 3 s
+        self.assertIn("limited_basis", speed.summarize(quick)["warnings"])
+        enough = [task(n, gen_tokens=400, eval_ms=2000.0) for n in (1, 2, 3)]        # 6 s
+        self.assertNotIn("limited_basis", speed.summarize(enough)["warnings"])
         self.assertAlmostEqual(s["overhead_ratio"], 0.3)
         tasks = [task(n) for n in range(1, 13)] + [task(n, error="execution: x") for n in (13, 14, 15)]
         s = speed.summarize(tasks)
