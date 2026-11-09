@@ -241,6 +241,9 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual((lc["num_ctx"], lc["reserve_tokens"], lc["gen_tokens"]), (8192, 128, 128))
             self.assertEqual(lc["free_tokens"], 8192 - lc["prompt_tokens"] - 128)
             self.assertIn("chars_per_token", lc["calibration_json"])
+            self.assertEqual(len(lc["calibration_json"]["attempts"]), 1, (cpt, lc))    # trafione za pierwszym razem
+            self.assertLessEqual(abs(lc["prompt_tokens"] - lc["target_tokens"]), 0.03 * lc["target_tokens"])
+            self.assertAlmostEqual(lc["calibration_json"]["fixed_tokens"], 12, delta=1)   # narzut szablonu
             self.assertEqual(lc["prompt_cached"], 0)
             self.assertGreater(lc["tg_tps"], 0)
 

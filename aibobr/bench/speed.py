@@ -53,6 +53,7 @@ LONG_RESERVE = 128            # tokeny odpowiedzi po długim wejściu (generowan
 LONG_MARGIN = 32              # zapas na szablon czatu i polecenie
 LONG_RANGE = (0.80, 0.95)     # ważne wejście: 80–95% (num_ctx − rezerwa)
 LONG_TARGET = 0.90
+LONG_TOLERANCE = 0.05         # wejście dalej od celu – jedna poprawka (porównywalne przebiegi)
 
 
 # ------------------------------------------------------------------ progi i werdykt
@@ -335,30 +336,30 @@ class SpeedRunner:
     def long_context(self, model: str, num_ctx: int, run: int = 0,
                      on_chunk: Callable[[str], None] = lambda s: None,
                      on_retry: Callable[[int, int, int], None] = lambda tokens, low, high: None) -> dict:
-        """Wejście dopasowane do tokenizatora modelu: najpierw krótka próbka (ile znaków na token),
-        potem pomiar właściwy; poza zakresem 80–95% – jedna poprawka z rzeczywistego wyniku."""
+        """Wejście dopasowane do tokenizatora modelu. Dwie krótkie próbki różnej długości dają
+        znaki na token ORAZ stały narzut (szablon czatu, polecenie) – jedna próbka zawyżała liczbę
+        tokenów i pierwsze wejście wychodziło ok. 10–15% za krótkie (pomiar autora 9.11.2026: 653–671
+        zamiast ok. 777 tokenów przy 1k). Wejście dalej niż 5% od celu – jedna poprawka, żeby kolejne
+        przebiegi miały porównywalną długość; ważność: 80–95% (num_ctx − rezerwa)."""
         usable = num_ctx - LONG_RESERVE - LONG_MARGIN
         target = int(usable * LONG_TARGET)
         low, high = int((num_ctx - LONG_RESERVE) * LONG_RANGE[0]), int((num_ctx - LONG_RESERVE) * LONG_RANGE[1])
         out = {"num_ctx": num_ctx, "target_tokens": target, "reserve_tokens": LONG_RESERVE}
-        calibration = {"attempts": []}
+        calibration = {"attempts": [], "probes": []}
         try:
             released = self.release(model)
             self.bench.load(model, num_ctx)
-            sample_tokens = min(256, max(32, usable // 8))
-            probe = prompts.filler(sample_tokens, 9000 + run)
-            g = self.bench.generate(model, probe, num_ctx, 1)
-            cpt = len(probe) / g.prompt_tokens if g.prompt_tokens else prompts.CHARS_PER_TOKEN
-            calibration["chars_per_token"] = round(cpt, 3)
+            cpt, fixed = self._calibrate(model, num_ctx, usable, run, calibration)
             for attempt in range(2):
-                text = long_prompt(target, cpt, run * 10 + attempt)
+                text = long_text(max(64, (target - fixed) * cpt - len(LONG_TAIL)), run * 10 + attempt)
                 released = self.release(model) and released
                 self.bench.load(model, num_ctx)
                 g, ttft, wall = self._generate(model, text, num_ctx, LONG_RESERVE, on_chunk)
                 calibration["attempts"].append({"chars": len(text), "prompt_tokens": g.prompt_tokens})
-                if low <= g.prompt_tokens <= high or attempt == 1 or not g.prompt_tokens:
+                if attempt == 1 or not g.prompt_tokens or abs(g.prompt_tokens - target) <= LONG_TOLERANCE * target:
                     break
-                cpt = len(text) / g.prompt_tokens                       # poprawka z rzeczywistego wyniku
+                if g.prompt_tokens > fixed:                              # poprawka z rzeczywistego wyniku
+                    cpt = len(text) / (g.prompt_tokens - fixed)
                 calibration["chars_per_token"] = round(cpt, 3)
                 on_retry(g.prompt_tokens, low, high)
         except Stopped:
@@ -389,14 +390,33 @@ class SpeedRunner:
         out.update(valid=int(reason is None), invalid_reason=reason)
         return out
 
+    def _calibrate(self, model: str, num_ctx: int, usable: int, run: int, calibration: dict) -> tuple[float, float]:
+        """(znaki na token, stały narzut w tokenach) z dwóch próbek: tokeny = narzut + znaki / cpt."""
+        sizes = (300, max(1200, min(6000, int(usable * prompts.CHARS_PER_TOKEN * 0.25))))
+        points = []
+        for i, chars in enumerate(sizes):
+            text = long_text(chars, 9000 + run * 10 + i)
+            g = self.bench.generate(model, text, num_ctx, 1)
+            points.append((len(text), g.prompt_tokens))
+            calibration["probes"].append({"chars": len(text), "prompt_tokens": g.prompt_tokens})
+        (c1, t1), (c2, t2) = points
+        if t2 > t1 and c2 > c1:
+            cpt = (c2 - c1) / (t2 - t1)
+            fixed = max(0.0, t2 - c2 / cpt)
+        else:                                                           # brak liczb – zgrubnie
+            cpt, fixed = (c2 / t2 if t2 else prompts.CHARS_PER_TOKEN), 0.0
+        calibration["chars_per_token"] = round(cpt, 3)
+        calibration["fixed_tokens"] = round(fixed, 1)
+        return cpt, fixed
 
-def long_prompt(target_tokens: int, chars_per_token: float, run: int) -> str:
-    """Tekst ok. `target_tokens` tokenów dla tokenizatora z `chars_per_token` + polecenie, po którym
-    model pisze długo (mierzymy generowanie po długim wejściu)."""
-    tail = "\n\nNow continue: write a long, detailed story about the beavers from the text above. Do not stop early."
-    body_tokens = max(16, int(target_tokens - len(tail) / chars_per_token))
-    body = prompts.filler(int(body_tokens * chars_per_token / prompts.CHARS_PER_TOKEN), run)
-    return body + tail
+
+LONG_TAIL = "\n\nNow continue: write a long, detailed story about the beavers from the text above. Do not stop early."
+
+
+def long_text(chars: float, run: int) -> str:
+    """Tekst ok. `chars` znaków (opowieść z prompts.filler) + polecenie, po którym model pisze długo
+    (mierzymy generowanie po długim wejściu)."""
+    return prompts.filler(max(8, int(chars / prompts.CHARS_PER_TOKEN)), run) + LONG_TAIL
 
 
 def _round(value: Optional[float], digits: int) -> Optional[float]:
