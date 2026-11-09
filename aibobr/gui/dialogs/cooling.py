@@ -69,7 +69,7 @@ class ThreadsafeAsk:
         self.root, self.ask, self.stop, self.poll_ms = root, ask, stop, poll_ms
         self.requests: "queue.Queue[tuple[threading.Event, dict]]" = queue.Queue()
         self.closed = False
-        self.root.after(self.poll_ms, self._poll)
+        self._after = self.root.after(self.poll_ms, self._poll)
 
     def _poll(self) -> None:
         if self.closed:
@@ -83,10 +83,16 @@ class ThreadsafeAsk:
                 answer["value"] = bool(self.ask(self.root))
             finally:
                 done.set()
-        self.root.after(self.poll_ms, self._poll)
+        self._after = self.root.after(self.poll_ms, self._poll)
 
     def close(self) -> None:
+        """Wołamy z wątku Tk (po teście); z innego wątku wystarczy flaga – pętla sama się zatrzyma."""
         self.closed = True
+        if threading.current_thread() is threading.main_thread():
+            try:
+                self.root.after_cancel(self._after)
+            except Exception:
+                pass
 
     def __call__(self) -> bool:
         done, answer = threading.Event(), {"value": False}

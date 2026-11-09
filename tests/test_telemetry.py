@@ -42,6 +42,7 @@ class SourcesTest(unittest.TestCase):
         self.assertIsNone(tm.cpu_temperature(lambda: {"nvme": [Temp("Composite", 40, 0, 0)]}))
         self.assertIsNone(tm.cpu_temperature(lambda: {}))
 
+    @unittest.skipUnless(tm.LINUX, "RAPL jest tylko na Linuksie (dwukropek w nazwie katalogu)")
     def test_rapl_power_wraparound_and_no_access(self):
         root = Path(tempfile.mkdtemp())
         zone = root / "intel-rapl:0"
@@ -299,6 +300,7 @@ class CoolingDialogTest(unittest.TestCase):
     def test_worker_thread_gets_answer_from_tk_thread(self):
         from aibobr.gui.dialogs.cooling import ThreadsafeAsk
         ask = ThreadsafeAsk(self.root, ask=lambda root: True)
+        self.addCleanup(ask.close)
         out = {}
         worker = threading.Thread(target=lambda: out.setdefault("v", ask()))
         worker.start()
@@ -309,6 +311,7 @@ class CoolingDialogTest(unittest.TestCase):
         self.assertEqual(out.get("v"), True)
         ask.close()
         no = ThreadsafeAsk(self.root, ask=lambda root: False)
+        self.addCleanup(no.close)
         worker = threading.Thread(target=lambda: out.__setitem__("v", no()))
         worker.start()
         while worker.is_alive() and time.time() < deadline + 5:
@@ -317,7 +320,9 @@ class CoolingDialogTest(unittest.TestCase):
         self.assertIs(out["v"], False)
         stop = threading.Event()
         stop.set()
-        self.assertTrue(ThreadsafeAsk(self.root, ask=lambda root: False, stop=stop)())  # zatrzymany test
+        stopped = ThreadsafeAsk(self.root, ask=lambda root: False, stop=stop)
+        self.addCleanup(stopped.close)
+        self.assertTrue(stopped())                                                   # zatrzymany test
 
 
 if __name__ == "__main__":
