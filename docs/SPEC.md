@@ -563,6 +563,16 @@ zniknęła z okna (kod oceniania zostaje na przyszły moduł jakości). **Ekspor
 `telemetria.csv` (wartości bez zaokrągleń, NULL = pusta komórka) i `manifest.json`
 (`export_schema_version: 1`, progi z dnia testu).
 
+**Historia 0.9 (PR `historia`, pytanie 9a):** trzecia zakładka wyników „Historia” – wiersz = model w
+sesji (kolejność jak w teście): data, przebiegi, werdykt z dnia testu, zakres generowania (pomiar
+rozrzutu), TTFT (mediana; zakres przy kilku przebiegach), uwagi; przebiegi przerwane / niewiarygodne
+opisane, bez przeliczania. Filtr po modelu; „Według obecnych progów” – kolumna z werdyktem
+przeliczonym z zapisanych sum (`speed.recompute`) **tylko tam, gdzie wychodzi inny**; szczegóły
+(dwuklik) jak tuż po teście, z linią „Według obecnych progów: …”, gdy inny. Eksport sesji do
+folderu, usunięcie sesji z potwierdzeniem (kaskadowo; archiwum zostaje). Pod spodem (przesuwany
+podział) „Archiwum (przed 0.9) – tylko odczyt”: tabele `perf` i `quality`, eksport do folderu
+`archiwum_przed_0.9_RRRR-MM-DD` (`perf.csv`, `quality.csv`, bez zaokrągleń); bez werdyktu prędkości.
+
 **Etapy:** 12a wydajność przez Ollamę + SQLite · 12b passkey · 12c sprawdziany formatu i polszczyzny ·
 12d llama-server / LM Studio, prawdziwe tokeny/s w Statystyce, przewidywanie ↔ pomiar.
 Sprzęt testowy autora: laptop i5-13450HX + RTX 5050 8 GB + DDR5 oraz Ryzen 7 5700X + RTX 2060 SUPER 8 GB

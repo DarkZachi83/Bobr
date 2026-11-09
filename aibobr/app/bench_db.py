@@ -398,6 +398,14 @@ class BenchDb:
     def runs(self, session_id: str) -> list[dict]:
         return self._select("SELECT * FROM runs WHERE session_id = ? ORDER BY model, run_no", [session_id])
 
+    def run(self, run_id: str) -> Optional[dict]:
+        rows = self._select("SELECT * FROM runs WHERE id = ?", [run_id])
+        return rows[0] if rows else None
+
+    def run_models(self) -> list[str]:
+        """Modele z przebiegów 0.9 – do filtra w zakładce Historia."""
+        return [r["model"] for r in self._select("SELECT DISTINCT model FROM runs ORDER BY model")]
+
     def tasks(self, run_id: str) -> list[dict]:
         return self._select("SELECT * FROM tasks WHERE run_id = ? ORDER BY task_no", [run_id])
 

@@ -419,6 +419,73 @@ class GuiSmokeTest(unittest.TestCase):
         finally:
             bp.messagebox.showinfo, bp.filedialog.askdirectory = old_info, old_ask
 
+    def test_benchmark_history_tab(self):
+        import aibobr.gui.widgets.bench_panel  # noqa: F401
+        import aibobr.gui.widgets.history_view as hv
+        from aibobr.bench.runner import PerfResult
+        from tests.test_history import add_run
+        w = self.window()
+        b = w.bench
+        db = w.c.bench_db
+        db.add_perf(PerfResult("stary", 8192, pp_tps=1000.5, tg_tps=41.2), measured_at="2026-11-04 10:00",
+                    runtime="ollama", runtime_version="0.40.14", hardware="hw", power="ac", suite="perf_v1")
+        old = db.start_session(started_at="2026-11-08T10:00:00+01:00", runs_per_model=1, status="finished",
+                               models_json=["gemma"])
+        add_run(db, old, "gemma", 1, 31.0)
+        sid = db.start_session(started_at="2026-11-09T14:00:00+01:00", runs_per_model=2, status="finished",
+                               models_json=["minitron"])
+        add_run(db, sid, "minitron", 1, 61.2)
+        add_run(db, sid, "minitron", 2, 59.8, warnings=("limited_basis",))
+        b.results_tabs.select(b.history)                                    # otwarcie zakładki = odświeżenie
+        self.pump(seconds=0.2)
+        h = b.history
+        col = {c: i for i, c in enumerate(h.table["columns"])}
+        rows = [h.table.item(i, "values") for i in h.table.get_children()]
+        self.assertEqual([r[col["model"]] for r in rows], ["minitron", "gemma"])
+        self.assertEqual(rows[0][col["verdict"]], "🟢 Szybko")
+        self.assertEqual(rows[0][col["gen"]], "59,8–61,2 tok/s")
+        self.assertIn("ograniczona podstawa", rows[0][col["notes"]])
+        self.assertEqual(rows[1][col["now"]], "")
+        w.c.settings["bench_thresholds"] = {"gen_tps": [40, 20, 8]}         # zaostrzone progi
+        h.current.set(True)
+        h.refresh()
+        rows = [h.table.item(i, "values") for i in h.table.get_children()]
+        self.assertEqual((rows[0][col["now"]], rows[1][col["now"]]), ("", "🔵 Użytecznie"))
+        self.assertEqual(rows[1][col["verdict"]], "🟢 Szybko")             # werdykt z dnia testu bez zmian
+        h.table.selection_set(h.table.get_children()[1])
+        h.details()
+        text = h.details_window.winfo_children()[0].get("1.0", "end")
+        self.assertIn("Według obecnych progów: 🔵 Użytecznie", text)
+        h.details_window.destroy()
+        h.model.set("gemma")
+        h.refresh()
+        self.assertEqual(len(h.table.get_children()), 1)
+        self.assertEqual(h.archive.item(h.archive.get_children()[0], "values")[1], "stary")   # archiwum
+        h.archive_kind.set("quality")
+        h.fill_archive()
+        self.assertEqual(h.archive.get_children(), ())
+        asked = []
+        h.confirm = lambda title, text: asked.append(text) or True
+        h.table.selection_set(h.table.get_children()[0])
+        h.delete()
+        self.assertIn("2026-11-08 10:00", asked[0])
+        self.assertIsNone(db.session(old))
+        self.assertEqual(db.count(), 1)                                     # archiwum nietknięte
+        d = tempfile.mkdtemp()
+        old_ask = hv.filedialog.askdirectory
+        hv.filedialog.askdirectory = lambda **kw: d
+        try:
+            h.model.set(h.model_box["values"][0])
+            h.refresh()
+            h.table.selection_set(h.table.get_children()[0])
+            h.export()
+            h.export_archive()
+        finally:
+            hv.filedialog.askdirectory = old_ask
+        names = sorted(p.name for p in Path(d).iterdir())
+        self.assertEqual(len(names), 2)
+        self.assertTrue(names[0].startswith("archiwum_przed_0.9_") and names[1].startswith("benchmark_2026-11-09"))
+
     def test_benchmark_tab_finds_models_and_remembers(self):
         from aibobr.scan.model import FoundModel, Kind, ScanReport
         calls = []

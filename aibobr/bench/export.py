@@ -193,3 +193,14 @@ def export_session(db, session_id: str, parent: str | Path) -> Path:
                 "note": t("speed.disclaimer")}
     (folder / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return folder
+
+
+def export_archive(db, parent: str | Path, day: str) -> Path:
+    """Archiwum sprzed 0.9 (tabele perf i quality, tylko odczyt) do folderu, bez zaokrągleń."""
+    folder = Path(parent) / f"archiwum_przed_0.9_{day}"
+    folder.mkdir(parents=True, exist_ok=True)
+    for table in ("perf", "quality"):
+        rows = db.archive(table)
+        cols = list(rows[0]) if rows else []
+        _write(folder / f"{table}.csv", cols, ([exact(r[c]) for c in cols] for r in rows))
+    return folder
