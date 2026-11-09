@@ -264,7 +264,7 @@ with the model link and what your program really used – real measurements make
 
 ### License
 
-[GNU General Public License v3.0](LICENSE) (GPL-3.0) from version 0.9.0. You may use, change and share
+Copyright (C) 2026 Rafał Zacharski. [GNU General Public License v3.0](LICENSE) (GPL-3.0) from version 0.9.0. You may use, change and share
 AI Bóbr freely; if you distribute a modified version or a program built on it, its source code must be
 available under the same license. Versions up to and including 0.8.1 were released under the MIT
 license and stay under it.
@@ -500,7 +500,7 @@ z linkiem do modelu i tym, ile pamięci naprawdę zajął – prawdziwe pomiary 
 
 ### Licencja
 
-[GNU General Public License v3.0](LICENSE) (GPL-3.0) od wersji 0.9.0. AI Bóbra możesz swobodnie używać,
+Copyright (C) 2026 Rafał Zacharski. [GNU General Public License v3.0](LICENSE) (GPL-3.0) od wersji 0.9.0. AI Bóbra możesz swobodnie używać,
 zmieniać i udostępniać; jeśli rozpowszechniasz zmienioną wersję albo program na nim zbudowany, jego kod
 źródłowy musi być dostępny na tej samej licencji. Wersje do 0.8.1 włącznie zostały wydane na licencji
 MIT i na niej zostają.
