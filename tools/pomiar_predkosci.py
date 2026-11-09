@@ -57,7 +57,10 @@ def printer(event: dict) -> None:
         lc = event["result"]
         print(f"   kontekst {lc['num_ctx']}: wejście {lc.get('prompt_tokens')} tok, wygenerowane {lc.get('gen_tokens')}, "
               f"prompt {num(lc.get('pp_tps'))} tok/s, generowanie {num(lc.get('tg_tps'))} tok/s, "
-              f"ważny={lc['valid']} {lc.get('invalid_reason') or ''}")
+              f"ważny={lc['valid']} {lc.get('invalid_reason') or ''}· cel {lc.get('target_tokens')} tok, "
+              f"próby: {len((lc.get('calibration_json') or {}).get('attempts', []))}, "
+              f"znaki/token {(lc.get('calibration_json') or {}).get('chars_per_token')}, "
+              f"narzut {(lc.get('calibration_json') or {}).get('fixed_tokens')} tok")
     elif kind == "s_run_done":
         r = event["result"]
         b = speed.basis(r)

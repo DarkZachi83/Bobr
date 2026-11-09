@@ -241,6 +241,9 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual((lc["num_ctx"], lc["reserve_tokens"], lc["gen_tokens"]), (8192, 128, 128))
             self.assertEqual(lc["free_tokens"], 8192 - lc["prompt_tokens"] - 128)
             self.assertIn("chars_per_token", lc["calibration_json"])
+            self.assertEqual(len(lc["calibration_json"]["attempts"]), 1, (cpt, lc))    # trafione za pierwszym razem
+            self.assertLessEqual(abs(lc["prompt_tokens"] - lc["target_tokens"]), 0.03 * lc["target_tokens"])
+            self.assertAlmostEqual(lc["calibration_json"]["fixed_tokens"], 12, delta=1)   # narzut szablonu
             self.assertEqual(lc["prompt_cached"], 0)
             self.assertGreater(lc["tg_tps"], 0)
 
@@ -256,8 +259,10 @@ class RunnerTest(unittest.TestCase):
                 return replace(g, prompt_tokens=tokens_for_long(c)) if len(p) > 2000 else g
             bench.generate = generate
             return speed.SpeedRunner(bench, self.pack, clock=bench.clock, sleep=lambda s: None)
-        lc = runner_seeing(lambda c: 1000).long_context("m", 8192)        # model „widzi” tylko część
+        retries = []
+        lc = runner_seeing(lambda c: 1000).long_context("m", 8192, on_retry=lambda *a: retries.append(a))
         self.assertEqual((lc["valid"], lc["invalid_reason"]), (0, "input_too_short"))
+        self.assertEqual(retries, [(1000, 6451, 7660)])                    # druga próba zgłoszona
         self.assertEqual(len(lc["calibration_json"]["attempts"]), 2)      # jedna poprawka, potem koniec
         lc = runner_seeing(lambda c: c - 10).long_context("m", 8192)      # prawie cały kontekst – obcięcie
         self.assertEqual((lc["valid"], lc["invalid_reason"]), (0, "possible_truncation"))
@@ -308,6 +313,9 @@ class SessionTest(unittest.TestCase):
         self.assertTrue({"cooling", "baseline", "task", "long_context"} <= phases, phases)
         kinds = [e["event"] for e in events]
         self.assertEqual(kinds.count("s_run_done"), 4)
+        after = [e["sample"]["phase"] for e in events[kinds.index("unload", len(kinds) - 10):]
+                 if e["event"] == "telemetry"]
+        self.assertTrue(after and set(after) == {"idle"}, after)            # Monitor kończy na stanie po teście
         self.assertIn("telemetry", kinds)
         self.assertEqual(kinds[-1], "s_done")
 
@@ -326,8 +334,11 @@ class SessionTest(unittest.TestCase):
         runner.task = task_then_stop
         job = SpeedBenchmark(bench, runner.pack, db=db, collector=self.collector(), settings=self.SETTINGS,
                              runner=runner, sampler_kw={"interval": 0.02})
-        out = job.run(["a"], runs=1, stop=stop)
+        events = []
+        out = job.run(["a"], runs=1, stop=stop, report=events.append)
         self.assertEqual(out["status"], "stopped")
+        self.assertIsNone(bench.loaded)                                     # przerwany test zwalnia model
+        self.assertIn({"event": "unload", "model": "a"}, events)
         session = db.sessions()[0]
         self.assertEqual(session["status"], "stopped")
         self.assertEqual(db.runs(session["id"])[0]["status"], "stopped")

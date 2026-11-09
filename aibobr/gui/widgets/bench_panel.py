@@ -728,6 +728,13 @@ class BenchmarkPanel(ttk.Frame):
             self._phase(label)
             if m:
                 m.start(label, t("speed.long_prompt"))
+        elif event == "s_long_retry":
+            text = t("speed.log.long_retry", context=fmt_context(p["context"]), tokens=sf.num(p["tokens"], 0),
+                     low=sf.num(p["low"], 0), high=sf.num(p["high"], 0))
+            self.log("INFO", f"{p['model']} | {text}")
+            if m:
+                m.start(t("speed.phase.long", model=p["model"], context=fmt_context(p["context"]))
+                        + " · " + t("speed.long_retry_short"), t("speed.long_prompt"))
         elif event == "s_long_done":
             lc = p["result"]
             self.log("RESULT" if lc.get("valid") else "WARN",
