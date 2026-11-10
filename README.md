@@ -47,8 +47,8 @@ does it fit, and where?
 It reads only the header of the model file – a few MB, not gigabytes – so checking a 40 GB
 model from Hugging Face takes seconds. Nothing is downloaded or installed.
 
-The window has four tabs – **Check**, **Benchmark**, **Statistics**, **Advanced** (the same model on
-hardware you type in: "what if I had a 16 GB card?") – and a **dark or light theme** (☀/☾ icon or
+The window has five tabs – **Check**, **Benchmark**, **Quality**, **Statistics**, **Advanced**
+(the same model on hardware you type in: "what if I had a 16 GB card?") – and a **dark or light theme** (☀/☾ icon or
 Settings → Theme). The language is in its own **Language** menu.
 
 ### Quick start
@@ -217,6 +217,42 @@ available, and the missing value is recorded as "no data", not as zero.
 *The **Monitor** window during a benchmark: CPU load per thread, CPU and GPU temperature, RAM and swap,
 GPU load and VRAM, and the model's answer as it is written.*
 
+### Quality – what is the model good for
+
+The **Quality** tab answers the third question: **what is this model good for?** Two standard tests,
+15 tasks each (5 easy, 5 medium, 5 hard):
+
+- **Humanities test** (in Polish): spelling and diacritics, inflection, numerals, verb aspect,
+  punctuation, sentence transformation, language knowledge.
+- **Science test** (in Polish **and** in English): arithmetic, percentages and units, logic, JSON,
+  Python code. With the English version the window shows the question in Polish underneath – the model
+  does not see it. The difference between the two versions shows how much the model loses in Polish.
+
+**How it is graded.** Every task has one checkable answer and is graded by plain code – never by another
+model ("a judge" is a language model too, with the same repeatability problems). Each answer gets two
+separate marks: **correct** and **format followed**. A correct answer wrapped in ```json, preceded by
+"Here is the code:" or written as a worked solution ("240 × 0.85 = 204") counts as correct, with a
+"format not followed" note; if the answer cannot be read unambiguously, it is not passed. Small
+differences are normalised (a full stop at the end, quotes around the answer, 24 = 24.0 = 24,0), but
+diacritics and commas inside a sentence always count.
+
+**Python code from the model is untrusted.** It runs only on Linux, in a **bubblewrap** sandbox: no
+network, no access to your home folder, a read-only system, memory, CPU-time and process limits. A
+self-test checks the isolation first; if anything is not blocked – and always on Windows – the code is
+**not run**: you see it and grade it yourself, and until then the task counts as "not graded" (the result
+shows the coverage, e.g. "12/12 graded · coverage 12/15"). On Arch: `sudo pacman -S bubblewrap`.
+
+**Every task starts from scratch** (the model is released and loaded again), like in the benchmark.
+One attempt per task by default; three attempts (passed at 2 of 3) show whether the model answers the
+same way every time – a check of stability, not 45 tasks.
+
+**The result**: each test separately, as fractions per category and difficulty level, plus a label that
+speaks only about these tests, e.g. *"In these tests it did better on text tasks (12/15 vs 9/15)"* or
+*"…did similarly in both"*. Fifteen tasks are a short indicative test, not a verdict on the model's
+general abilities. Bielik-Minitron 7B on the author's laptop: humanities 11/15, science 12/15 (Polish).
+Results go to the **History** tab (details, export to a folder with CSV files and `manifest.json`,
+delete) and do not affect the speed verdict. Your own tests (with an editor) come in a later version.
+
 ### Models on your disk
 
 The **Benchmark** tab (or `--scan [FOLDER]`) lists the models you already have – from Ollama,
@@ -240,6 +276,7 @@ python tools/try_source.py <link or .gguf>    # what the program reads from a mo
 python tools/try_detection.py [--json]        # what it detects on this PC (JSON = test profile)
 python tools/calibrate.py                     # predictions vs. real memory use in Ollama
 python tools/pomiar_predkosci.py <model> [--runs 3]   # speed benchmark from the terminal (separate database)
+python tools/test_jakosci.py <model> [--attempts 3]   # quality tests from the terminal (separate database)
 python main.py --fake-hw tests/fake_hardware/windows_amd_rx7900xtx.json   # pretend hardware
 python tools/build_catalog.py                 # rebuild the model list from catalog_sources.txt
 python tools/build_exe.py                     # PyInstaller build (CI does this for v* tags)
@@ -297,8 +334,8 @@ czy się zmieści i gdzie?
 Program czyta tylko nagłówek pliku modelu – kilka MB, nie gigabajty – więc sprawdzenie modelu
 40 GB z Hugging Face trwa kilka sekund. Nic nie jest pobierane ani instalowane.
 
-Okno ma cztery zakładki – **Sprawdź**, **Benchmark**, **Statystyka**, **Zaawansowane** (ten sam model
-na sprzęcie, który wpiszesz: „co by było z kartą 16 GB?”) – i **styl ciemny albo jasny** (ikona ☀/☾
+Okno ma pięć zakładek – **Sprawdź**, **Benchmark**, **Jakość**, **Statystyka**, **Zaawansowane**
+(ten sam model na sprzęcie, który wpiszesz: „co by było z kartą 16 GB?”) – i **styl ciemny albo jasny** (ikona ☀/☾
 albo Ustawienia → Styl). Język zmienisz w osobnym menu **Język**.
 
 ### Szybki start
@@ -462,6 +499,44 @@ nie jest dostępna, a brakująca wartość jest zapisana jako „brak danych”,
 *Okno **Monitor** w trakcie benchmarku: obciążenie procesora z podziałem na wątki, temperatura CPU i GPU,
 RAM i swap, obciążenie karty i VRAM oraz odpowiedź modelu pisana na żywo.*
 
+### Jakość – do czego model się nadaje
+
+Zakładka **Jakość** odpowiada na trzecie pytanie: **do czego ten model się nadaje?** Dwa testy
+standardowe, po 15 zadań (5 łatwych, 5 średnich, 5 trudnych):
+
+- **Test humanistyczny** (po polsku): ortografia i znaki diakrytyczne, fleksja, liczebniki, aspekt
+  czasownika, interpunkcja, przekształcanie zdań, wiedza o języku.
+- **Test ścisły** (po polsku **i** po angielsku): arytmetyka, procenty i jednostki, logika, JSON, kod
+  w Pythonie. Przy wersji angielskiej okno pokazuje pod spodem pytanie po polsku – model go nie widzi.
+  Różnica między wersjami pokazuje, ile model traci na polszczyźnie.
+
+**Jak oceniamy.** Każde zadanie ma jedną sprawdzalną odpowiedź i ocenia je zwykły kod – nigdy inny model
+(„sędzia” to też model językowy, z tymi samymi problemami z powtarzalnością). Każda odpowiedź dostaje dwie
+osobne oceny: **poprawność** i **zgodność z formatem**. Poprawna odpowiedź w otoczce ```json, poprzedzona
+„Oto kod:” albo zapisana z obliczeniami („240 × 0,85 = 204”) jest zaliczona, z dopiskiem „nie zachowano
+wymaganego formatu”; odpowiedź, której nie da się jednoznacznie odczytać, nie jest zaliczona. Drobne
+różnice są normalizowane (kropka na końcu, cudzysłów wokół odpowiedzi, 24 = 24.0 = 24,0), ale znaki
+diakrytyczne i przecinki w środku zdania liczą się zawsze.
+
+**Kod Pythona od modelu jest niezaufany.** Uruchamia się tylko na Linuksie, w piaskownicy **bubblewrap**:
+bez sieci, bez dostępu do Twojego katalogu domowego, system tylko do odczytu, limity pamięci, czasu
+procesora i procesów. Najpierw test kontrolny sprawdza izolację; jeśli cokolwiek nie jest zablokowane –
+i zawsze na Windowsie – kod **nie jest uruchamiany**: widzisz go i oceniasz sam, a do tego czasu zadanie
+jest „nieocenione” (wynik pokazuje pokrycie, np. „12/12 ocenionych · pokrycie 12/15”). Na Arch:
+`sudo pacman -S bubblewrap`.
+
+**Każde zadanie od zera** (model zwolniony i wczytany od nowa), jak w benchmarku. Domyślnie jedna próba
+na zadanie; trzy próby (zaliczone przy 2 z 3) pokazują, czy model odpowiada za każdym razem tak samo – to
+sprawdzenie stabilności, a nie 45 zadań.
+
+**Wynik**: każdy test osobno, w ułamkach według kategorii i poziomów trudności, oraz etykieta, która mówi
+tylko o tych testach, np. *„W tych testach lepiej wypadł w zadaniach tekstowych (12/15 wobec 9/15)”* albo
+*„…wypadł podobnie w obu”*. Piętnaście zadań to krótki test orientacyjny, a nie werdykt o ogólnych
+zdolnościach modelu. Bielik-Minitron 7B na laptopie autora: humanistyczny 11/15, ścisły 12/15 (po
+polsku). Wyniki trafiają do zakładki **Historia** (szczegóły, eksport do folderu z plikami CSV i
+`manifest.json`, usuwanie) i nie wpływają na werdykt prędkości. Własne testy (z edytorem) – w kolejnej
+wersji.
+
 ### Modele na dysku
 
 Zakładka **Benchmark** (albo `--scan [FOLDER]`) pokazuje modele, które już masz – z Ollamy, LM Studio,
@@ -481,6 +556,7 @@ się z internetem sam z siebie. Sprawdzany model zawsze pochodzi z Twojego linku
 
 Polecenia jak w części angielskiej (testy, `tools/try_source.py`, `tools/try_detection.py`,
 `tools/pomiar_predkosci.py` – benchmark prędkości z terminala, do osobnej bazy,
+`tools/test_jakosci.py` – testy jakości z terminala, do osobnej bazy,
 `--fake-hw`, `tools/build_catalog.py`, `tools/build_exe.py`). Decyzje projektowe:
 [docs/SPEC.md](docs/SPEC.md). Zmienione ustawienia i token Hugging Face są zapisywane poza
 repozytorium (`~/.config/ai-bobr/`, `%APPDATA%\AI-Bobr\`).
