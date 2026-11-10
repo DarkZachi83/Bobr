@@ -336,6 +336,29 @@ class AppController:
         from aibobr import resources
         return json.loads(resources.path("data", "benchmarks", f"{suite_id}.json").read_text(encoding="utf-8"))
 
+    def run_quality(self, targets, tests, report, stop, *, attempts: int = 1, hw=None, bench=None,
+                    sandbox=None, db=None, runner_kw=None) -> dict:
+        """Moduł jakości 0.10: tests = [(id testu, język)], np. [("humanistyczny_v1", "pl"),
+        ("scisly_v1", "pl"), ("scisly_v1", "en")]; kod Pythona tylko w zweryfikowanej piaskownicy."""
+        from aibobr import __version__
+        from aibobr.bench.ollama import OllamaBench
+        from aibobr.quality import suites
+        from aibobr.quality.runner import QualityRunner
+        from aibobr.quality.sandbox import Sandbox
+        from aibobr.sources.factory import OLLAMA_PREFIX
+        bench = bench or OllamaBench(self.ollama_host())
+        loaded = {}
+        chosen = []
+        for suite_id, lang in tests:
+            loaded.setdefault(suite_id, suites.load(suite_id))
+            chosen.append((loaded[suite_id], lang))
+        models = [t[len(OLLAMA_PREFIX):] if t.startswith(OLLAMA_PREFIX) else t for t in targets]
+        info = {"app_version": __version__, "runtime_version": bench.version(),
+                "hardware": self.hardware_text(hw) if hw is not None else None}
+        runner = QualityRunner(bench, sandbox if sandbox is not None else Sandbox(),
+                               db if db is not None else self.bench_db, info, **(runner_kw or {}))
+        return runner.run(models, chosen, attempts, report, stop)
+
     def speed_pack(self) -> dict:
         """Benchmark prędkości 0.9: 15 zadań z pakietów polszczyzny i formatu (bez oceniania treści)."""
         from aibobr.bench import speed

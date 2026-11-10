@@ -20,8 +20,8 @@ from typing import Any, Callable, Optional
 CHECK_TYPES = ("text", "number", "fraction", "choice", "json", "python", "manual")
 
 # Powody (klucze tłumaczeń quality.reason.*)
-OK, FORMAT, WRONG, AMBIGUOUS, SYNTAX, EMPTY, NOT_RUN, MANUAL = (
-    "ok", "format", "wrong", "ambiguous", "syntax", "empty", "not_run", "manual")
+OK, FORMAT, WRONG, AMBIGUOUS, SYNTAX, EMPTY, NOT_RUN, MANUAL, TRUNCATED = (
+    "ok", "format", "wrong", "ambiguous", "syntax", "empty", "not_run", "manual", "truncated")
 
 QUOTES = "\"'„”“«»‚‘’`"
 THINK = re.compile(r"<think>.*?</think>", re.S | re.I)
@@ -76,13 +76,17 @@ def _lines(text: str) -> list[str]:
 
 
 # ------------------------------------------------------------------ rodzaje sprawdzeń
-def check_text(answer: str, expected: list[str]) -> Check:
+def check_text(answer: str, expected: list[str], sentence: Optional[list[str]] = None) -> Check:
+    """sentence – w zadaniach „uzupełnij lukę”: całe zdanie z polecenia z poprawnie wypełnioną luką
+    (decyzja autora 10.11.2026) – zaliczone, ale z niezgodnym formatem (prosiliśmy o samo słowo)."""
     s = body(answer)
     if not s:
         return Check(False, None, EMPTY)
     want = {norm_text(e) for e in expected}
     if norm_text(s) in want:
         return Check(True, True, OK, unwrap(s))
+    if sentence and norm_text(s) in {norm_text(e) for e in sentence}:
+        return Check(True, False, FORMAT, unwrap(s))
     fenced = FENCE.fullmatch(s)
     if fenced and norm_text(fenced.group(2)) in want:            # sama odpowiedź w bloku ```
         return Check(True, False, FORMAT, unwrap(fenced.group(2)))
@@ -95,6 +99,27 @@ def check_text(answer: str, expected: list[str]) -> Check:
     return Check(False, None, WRONG, unwrap(s))
 
 
+def final_line(text: str) -> str:
+    """Ostatnia linia z treścią – bez linii z samymi znacznikami (``` , \\], **, ---)."""
+    lines = [line for line in _lines(text) if re.search(r"\w", line)]
+    return lines[-1] if lines else ""
+
+
+def final_answer(text: str, pattern: re.Pattern) -> Optional[str]:
+    """Wynik końcowy z rozwiązania z obliczeniami (decyzja autora 10.11.2026, propozycja B) – tylko
+    dwa ściśle określone wzorce: ostatnia linia ma dokładnie jedną wartość albo po ostatnim „=”
+    w ostatniej linii stoi dokładnie jedna wartość. Inaczej None (nie można ocenić)."""
+    last = final_line(text)
+    found = pattern.findall(last)
+    if len(found) == 1:
+        return found[0]
+    if "=" in last:
+        tail = pattern.findall(last.rsplit("=", 1)[1])
+        if len(tail) == 1:
+            return tail[0]
+    return None
+
+
 def _to_number(token: str) -> float:
     return float(token.replace(" ", "").replace(" ", "").replace("−", "-").replace(",", "."))
 
@@ -104,8 +129,13 @@ def check_number(answer: str, expected: float, tolerance: float = 1e-9) -> Check
     if not s:
         return Check(False, None, EMPTY)
     tokens = NUMBER.findall(s)
-    if len(tokens) != 1:
-        return Check(False, None, AMBIGUOUS if tokens else WRONG, s)
+    if len(tokens) > 1:
+        last = final_answer(s, NUMBER)
+        if last is None:
+            return Check(False, None, AMBIGUOUS, s)
+        tokens = [last]
+    if not tokens:
+        return Check(False, None, WRONG, s)
     value = _to_number(tokens[0])
     ok = abs(value - float(expected)) <= max(tolerance, 1e-9 * max(1.0, abs(float(expected))))
     bare = norm_text(s) == norm_text(tokens[0])
@@ -114,13 +144,22 @@ def check_number(answer: str, expected: float, tolerance: float = 1e-9) -> Check
     return Check(True, bare, OK if bare else FORMAT, value)
 
 
+LATEX_FRAC = re.compile(r"\\[dt]?frac\{\s*(-?\d+)\s*\}\{\s*(\d+)\s*\}")
+
+
 def check_fraction(answer: str, expected: str) -> Check:
-    s = unwrap(body(answer))
+    # \frac{19}{12} to inny zapis 19/12 (propozycja D, odpowiedź Minitrona 10.11.2026) – normalizacja
+    s = unwrap(LATEX_FRAC.sub(r"\1/\2", body(answer)))
     if not s:
         return Check(False, None, EMPTY)
     found = FRACTION.findall(s)
-    if len(found) != 1:
-        return Check(False, None, AMBIGUOUS if found else WRONG, s)
+    if len(found) > 1:
+        last = final_answer(s, FRACTION)
+        if last is None:
+            return Check(False, None, AMBIGUOUS, s)
+        found = [last]
+    if not found:
+        return Check(False, None, WRONG, s)
     num, den = found[0]
     want_num, want_den = expected.split("/")
     ok = (int(num), int(den)) == (int(want_num), int(want_den))   # „nieskracalny” – 38/24 to błąd
@@ -136,10 +175,16 @@ def check_choice(answer: str, expected: str, options: list[str]) -> Check:
     s = unwrap(body(answer))
     if not s:
         return Check(False, None, EMPTY)
-    words = {w.casefold() for w in re.findall(r"\w+", s)}
-    found = [o for o in options if o.casefold() in words]
-    if len(found) != 1:
-        return Check(False, None, AMBIGUOUS if found else WRONG, s)
+    def mentioned(text):
+        words = {w.casefold() for w in re.findall(r"\w+", text)}
+        return [o for o in options if o.casefold() in words]
+    found = mentioned(s)
+    if len(found) > 1:                     # rozwiązanie krok po kroku: wynik z ostatniej linii (propozycja E)
+        found = mentioned(final_line(s))
+        if len(found) != 1:
+            return Check(False, None, AMBIGUOUS, s)
+    if not found:
+        return Check(False, None, WRONG, s)
     ok = found[0].casefold() == expected.casefold()
     bare = norm_text(s).casefold() == found[0].casefold()
     if not ok:
@@ -254,7 +299,7 @@ def check(answer: str, spec: dict, lang: str = "pl", run_python: Optional[RunPyt
     def pick(value):
         return value.get(lang) if isinstance(value, dict) and lang in value else value
     if kind == "text":
-        return check_text(answer, pick(spec["expected"]))
+        return check_text(answer, pick(spec["expected"]), pick(spec.get("sentence")))
     if kind == "number":
         return check_number(answer, spec["expected"], spec.get("tolerance", 1e-9))
     if kind == "fraction":

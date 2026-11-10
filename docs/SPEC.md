@@ -970,3 +970,25 @@ cgroups przez `systemd-run --user --scope` (MemoryMax, TasksMax) tylko jako doda
 1 GB pamięci, urządzeń karty, zapełnienia `/tmp`, 192 procesów – piaskownica jest gotowa tylko, gdy
 wszystkie próby się nie udały (root omija limit procesów → „failed:processes”, chyba że działa
 cgroup). Przerwanie kodu modelu przez limit = zadanie niezaliczone; brak piaskownicy = nieocenione.
+
+**Przebieg jakości (`aibobr/quality/runner.py`, `score.py`):** każda próba od zera (zwolnienie →
+wczytanie z num_ctx 2048 → zadanie → pamięć promptu); prompt z pamięci = próba powtórzona raz, drugi
+raz – „invalid”, nieocenione; błąd wykonania – nieocenione. 1 próba (domyślnie) albo 3 (zaliczone przy
+2 z 3, dopisek „odpowiedzi różne”). Wynik testu: ocenione/zaliczone, pokrycie, niezgodny format, ręczne
+oceny; kategorie i poziomy jako ułamki. Etykieta „w tych testach”: humanistyczny vs ścisły PL, różnica
+≥ 15 pkt proc. – tekstowe/ścisłe, mniej – podobnie, oba < 50% – słabo; przy pokryciu < 100% – wynik
+częściowy. Ocena ręczna (`set_manual`) przelicza wynik przebiegu. Baza: schemat 2 – `quality_sessions`,
+`quality_runs`, `quality_tasks` (z odpowiedziami wszystkich prób), migracja z kopią jak przy 0.9.
+`tools/test_jakosci.py` – to samo z terminala, do osobnej bazy.
+
+**Poprawki po pierwszym pomiarze autora (Minitron, 10.11.2026):** (A) limit 256 tokenów w każdym
+zadaniu (Python 512) – 32 tokeny ucinały wyjaśnienia przed wynikiem; odpowiedź ucięta limitem i błędna
+ma powód „truncated” (niezaliczone, ale z prawdziwą przyczyną); (B) wynik końcowy z rozwiązania z
+obliczeniami tylko z dwóch wzorców – ostatnia linia z treścią ma dokładnie jedną wartość albo po
+ostatnim „=” w ostatniej linii stoi dokładnie jedna wartość (zaliczone z niezgodnym formatem; inaczej
+„nie można ocenić”); (C) w zadaniu „uzupełnij lukę” (H5) zaliczone też całe zdanie z polecenia z
+poprawnie wypełnioną luką, z niezgodnym formatem. Wersja plików testów 1.1.
+Po drugim pomiarze: (D) `\frac{a}{b}` (także `\dfrac`, `\tfrac`, w `\boxed{}`) = zapis „a/b” –
+normalizacja zapisu; (E) reguła B także dla odpowiedzi z listy (tak/nie, dni tygodnia): przy kilku
+wymienionych możliwościach – ostatnia linia z treścią z dokładnie jedną możliwością.
+
