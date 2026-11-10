@@ -262,7 +262,7 @@ class Sandbox:
         home = os.path.expanduser("~")
         result, msg = self._run({"probe.py": PROBE}, "/work/probe.py", home)
         if result is None:
-            return Status(False, f"error:{msg}")
+            return Status(False, msg if ":" in msg else f"error:{msg}")
         broken = result.get("broken", ["?"])
         return Status(not broken, "ok" if not broken else "failed:" + ",".join(broken))
 
