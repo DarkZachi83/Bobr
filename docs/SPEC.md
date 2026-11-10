@@ -992,3 +992,13 @@ Po drugim pomiarze: (D) `\frac{a}{b}` (także `\dfrac`, `\tfrac`, w `\boxed{}`) 
 normalizacja zapisu; (E) reguła B także dla odpowiedzi z listy (tak/nie, dni tygodnia): przy kilku
 wymienionych możliwościach – ostatnia linia z treścią z dokładnie jedną możliwością.
 
+**Zakładka „Jakość” (`aibobr/gui/widgets/quality_panel.py`):** lista modeli jak w Benchmarku; wybór
+testów (humanistyczny PL, ścisły PL, ścisły EN), 1 albo 3 próby (przy 3 – komunikat autora o czasie),
+prognoza czasu z ostatniego benchmarku prędkości modelu (wczytanie, tok/s; bez niego zgrubnie), zegar,
+stan piaskownicy. Zakładki: **Wynik** (etykieta „w tych testach…” z różnicą PL/EN, tabela testów:
+zaliczone/ocenione, pokrycie, niezgodny format, poziomy; pod spodem kategorie i poziomy w ułamkach),
+**Zadania** (lista z oceną i powodem; szczegóły: pytanie, tłumaczenie przy EN, oczekiwana odpowiedź,
+odpowiedzi wszystkich prób; ocena ręczna tylko dla nieocenionych – kod bez piaskownicy), **Na żywo**
+(pytanie, tłumaczenie, odpowiedź strumieniowo, dziennik), **Historia** (sesje, szczegóły, eksport do
+`jakosc_RRRR-MM-DD_GGMM_<id8>/` z `wyniki.csv`, `zadania.csv`, `manifest.json`, usuwanie).
+

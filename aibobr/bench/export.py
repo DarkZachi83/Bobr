@@ -204,3 +204,38 @@ def export_archive(db, parent: str | Path, day: str) -> Path:
         cols = list(rows[0]) if rows else []
         _write(folder / f"{table}.csv", cols, ([exact(r[c]) for c in cols] for r in rows))
     return folder
+
+
+# ------------------------------------------------------------------ moduł jakości 0.10
+Q_RUN_COLS = ("id", "model", "suite", "suite_version", "lang", "started_at", "finished_at", "status", "total",
+              "evaluated", "correct", "format_noncompliant", "not_evaluated", "manual", "by_category_json",
+              "by_level_json")
+Q_TASK_COLS = ("task_no", "task_id", "category", "level", "correct", "format_compliant", "reason", "manual",
+               "differing", "expected", "value", "prompt_text", "answer", "attempts_json")
+
+
+def export_quality_session(db, session_id: str, parent: str | Path) -> Path:
+    """Folder jakosc_RRRR-MM-DD_GGMM_<id8>: wyniki.csv, zadania.csv (z odpowiedziami), manifest.json."""
+    import json
+    session = next((s for s in db.quality_sessions() if s["id"] == session_id), None)
+    if session is None:
+        raise KeyError(session_id)
+    stamp = (session.get("started_at") or "")[:16].replace("T", "_").replace(":", "")
+    folder = Path(parent) / f"jakosc_{stamp}_{session_id[:8]}"
+    folder.mkdir(parents=True, exist_ok=True)
+    runs = db.quality_runs(session_id)
+    _write(folder / "wyniki.csv", list(Q_RUN_COLS), ([exact(r.get(c)) for c in Q_RUN_COLS] for r in runs))
+    _write(folder / "zadania.csv", ["run_id", "model", "suite", "lang", *Q_TASK_COLS],
+           ([r["id"], r["model"], r["suite"], r["lang"], *(exact(x.get(c)) for c in Q_TASK_COLS)]
+            for r in runs for x in db.quality_tasks(r["id"])))
+
+    def parsed(value):
+        try:
+            return json.loads(value) if isinstance(value, str) else value
+        except ValueError:
+            return value
+    manifest = {"export_schema_version": EXPORT_SCHEMA_VERSION, "kind": "quality", "db_schema_version": db.schema_version(),
+                "session": {k: parsed(v) if k.endswith("_json") else v for k, v in session.items()},
+                "files": ["wyniki.csv", "zadania.csv"]}
+    (folder / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    return folder

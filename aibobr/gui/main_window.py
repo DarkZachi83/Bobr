@@ -117,6 +117,16 @@ class MainWindow:
         if old_bench is not None and old_bench.checked:
             self.bench.select_targets(sorted(old_bench.checked))
 
+        # --- Jakość (0.10): do czego model się nadaje
+        from aibobr.gui.widgets.quality_panel import QualityPanel
+        old_quality = getattr(self, "quality", None)
+        self.quality = QualityPanel(self.tabs, self.c, self.worker, self.current, self.check_from_disk,
+                                    self.set_status)
+        self.tabs.add(self.quality, text=t("q.tab"))
+        self.pages["quality"] = self.quality
+        if old_quality is not None and old_quality.checked:
+            self.quality.select_targets(sorted(old_quality.checked))
+
         # --- Statystyka
         self.stats = StatsPanel(self.tabs, self.c.saved, self.open_saved, self.compare_saved,
                                 self.fetch_hf, kind=(state or {}).get("stats_kind")) if self.c.saved else None
@@ -231,6 +241,7 @@ class MainWindow:
             self.run_options.set_defaults(self.c.run_settings(platform))
             self.recompute()
             self.bench.refresh_verdicts()
+            self.quality.refresh_verdicts()
 
         def done(hw):
             self.hw = hw
@@ -337,10 +348,12 @@ class MainWindow:
         self.tabs.select(self.pages["bench"])
 
     def close(self) -> None:
-        if self.bench.running:
+        running = [p for p in (self.bench, getattr(self, "quality", None)) if p is not None and p.running]
+        if running:
             if not messagebox.askyesno(t("bench.title"), t("bench.confirm_close"), parent=self.root):
                 return
-            self.bench.stop.set()
+            for p in running:
+                p.stop.set()
         self.root.destroy()
 
     def recompute(self) -> None:
@@ -481,7 +494,7 @@ class MainWindow:
     # ------------------------------------------------------------------ menu
     def _busy(self) -> bool:
         """Trwa benchmark – przebudowa okna (język, styl) przerwałaby wyświetlanie wyników."""
-        if getattr(self, "bench", None) is not None and self.bench.running:
+        if any(getattr(getattr(self, name, None), "running", False) for name in ("bench", "quality")):
             messagebox.showinfo(t("bench.title"), t("bench.wait_rebuild"), parent=self.root)
             self.lang_var.set(str(self.c.settings.get("language") or ""))
             self.theme_var.set(self.theme)

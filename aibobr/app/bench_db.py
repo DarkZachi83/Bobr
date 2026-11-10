@@ -460,6 +460,12 @@ class BenchDb:
         rows = self._select("SELECT * FROM runs WHERE id = ?", [run_id])
         return rows[0] if rows else None
 
+    def last_speed(self, model: str) -> Optional[dict]:
+        """Ostatni ukończony przebieg benchmarku prędkości modelu – do prognozy czasu testów jakości."""
+        rows = self._select("SELECT * FROM runs WHERE model = ? AND status = 'finished' ORDER BY started_at DESC "
+                            "LIMIT 1", [model])
+        return rows[0] if rows else None
+
     def run_models(self) -> list[str]:
         """Modele z przebiegów 0.9 – do filtra w zakładce Historia."""
         return [r["model"] for r in self._select("SELECT DISTINCT model FROM runs ORDER BY model")]

@@ -486,6 +486,77 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertEqual(len(names), 2)
         self.assertTrue(names[0].startswith("archiwum_przed_0.9_") and names[1].startswith("benchmark_2026-11-09"))
 
+    def test_quality_tab_run_grade_history(self):
+        import aibobr.gui.widgets.quality_panel as qp
+        from aibobr.quality import suites
+        from tests.test_quality_runner import Bench, NoSandbox, by_prompt
+        w = self.window()
+        q = w.quality
+        h, sci = suites.standard()
+        answers = {**by_prompt(h), **by_prompt(sci)}
+        answers[h["tasks"][1]["prompt"]["pl"]] = "On nielubi niedobrych ludzi."            # H2 – błąd
+        original = w.c.run_quality
+        clock = [0.0]
+
+        def fake(targets, tests, report, stop, attempts=1, hw=None, sandbox=None):
+            return original(targets, tests, report, stop, attempts=attempts, bench=Bench(lambda p, n: answers[p]),
+                            sandbox=NoSandbox(), runner_kw={"clock": lambda: clock[0],
+                                                            "sleep": lambda x: clock.__setitem__(0, clock[0] + x),
+                                                            "unload_timeout": 1})
+        w.c.run_quality = fake
+        q._sandbox_obj = NoSandbox()
+        q.select_targets(["ollama:llama3.1:8b"])
+        self.assertIn("zadania: 45", q.plan.cget("text"))
+        self.assertIn("ocenisz go ręcznie", q.sandbox_line.cget("text"))
+        q.confirm = lambda title, text: (self.assertIn("trzy razy dłużej", text), False)[1]
+        q.attempts.set(3)
+        q._three()
+        self.assertEqual(q.attempts.get(), 1)                                   # „Wróć do jednej próby”
+        q.start()
+        self.pump(lambda: not q.running, 15)
+        rows = [q.rtable.item(i, "values") for i in q.rtable.get_children()]
+        self.assertEqual([r[1] for r in rows], ["Test humanistyczny (PL)", "Test ścisły (PL)", "Test ścisły (EN)"])
+        self.assertEqual(rows[0][2], "14/15 (93%)")
+        self.assertEqual((rows[1][2], rows[1][3]), ("12/12 (100%)", "pokrycie 12/15 – wynik częściowy"))
+        self.assertIn("W tych testach podobnie", q.label_line.cget("text").replace("wypadł ", ""))
+        self.assertIn("wynik częściowy", q.label_line.cget("text"))
+        live = q.live.get("1.0", "end")
+        self.assertIn("Tłumaczenie pytania (model go nie widzi): Oblicz 17 × 23.", live)
+        q.rtable.selection_set(q.rtable.get_children()[0])
+        q._show_breakdown()
+        self.assertIn("Ortografia", q.breakdown.get("1.0", "end"))
+        self.assertIn("2/3", q.breakdown.get("1.0", "end"))
+        py = next(i for i, row in q.task_rows.items() if row[3].task_id == "S13" and row[2] == "pl")
+        q.ttable.selection_set(py)
+        q._show_task()
+        self.assertIn("!disabled", str(q.pass_button.state()) + "!disabled")
+        self.assertNotIn("disabled", q.pass_button.state())
+        q.grade(True)                                                           # ocena ręczna kodu
+        rows = [q.rtable.item(i, "values") for i in q.rtable.get_children()]
+        sci_pl = next(r for r in rows if r[1] == "Test ścisły (PL)")
+        self.assertEqual((sci_pl[2], sci_pl[3]), ("13/13 (100%)", "pokrycie 13/15 – wynik częściowy"))
+        q.results_tabs.select(q.history_tab)
+        self.pump(seconds=0.2)
+        self.assertEqual(len(q.htable.get_children()), 1)
+        d = tempfile.mkdtemp()
+        old_ask = qp.filedialog.askdirectory
+        qp.filedialog.askdirectory = lambda **kw: d
+        try:
+            q.htable.selection_set(q.htable.get_children()[0])
+            q.export_history()
+        finally:
+            qp.filedialog.askdirectory = old_ask
+        folder = next(Path(d).iterdir())
+        self.assertTrue(folder.name.startswith("jakosc_"))
+        self.assertEqual(sorted(p.name for p in folder.iterdir()), ["manifest.json", "wyniki.csv", "zadania.csv"])
+        q.history_details()
+        self.assertIn("H2", q.details_window.winfo_children()[0].get("1.0", "end"))
+        q.details_window.destroy()
+        q.confirm = lambda title, text: True
+        q.htable.selection_set(q.htable.get_children()[0])
+        q.delete_history()
+        self.assertEqual(q.htable.get_children(), ())
+
     def test_benchmark_tab_finds_models_and_remembers(self):
         from aibobr.scan.model import FoundModel, Kind, ScanReport
         calls = []
