@@ -31,7 +31,8 @@ jobs:
       - name: Testy (Linux, z wirtualnym ekranem dla GUI)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y -q xvfb > /dev/null
+          sudo apt-get install -y -q xvfb bubblewrap > /dev/null
+          python -c "from aibobr.quality.sandbox import Sandbox; print('Piaskownica:', Sandbox().status())"
           xvfb-run -a python -m unittest discover -s tests -t . -v
       - name: Testy (Windows)
         if: runner.os == 'Windows'
