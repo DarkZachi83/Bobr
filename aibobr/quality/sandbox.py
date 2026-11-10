@@ -32,7 +32,7 @@ CPU_SECONDS = 10
 WALL_SECONDS = 15
 FILE_MB = 8
 TMP_MB = 64              # cały prywatny /tmp (w pamięci)
-EXTRA_PROCESSES = 48     # ponad procesy, które użytkownik już ma (RLIMIT_NPROC liczy wszystkie jego procesy)
+EXTRA_PROCESSES = 64     # ponad wątki, które użytkownik już ma (RLIMIT_NPROC liczy wszystkie jego wątki)
 MARK = "BOBR_RESULT:"
 
 HARNESS = r'''
@@ -115,18 +115,24 @@ class Status:
 
 
 def user_processes(uid: Optional[int] = None) -> int:
-    """Ile procesów ma już użytkownik – RLIMIT_NPROC liczy je wszystkie, nie tylko piaskownicę."""
+    """Ile WĄTKÓW ma już użytkownik – RLIMIT_NPROC liczy wszystkie jego wątki (nie procesy i nie
+    tylko piaskownicę). Pomiar autora 10.11.2026: na pulpicie z przeglądarką liczenie procesów dało
+    za niski limit i bwrap nie mógł utworzyć przestrzeni nazw („Resource temporarily unavailable”)."""
     uid = os.getuid() if uid is None else uid
     n = 0
     for entry in os.scandir("/proc"):
         if entry.name.isdigit():
             try:
+                owner, threads = None, 1
                 with open(f"/proc/{entry.name}/status", encoding="ascii", errors="replace") as f:
                     for line in f:
                         if line.startswith("Uid:"):
-                            n += int(line.split()[1]) == uid
-                            break
-            except OSError:
+                            owner = int(line.split()[1])
+                        elif line.startswith("Threads:"):
+                            threads = int(line.split()[1])
+                if owner == uid:
+                    n += threads
+            except (OSError, ValueError):
                 continue
     return n
 
