@@ -940,3 +940,21 @@ Etap 8 – kalibracja:
   ostrożna, do skalibrowania na katalogu.
 - **macOS (opcja B):** po wersji 1.
 - **Nazwa repozytorium na GitHubie.**
+
+## Moduł jakości 0.10 (decyzje autora 9–10.11.2026)
+
+Odpowiada na pytanie „do czego ten model się nadaje”; osobna zakładka „Jakość”, własne tabele, bez
+wpływu na werdykt prędkości. **Testy standardowe** (`data/quality/`): humanistyczny (`humanistyczny_v1`,
+po polsku) i ścisły (`scisly_v1`, po polsku i po angielsku; przy angielskim okno pokazuje polskie
+tłumaczenie pytania – model go nie widzi), po 15 zadań: 5 łatwych, 5 średnich, 5 trudnych; kategorie
+humanistyczne 3/4/2/1/2/2/1 (ortografia, fleksja, liczebniki, aspekt, interpunkcja, przekształcanie,
+wiedza), ścisłe po 3 (arytmetyka, procenty i jednostki, logika, JSON, Python). Zestaw stały; własne
+testy – dopiero z edytorem (format pliku już pod niego gotowy). **Ocena** (`aibobr/quality/checks.py`)
+wyłącznie zwykłym kodem albo ręcznie, **bez modelu-sędziego** (ten sam problem powtarzalności co przy
+pamięci promptu). Dwa pola: `correct` (None = nieocenione) i `format_compliant`; normalizacja zależna od
+rodzaju sprawdzenia (tekst: spacje, cudzysłów, kropka na końcu, wielka litera na początku, pogrubienie –
+nigdy znaki diakrytyczne ani przecinki w środku; liczba: 24 = 24.0 = 24,0; JSON: otoczka ```json;
+Python: otoczka ```python albo jednoznaczny wstęp). Dodatkowy tekst narusza format; jednoznacznie
+wydzielona jedna odpowiedź jest oceniana, kilka kandydatów – „nie można ocenić”, niezaliczone; niczego
+nie naprawiamy. Kod Pythona uruchamia tylko zweryfikowana piaskownica (bubblewrap na Linuksie); bez niej
+– nieocenione, z pokryciem testu w wyniku.
