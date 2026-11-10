@@ -94,6 +94,22 @@ class NumberTest(unittest.TestCase):
         self.assertEqual(c.check_number("17 × 23 = 391\nAle może też 392 albo 393.", 391).reason, "ambiguous")
         self.assertEqual(c.check_number("Krok 1: 17 × 20 = 340\nKrok 2: 17 × 3 = 51", 391).reason, "wrong")
 
+    def test_minitron_latex_and_worked_choice(self):
+        """Prawdziwe odpowiedzi z drugiego pomiaru autora (propozycje D i E)."""
+        s2 = ("To add fractions, we need to find a common denominator.\n"
+              "\\[ \\frac{3}{4} = \\frac{9}{12} \\]\n\\[ \\frac{5}{6} = \\frac{10}{12} \\]\n"
+              "\\[ \\frac{9}{12} + \\frac{10}{12} = \\frac{19}{12} \\]\n"
+              "The result is already in its simplest form, so the answer is:\n\\[ \\boxed{\\frac{19}{12}} \\]")
+        r = c.check_fraction(s2, "19/12")
+        self.assertEqual((r.correct, r.format_compliant, r.value), (True, False, "19/12"))
+        days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        s9 = ("1. The day before yesterday was Tuesday.\n3. Today would be Thursday.\n"
+              "4. The day after tomorrow would be Friday.\n\nSo, the answer is:\n\\[ \\boxed{Friday} \\]")
+        r = c.check_choice(s9, "saturday", days)
+        self.assertEqual((r.correct, r.reason, r.value), (False, "wrong", "friday"))      # uczciwie błędne
+        self.assertEqual(c.check_choice(s9.replace("Friday} ", "Saturday} "), "saturday", days).reason, "format")
+        self.assertEqual(c.check_choice("Tuesday or Saturday?", "saturday", days).reason, "ambiguous")
+
     def test_fill_in_whole_sentence(self):
         spec = {"type": "text", "expected": ["koni"], "sentence": ["Na łące pasło się sześć koni."]}
         r = c.check("Na łące pasło się sześć koni.", spec)

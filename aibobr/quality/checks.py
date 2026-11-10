@@ -144,8 +144,12 @@ def check_number(answer: str, expected: float, tolerance: float = 1e-9) -> Check
     return Check(True, bare, OK if bare else FORMAT, value)
 
 
+LATEX_FRAC = re.compile(r"\\[dt]?frac\{\s*(-?\d+)\s*\}\{\s*(\d+)\s*\}")
+
+
 def check_fraction(answer: str, expected: str) -> Check:
-    s = unwrap(body(answer))
+    # \frac{19}{12} to inny zapis 19/12 (propozycja D, odpowiedź Minitrona 10.11.2026) – normalizacja
+    s = unwrap(LATEX_FRAC.sub(r"\1/\2", body(answer)))
     if not s:
         return Check(False, None, EMPTY)
     found = FRACTION.findall(s)
@@ -171,10 +175,16 @@ def check_choice(answer: str, expected: str, options: list[str]) -> Check:
     s = unwrap(body(answer))
     if not s:
         return Check(False, None, EMPTY)
-    words = {w.casefold() for w in re.findall(r"\w+", s)}
-    found = [o for o in options if o.casefold() in words]
-    if len(found) != 1:
-        return Check(False, None, AMBIGUOUS if found else WRONG, s)
+    def mentioned(text):
+        words = {w.casefold() for w in re.findall(r"\w+", text)}
+        return [o for o in options if o.casefold() in words]
+    found = mentioned(s)
+    if len(found) > 1:                     # rozwiązanie krok po kroku: wynik z ostatniej linii (propozycja E)
+        found = mentioned(final_line(s))
+        if len(found) != 1:
+            return Check(False, None, AMBIGUOUS, s)
+    if not found:
+        return Check(False, None, WRONG, s)
     ok = found[0].casefold() == expected.casefold()
     bare = norm_text(s).casefold() == found[0].casefold()
     if not ok:

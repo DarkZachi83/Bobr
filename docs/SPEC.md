@@ -988,4 +988,7 @@ obliczeniami tylko z dwóch wzorców – ostatnia linia z treścią ma dokładni
 ostatnim „=” w ostatniej linii stoi dokładnie jedna wartość (zaliczone z niezgodnym formatem; inaczej
 „nie można ocenić”); (C) w zadaniu „uzupełnij lukę” (H5) zaliczone też całe zdanie z polecenia z
 poprawnie wypełnioną luką, z niezgodnym formatem. Wersja plików testów 1.1.
+Po drugim pomiarze: (D) `\frac{a}{b}` (także `\dfrac`, `\tfrac`, w `\boxed{}`) = zapis „a/b” –
+normalizacja zapisu; (E) reguła B także dla odpowiedzi z listy (tak/nie, dni tygodnia): przy kilku
+wymienionych możliwościach – ostatnia linia z treścią z dokładnie jedną możliwością.
 
