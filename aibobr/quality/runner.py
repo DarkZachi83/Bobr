@@ -38,6 +38,7 @@ class AttemptResult:
     gen_tokens: Optional[int] = None
     cached: Optional[int] = None
     released: bool = True
+    done_reason: Optional[str] = None
 
 
 @dataclass
@@ -107,8 +108,11 @@ class QualityRunner:
             return AttemptResult(g.text, None, None, "invalid", None, g.prompt_tokens, g.gen_tokens,
                                  g.prompt_cached, released)
         c = checks.check(g.text, task["check"], lang, run_python=self._python())
-        return AttemptResult(g.text, c.correct, c.format_compliant, c.reason, c.value, g.prompt_tokens,
-                             g.gen_tokens, g.prompt_cached, released)
+        reason = c.reason
+        if c.correct is False and g.done_reason == "length":
+            reason = checks.TRUNCATED              # nie zdążył – osobny powód (decyzja autora, propozycja A)
+        return AttemptResult(g.text, c.correct, c.format_compliant, reason, c.value, g.prompt_tokens,
+                             g.gen_tokens, g.prompt_cached, released, g.done_reason)
 
     def run(self, models: list[str], tests: list[tuple[dict, str]], attempts: int = 1,
             report: Callable[[dict], None] = lambda e: None, stop: Optional[threading.Event] = None) -> dict:

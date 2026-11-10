@@ -149,6 +149,25 @@ class RunnerTest(unittest.TestCase):
         self.assertIsNone(bench.loaded)
 
 
+class TruncatedTest(unittest.TestCase):
+    def test_cut_off_answer_has_its_own_reason(self):
+        h, sci = suites.standard()
+        one = {"suite_info": sci["suite_info"], "tasks": [sci["tasks"][4]]}           # S5, 240 zł − 15%
+
+        class Cut(Bench):
+            def generate(self, model, prompt, num_ctx, num_predict, on_chunk=None):
+                from dataclasses import replace
+                return replace(super().generate(model, prompt, num_ctx, num_predict, on_chunk), done_reason="length")
+        bench = Cut(lambda p, n: "Aby obliczyć nową cenę kurtki po obniżce o 15%, należy najpi")
+        t = [0.0]
+        out = QualityRunner(bench, NoSandbox(), None, {}, clock=lambda: t[0],
+                            sleep=lambda s: t.__setitem__(0, t[0] + s), unload_timeout=1).run(["m"], [(one, "pl")], 1)
+        task = out["runs"][0]["tasks"][0]
+        self.assertEqual((task.correct, task.reason), (False, "truncated"))
+        self.assertEqual(task.attempts[0].done_reason, "length")
+        self.assertTrue(all(x["max_tokens"] >= 256 for x in h["tasks"] + sci["tasks"]))   # propozycja A
+
+
 class ScoreTest(unittest.TestCase):
     def tally(self, correct, evaluated, total=15):
         return score.Tally(total, evaluated, correct)

@@ -981,3 +981,11 @@ częściowy. Ocena ręczna (`set_manual`) przelicza wynik przebiegu. Baza: schem
 `quality_runs`, `quality_tasks` (z odpowiedziami wszystkich prób), migracja z kopią jak przy 0.9.
 `tools/test_jakosci.py` – to samo z terminala, do osobnej bazy.
 
+**Poprawki po pierwszym pomiarze autora (Minitron, 10.11.2026):** (A) limit 256 tokenów w każdym
+zadaniu (Python 512) – 32 tokeny ucinały wyjaśnienia przed wynikiem; odpowiedź ucięta limitem i błędna
+ma powód „truncated” (niezaliczone, ale z prawdziwą przyczyną); (B) wynik końcowy z rozwiązania z
+obliczeniami tylko z dwóch wzorców – ostatnia linia z treścią ma dokładnie jedną wartość albo po
+ostatnim „=” w ostatniej linii stoi dokładnie jedna wartość (zaliczone z niezgodnym formatem; inaczej
+„nie można ocenić”); (C) w zadaniu „uzupełnij lukę” (H5) zaliczone też całe zdanie z polecenia z
+poprawnie wypełnioną luką, z niezgodnym formatem. Wersja plików testów 1.1.
+

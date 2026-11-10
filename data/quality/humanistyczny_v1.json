@@ -1,7 +1,7 @@
 {
   "suite_info": {
     "id": "humanistyczny_v1",
-    "version": "1.0",
+    "version": "1.1",
     "kind": "humanities",
     "name": {
       "pl": "Test humanistyczny",
@@ -17,7 +17,7 @@
       "id": "H1",
       "category": "ortografia",
       "level": "easy",
-      "max_tokens": 64,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Dodaj polskie znaki diakrytyczne. Odpowiedz samym poprawionym zdaniem: \"Zolw wszedl do zrodla.\""
       },
@@ -32,7 +32,7 @@
       "id": "H2",
       "category": "ortografia",
       "level": "medium",
-      "max_tokens": 64,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Napisz poprawnie (łącznie albo osobno). Odpowiedz samym zdaniem: \"On (nie)lubi (nie)dobrych ludzi.\""
       },
@@ -47,7 +47,7 @@
       "id": "H3",
       "category": "ortografia",
       "level": "hard",
-      "max_tokens": 64,
+      "max_tokens": 256,
       "prompt": {
         "pl": "W miejsce każdej luki wpisz rz albo ż. Odpowiedz samym zdaniem: \"P_y wie_y le_ał pies.\""
       },
@@ -62,7 +62,7 @@
       "id": "H4",
       "category": "fleksja",
       "level": "easy",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Podaj wołacz imienia \"Grzegorz\". Odpowiedz jednym słowem."
       },
@@ -77,7 +77,7 @@
       "id": "H5",
       "category": "fleksja",
       "level": "medium",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Uzupełnij jednym słowem w poprawnej formie: \"Na łące pasło się sześć ... (koń).\" Odpowiedz samym słowem."
       },
@@ -85,6 +85,9 @@
         "type": "text",
         "expected": [
           "koni"
+        ],
+        "sentence": [
+          "Na łące pasło się sześć koni."
         ]
       }
     },
@@ -92,7 +95,7 @@
       "id": "H6",
       "category": "fleksja",
       "level": "medium",
-      "max_tokens": 64,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Zamień na liczbę mnogą. Odpowiedz samym zdaniem: \"Ten młody nauczyciel przyszedł.\""
       },
@@ -107,7 +110,7 @@
       "id": "H7",
       "category": "fleksja",
       "level": "hard",
-      "max_tokens": 64,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Zamień na liczbę mnogą. Odpowiedz samym zdaniem: \"Ten Włoch był dobrym kucharzem.\""
       },
@@ -122,7 +125,7 @@
       "id": "H8",
       "category": "liczebniki",
       "level": "easy",
-      "max_tokens": 64,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Zapisz liczebnik słownie w poprawnej formie. Odpowiedz samym zdaniem: \"Mieszkam na 3. piętrze.\""
       },
@@ -137,7 +140,7 @@
       "id": "H9",
       "category": "liczebniki",
       "level": "hard",
-      "max_tokens": 64,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Przepisz zdanie, zapisując liczbę słownie. Odpowiedz samym zdaniem: \"W klasie jest 25 uczniów.\""
       },
@@ -152,7 +155,7 @@
       "id": "H10",
       "category": "aspekt",
       "level": "easy",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Podaj czasownik dokonany od \"czytać\" (znaczenie: skończyć czytać całość). Odpowiedz jednym słowem."
       },
@@ -167,7 +170,7 @@
       "id": "H11",
       "category": "interpunkcja",
       "level": "medium",
-      "max_tokens": 64,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Wstaw brakujące przecinki. Odpowiedz samym poprawionym zdaniem: \"Wiem że przyjdziesz chociaż pada deszcz.\""
       },
@@ -182,7 +185,7 @@
       "id": "H12",
       "category": "interpunkcja",
       "level": "hard",
-      "max_tokens": 96,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Wstaw brakujące przecinki. Odpowiedz samym poprawionym zdaniem: \"Kiedy wróciłem do domu który stał na wzgórzu okazało się że nikogo nie ma.\""
       },
@@ -197,7 +200,7 @@
       "id": "H13",
       "category": "przeksztalcanie",
       "level": "medium",
-      "max_tokens": 64,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Zamień na stronę bierną. Odpowiedz samym zdaniem: \"Kot zjadł mysz.\""
       },
@@ -213,7 +216,7 @@
       "id": "H14",
       "category": "przeksztalcanie",
       "level": "easy",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Podaj tryb rozkazujący czasownika \"pisać\" w 2. osobie liczby mnogiej. Odpowiedz jednym słowem."
       },
@@ -228,7 +231,7 @@
       "id": "H15",
       "category": "wiedza",
       "level": "hard",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Jaką częścią zdania jest słowo \"szybko\" w zdaniu \"Biegł szybko.\"? Odpowiedz jednym słowem."
       },

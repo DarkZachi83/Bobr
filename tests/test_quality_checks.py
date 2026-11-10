@@ -78,15 +78,35 @@ class NumberTest(unittest.TestCase):
             r = c.check_number(answer, exp)
             self.assertEqual((r.correct, r.reason), (True, reason), answer)
         self.assertEqual(c.check_number("0,185", 0.185).reason, "ok")
-        self.assertEqual(c.check_number("17 × 23 = 391", 391).reason, "ambiguous")  # nie zgadujemy
+        self.assertEqual(c.check_number("17 × 23 = 391", 391).reason, "format")    # po ostatnim „=” jedna liczba
+        self.assertEqual(c.check_number("Może 391, może 392", 391).reason, "ambiguous")  # nie zgadujemy
         self.assertEqual(c.check_number("390", 391).reason, "wrong")
         self.assertEqual(c.check_number("nie wiem", 391).reason, "wrong")
+
+    def test_final_answer_patterns_from_author_run(self):
+        """Prawdziwe odpowiedzi Minitrona (10.11.2026) – wynik końcowy tylko z dwóch wzorców (propozycja B)."""
+        r = c.check_number("240 * (1 - 15 / 100) = 240 * 0.85 = 204", 204)
+        self.assertEqual((r.correct, r.format_compliant, r.value), (True, False, 204.0))
+        worked = "Aby obliczyć 17 × 23, rozbijmy:\n17 × 20 = 340\n17 × 3 = 51\n340 + 51 = 391\n\nWynik: 391"
+        self.assertEqual(c.check_number(worked, 391).reason, "format")                 # ostatnia linia – jedna liczba
+        latex = "First:\n\\[ 0.15 \\times 0.4 = 0.06 \\]\nThen 0.06 + 0.125 = 0.185\n\\]"
+        self.assertEqual(c.check_number(latex, 0.185).reason, "format")                # linia „\\]” pominięta
+        self.assertEqual(c.check_number("17 × 23 = 391\nAle może też 392 albo 393.", 391).reason, "ambiguous")
+        self.assertEqual(c.check_number("Krok 1: 17 × 20 = 340\nKrok 2: 17 × 3 = 51", 391).reason, "wrong")
+
+    def test_fill_in_whole_sentence(self):
+        spec = {"type": "text", "expected": ["koni"], "sentence": ["Na łące pasło się sześć koni."]}
+        r = c.check("Na łące pasło się sześć koni.", spec)
+        self.assertEqual((r.correct, r.format_compliant, r.reason), (True, False, "format"))
+        self.assertEqual(c.check("Na łące pasło się sześć koniów.", spec).reason, "wrong")
+        self.assertEqual(c.check("koni", spec).reason, "ok")
 
     def test_fraction_must_be_irreducible(self):
         self.assertEqual(c.check_fraction("19/12", "19/12").reason, "ok")
         self.assertEqual(c.check_fraction("Wynik: 19 / 12", "19/12").reason, "format")
         self.assertEqual(c.check_fraction("38/24", "19/12").reason, "wrong")
-        self.assertEqual(c.check_fraction("3/4 + 5/6 = 19/12", "19/12").reason, "ambiguous")
+        self.assertEqual(c.check_fraction("3/4 + 5/6 = 19/12", "19/12").reason, "format")   # wynik po „=”
+        self.assertEqual(c.check_fraction("3/4 albo 5/6, nie wiem", "19/12").reason, "ambiguous")
 
     def test_choice(self):
         r = c.check_choice("Tak, Mruczek jest ssakiem.", "tak", ["tak", "nie"])

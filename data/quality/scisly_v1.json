@@ -1,7 +1,7 @@
 {
   "suite_info": {
     "id": "scisly_v1",
-    "version": "1.0",
+    "version": "1.1",
     "kind": "science",
     "name": {
       "pl": "Test ścisły",
@@ -18,7 +18,7 @@
       "id": "S1",
       "category": "arytmetyka",
       "level": "easy",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Oblicz 17 × 23. Podaj samą liczbę.",
         "en": "Calculate 17 × 23. Give only the number."
@@ -32,7 +32,7 @@
       "id": "S2",
       "category": "arytmetyka",
       "level": "medium",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Oblicz 3/4 + 5/6. Podaj wynik jako ułamek nieskracalny w postaci a/b.",
         "en": "Calculate 3/4 + 5/6. Give the result as an irreducible fraction a/b."
@@ -46,7 +46,7 @@
       "id": "S3",
       "category": "arytmetyka",
       "level": "hard",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Oblicz 0,15 × 0,4 + 1/8. Podaj wynik jako ułamek dziesiętny.",
         "en": "Calculate 0.15 × 0.4 + 1/8. Give the result as a decimal."
@@ -60,7 +60,7 @@
       "id": "S4",
       "category": "procenty",
       "level": "easy",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Zamień 2,5 km na metry. Podaj samą liczbę.",
         "en": "Convert 2.5 km to metres. Give only the number."
@@ -74,7 +74,7 @@
       "id": "S5",
       "category": "procenty",
       "level": "medium",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Kurtka kosztowała 240 zł. Cenę obniżono o 15%. Ile kosztuje teraz (w złotych)? Podaj samą liczbę.",
         "en": "A jacket cost 240 PLN. The price was cut by 15%. What does it cost now (in PLN)? Give only the number."
@@ -88,7 +88,7 @@
       "id": "S6",
       "category": "procenty",
       "level": "hard",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Cenę podniesiono o 20%, a potem obniżono o 20%. O ile procent nowa cena jest niższa od początkowej? Podaj samą liczbę.",
         "en": "A price was raised by 20% and then cut by 20%. By what percentage is the new price lower than the original? Give only the number."
@@ -102,7 +102,7 @@
       "id": "S7",
       "category": "logika",
       "level": "easy",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Wszystkie koty są ssakami. Mruczek jest kotem. Czy Mruczek jest ssakiem? Odpowiedz: tak albo nie.",
         "en": "All cats are mammals. Mruczek is a cat. Is Mruczek a mammal? Answer: yes or no."
@@ -129,7 +129,7 @@
       "id": "S8",
       "category": "logika",
       "level": "medium",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Jaka liczba jest następna w ciągu: 2, 6, 12, 20, 30, …? Podaj samą liczbę.",
         "en": "What number comes next: 2, 6, 12, 20, 30, …? Give only the number."
@@ -143,7 +143,7 @@
       "id": "S9",
       "category": "logika",
       "level": "hard",
-      "max_tokens": 32,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Przedwczoraj był dzień następujący po poniedziałku. Jaki dzień tygodnia będzie pojutrze? Odpowiedz jednym słowem.",
         "en": "The day before yesterday was the day after Monday. What day of the week will it be the day after tomorrow? Answer with one word."
@@ -180,7 +180,7 @@
       "id": "S10",
       "category": "json",
       "level": "easy",
-      "max_tokens": 96,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Zwróć tablicę JSON z liczbami parzystymi od 2 do 10 włącznie. Zwróć tylko JSON.",
         "en": "Return a JSON array with the even numbers from 2 to 10 inclusive. Return only the JSON."
@@ -200,7 +200,7 @@
       "id": "S11",
       "category": "json",
       "level": "medium",
-      "max_tokens": 128,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Zapisz dane jako obiekt JSON z kluczami \"name\" (tekst), \"age\" (liczba) i \"city\" (tekst): \"Ola ma 28 lat, a jej miasto to Gdynia.\" Zwróć tylko JSON.",
         "en": "Write the data as a JSON object with keys \"name\" (string), \"age\" (number) and \"city\" (string): \"Ola is 28 years old and her city is Gdynia.\" Return only the JSON."
@@ -218,7 +218,7 @@
       "id": "S12",
       "category": "json",
       "level": "hard",
-      "max_tokens": 96,
+      "max_tokens": 256,
       "prompt": {
         "pl": "Zwróć obiekt JSON z jednym kluczem \"path\", którego wartością jest dokładnie ten tekst: C:\\Users\\Ola. Zwróć tylko JSON.",
         "en": "Return a JSON object with a single key \"path\" whose value is exactly this text: C:\\Users\\Ola. Return only the JSON."
