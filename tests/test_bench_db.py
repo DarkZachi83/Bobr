@@ -56,7 +56,7 @@ class MigrationTest(unittest.TestCase):
         make_db(self.path, LEGACY_081)
         before = {t: dump(self.path, t) for t in ("perf", "quality")}
         db = BenchDb(self.path, today="2026-11-09")
-        self.assertEqual(db.schema_version(), 1)
+        self.assertEqual(db.schema_version(), bench_db.SCHEMA_VERSION)
         self.assertEqual(db.backup, self.dir / "benchmarks.sqlite.bak-2026-11-09")
         for t in ("perf", "quality"):
             self.assertEqual(dump(self.path, t), before[t])          # archiwum bez zmian
@@ -81,7 +81,7 @@ class MigrationTest(unittest.TestCase):
 
     def test_new_database_without_backup(self):
         db = BenchDb(self.path)
-        self.assertEqual(db.schema_version(), 1)
+        self.assertEqual(db.schema_version(), bench_db.SCHEMA_VERSION)
         self.assertIsNone(db.backup)
         self.assertEqual([p.name for p in self.dir.iterdir()], ["benchmarks.sqlite"])
 
@@ -98,7 +98,34 @@ class MigrationTest(unittest.TestCase):
         self.assertEqual(tables, {"perf", "quality"})                 # żadnej nowej tabeli
         self.assertEqual(dump(self.path, "perf"), before)
         self.assertTrue((self.dir / "benchmarks.sqlite.bak-2026-11-09").exists())
-        self.assertEqual(BenchDb(self.path, today="2026-11-10").schema_version(), 1)   # kolejna próba się udaje
+        self.assertEqual(BenchDb(self.path, today="2026-11-10").schema_version(), bench_db.SCHEMA_VERSION)   # kolejna próba się udaje
+
+
+class QualitySchemaTest(unittest.TestCase):
+    def test_upgrade_from_09_keeps_speed_history(self):
+        path = Path(tempfile.mkdtemp()) / "benchmarks.sqlite"
+        with mock.patch.object(bench_db, "SCHEMA_VERSION", 1):              # baza z 0.9
+            old = BenchDb(path, today="2026-11-09")
+            sid = old.start_session(started_at="2026-11-09T10:00:00+01:00", status="finished")
+            old.start_run(sid, model="m", run_no=1, started_at="x", gen_tps=61.2, verdict="fast")
+        before = dump(path, "runs")
+        db = BenchDb(path, today="2026-11-10")
+        self.assertEqual(db.schema_version(), 2)
+        self.assertEqual(db.backup.name, "benchmarks.sqlite.bak-2026-11-10")
+        self.assertEqual(dump(path, "runs"), before)                        # historia prędkości nietknięta
+        self.assertEqual(dump(db.backup, "runs"), before)
+
+    def test_quality_session_cascade(self):
+        db = BenchDb(Path(tempfile.mkdtemp()) / "benchmarks.sqlite")
+        qs = db.start_quality_session(started_at="2026-11-10T10:00:00+01:00", attempts=1)
+        qr = db.start_quality_run(qs, model="m", suite="scisly_v1", lang="en", started_at="x")
+        row = db.add_quality_task(qr, task_no=1, task_id="S1", correct=None, reason="not_run")
+        db.update_quality_task(row, correct=1, manual=1)
+        t = db.quality_tasks(qr)[0]
+        self.assertEqual((t["correct"], t["manual"], t["format_compliant"]), (1, 1, None))
+        self.assertEqual(db.quality_sessions(model="m")[0]["id"], qs)
+        db.delete_quality_session(qs)
+        self.assertEqual((db.quality_runs(qs), db.quality_tasks(qr)), ([], []))
 
 
 class SessionDataTest(unittest.TestCase):

@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS perf (
@@ -216,7 +216,64 @@ CREATE TABLE long_context (
 );
 CREATE INDEX long_context_run ON long_context(run_id, num_ctx);
 """
-MIGRATIONS = {1: SCHEMA_V1}
+# Schemat 2 (0.10): moduł jakości – własne tabele, bez związku z werdyktem prędkości.
+SCHEMA_V2 = """
+CREATE TABLE quality_sessions (
+    id TEXT PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    status TEXT NOT NULL DEFAULT 'running',
+    app_version TEXT,
+    runtime_version TEXT,
+    hardware TEXT,
+    attempts INTEGER,
+    tests_json TEXT,
+    models_json TEXT,
+    sandbox TEXT,
+    note TEXT
+);
+CREATE TABLE quality_runs (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES quality_sessions(id) ON DELETE CASCADE,
+    model TEXT NOT NULL,
+    suite TEXT NOT NULL,
+    suite_version TEXT,
+    lang TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    status TEXT NOT NULL DEFAULT 'running',
+    total INTEGER,
+    evaluated INTEGER,
+    correct INTEGER,
+    format_noncompliant INTEGER,
+    not_evaluated INTEGER,
+    manual INTEGER,
+    by_category_json TEXT,
+    by_level_json TEXT
+);
+CREATE INDEX quality_runs_session ON quality_runs(session_id, model);
+CREATE TABLE quality_tasks (
+    id INTEGER PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES quality_runs(id) ON DELETE CASCADE,
+    task_no INTEGER NOT NULL,
+    task_id TEXT NOT NULL,
+    category TEXT,
+    level TEXT,
+    prompt_text TEXT,
+    expected TEXT,
+    correct INTEGER,
+    format_compliant INTEGER,
+    reason TEXT,
+    value TEXT,
+    answer TEXT,
+    attempts_json TEXT,
+    differing INTEGER,
+    manual INTEGER DEFAULT 0
+);
+CREATE INDEX quality_tasks_run ON quality_tasks(run_id, task_no);
+"""
+MIGRATIONS = {1: SCHEMA_V1, 2: SCHEMA_V2}
+QUALITY_TABLES = ("quality_sessions", "quality_runs", "quality_tasks")
 
 NEW_TABLES = ("sessions", "runs", "tasks", "telemetry", "long_context")
 ARCHIVE_TABLES = ("perf", "quality")
@@ -314,7 +371,8 @@ class BenchDb:
 
     def _read_columns(self) -> dict[str, set[str]]:
         with closing(self._connect()) as db:
-            return {t: {row[1] for row in db.execute(f"PRAGMA table_info({t})")} for t in NEW_TABLES}
+            return {t: {row[1] for row in db.execute(f"PRAGMA table_info({t})")}
+                    for t in NEW_TABLES + QUALITY_TABLES}
 
     def schema_version(self) -> int:
         with closing(self._connect()) as db:
@@ -438,6 +496,46 @@ class BenchDb:
             with closing(self._connect()) as db:
                 db.execute("VACUUM")                       # plik rzeczywiście się zmniejsza
         return removed
+
+    # ------------------------------------------------------------------ moduł jakości (0.10)
+    def start_quality_session(self, **values) -> str:
+        sid = values.pop("id", None) or new_id()
+        self._insert("quality_sessions", {"id": sid, **values})
+        return sid
+
+    def finish_quality_session(self, session_id: str, status: str = "finished", **values) -> None:
+        self._update("quality_sessions", session_id, {"status": status, **values})
+
+    def start_quality_run(self, session_id: str, **values) -> str:
+        rid = values.pop("id", None) or new_id()
+        self._insert("quality_runs", {"id": rid, "session_id": session_id, **values})
+        return rid
+
+    def update_quality_run(self, run_id: str, **values) -> None:
+        self._update("quality_runs", run_id, values)
+
+    def add_quality_task(self, run_id: str, **values) -> int:
+        return self._insert("quality_tasks", {"run_id": run_id, **values})
+
+    def update_quality_task(self, task_row: int, **values) -> None:
+        self._update("quality_tasks", task_row, values)
+
+    def quality_sessions(self, model: Optional[str] = None) -> list[dict]:
+        where, args = "", []
+        if model:
+            where, args = "WHERE s.id IN (SELECT session_id FROM quality_runs WHERE model = ?)", [model]
+        return self._select(f"SELECT s.* FROM quality_sessions s {where} ORDER BY s.started_at DESC", args)
+
+    def quality_runs(self, session_id: str) -> list[dict]:
+        return self._select("SELECT * FROM quality_runs WHERE session_id = ? ORDER BY started_at, model, suite, lang",
+                            [session_id])
+
+    def quality_tasks(self, run_id: str) -> list[dict]:
+        return self._select("SELECT * FROM quality_tasks WHERE run_id = ? ORDER BY task_no", [run_id])
+
+    def delete_quality_session(self, session_id: str) -> None:
+        with closing(self._connect()) as db, db:
+            db.execute("DELETE FROM quality_sessions WHERE id = ?", [session_id])
 
     # ------------------------------------------------------------------ archiwum do 0.8.1
     def add_perf(self, r, *, measured_at: str, runtime: str, runtime_version: Optional[str],

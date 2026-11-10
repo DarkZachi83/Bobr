@@ -970,3 +970,14 @@ cgroups przez `systemd-run --user --scope` (MemoryMax, TasksMax) tylko jako doda
 1 GB pamięci, urządzeń karty, zapełnienia `/tmp`, 192 procesów – piaskownica jest gotowa tylko, gdy
 wszystkie próby się nie udały (root omija limit procesów → „failed:processes”, chyba że działa
 cgroup). Przerwanie kodu modelu przez limit = zadanie niezaliczone; brak piaskownicy = nieocenione.
+
+**Przebieg jakości (`aibobr/quality/runner.py`, `score.py`):** każda próba od zera (zwolnienie →
+wczytanie z num_ctx 2048 → zadanie → pamięć promptu); prompt z pamięci = próba powtórzona raz, drugi
+raz – „invalid”, nieocenione; błąd wykonania – nieocenione. 1 próba (domyślnie) albo 3 (zaliczone przy
+2 z 3, dopisek „odpowiedzi różne”). Wynik testu: ocenione/zaliczone, pokrycie, niezgodny format, ręczne
+oceny; kategorie i poziomy jako ułamki. Etykieta „w tych testach”: humanistyczny vs ścisły PL, różnica
+≥ 15 pkt proc. – tekstowe/ścisłe, mniej – podobnie, oba < 50% – słabo; przy pokryciu < 100% – wynik
+częściowy. Ocena ręczna (`set_manual`) przelicza wynik przebiegu. Baza: schemat 2 – `quality_sessions`,
+`quality_runs`, `quality_tasks` (z odpowiedziami wszystkich prób), migracja z kopią jak przy 0.9.
+`tools/test_jakosci.py` – to samo z terminala, do osobnej bazy.
+
