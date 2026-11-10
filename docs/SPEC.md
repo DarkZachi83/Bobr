@@ -958,3 +958,15 @@ Python: otoczka ```python albo jednoznaczny wstęp). Dodatkowy tekst narusza for
 wydzielona jedna odpowiedź jest oceniana, kilka kandydatów – „nie można ocenić”, niezaliczone; niczego
 nie naprawiamy. Kod Pythona uruchamia tylko zweryfikowana piaskownica (bubblewrap na Linuksie); bez niej
 – nieocenione, z pokryciem testu w wyniku.
+
+**Piaskownica (`aibobr/quality/sandbox.py`):** bubblewrap w jednej stałej konfiguracji – `--unshare-all`
+(bez sieci, osobne procesy i użytkownik), `--die-with-parent`, `--new-session`, `--clearenv`, system
+tylko do odczytu (`/usr`, interpreter), prywatny `/tmp` w pamięci z limitem 64 MB (`--size`), minimalne
+`/dev` (bez karty), bez katalogu domowego; kod jako `python -I -S`. Limity jądra (`rlimit`): pamięć
+512 MB, czas procesora 10 s, plik 8 MB, 64 otwarte pliki, procesy = obecne procesy użytkownika + 48
+(RLIMIT_NPROC liczy wszystkie jego procesy); limit czasu 15 s z zewnątrz (zabicie grupy procesów);
+cgroups przez `systemd-run --user --scope` (MemoryMax, TasksMax) tylko jako dodatek, gdy działa.
+**Test kontrolny** przed pierwszym użyciem próbuje: sieci, katalogu domowego, zapisu poza `/tmp`,
+1 GB pamięci, urządzeń karty, zapełnienia `/tmp`, 192 procesów – piaskownica jest gotowa tylko, gdy
+wszystkie próby się nie udały (root omija limit procesów → „failed:processes”, chyba że działa
+cgroup). Przerwanie kodu modelu przez limit = zadanie niezaliczone; brak piaskownicy = nieocenione.
