@@ -532,6 +532,13 @@ class BenchDb:
             where, args = "WHERE s.id IN (SELECT session_id FROM quality_runs WHERE model = ?)", [model]
         return self._select(f"SELECT s.* FROM quality_sessions s {where} ORDER BY s.started_at DESC", args)
 
+    def quality_suite_used(self, suite: str, version: str) -> bool:
+        """Czy ta wersja testu ma już wyniki – edytor podnosi wtedy wersję przy zapisie."""
+        if not self.path.exists():
+            return False
+        return bool(self._select("SELECT 1 FROM quality_runs WHERE suite = ? AND suite_version = ? LIMIT 1",
+                                 [suite, version]))
+
     def quality_runs(self, session_id: str) -> list[dict]:
         return self._select("SELECT * FROM quality_runs WHERE session_id = ? ORDER BY started_at, model, suite, lang",
                             [session_id])
