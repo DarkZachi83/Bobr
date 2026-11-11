@@ -15,7 +15,7 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
 from aibobr.gui.widgets.bench_panel import LOG_COLORS, BenchmarkPanel, _clock
-from aibobr.i18n import t
+from aibobr.i18n import current_language, has_key, t
 from aibobr.quality import score
 
 TESTS = (("humanistyczny_v1", "pl"), ("scisly_v1", "pl"), ("scisly_v1", "en"))
@@ -28,8 +28,14 @@ HCOLS = ("date", "models", "tests", "attempts", "status")
 HWIDTHS = {"date": 130, "models": 260, "tests": 260, "attempts": 60, "status": 100}
 
 
+CUSTOM_NAMES: dict[str, str] = {}      # id własnego testu → nazwa (uzupełnia panel; usunięty test – samo id)
+
+
 def test_name(suite: str, lang: str) -> str:
-    return t(f"q.test.{suite}.{lang}")
+    key = f"q.test.{suite}.{lang}"
+    if has_key(key):
+        return t(key)
+    return f"{CUSTOM_NAMES.get(suite, suite)} ({lang.upper()})"
 
 
 def frac(correct: int, evaluated: int) -> str:
@@ -55,14 +61,11 @@ class QualityPanel(BenchmarkPanel):
         what = ttk.Label(top, text=t("q.what"), style="Muted.TLabel", wraplength=640, justify="left")
         what.pack(anchor="w", fill="x", pady=(2, 6))
         what.bind("<Configure>", lambda e: what.configure(wraplength=max(300, e.width)))
-        opts = ttk.Frame(top, style="Inner.TFrame")
-        opts.pack(fill="x")
+        self.opts = ttk.Frame(top, style="Inner.TFrame")
+        self.opts.pack(fill="x")
         self.test_vars = {}
-        for suite, lang in TESTS:
-            var = tk.BooleanVar(value=True)
-            ttk.Checkbutton(opts, text=test_name(suite, lang), variable=var, style="Panel.TCheckbutton",
-                            command=self._update_plan).pack(side="left", padx=(0, 10))
-            self.test_vars[(suite, lang)] = var
+        self.suite_data: dict[str, dict] = {}
+        self._build_tests()
         line = ttk.Frame(top, style="Inner.TFrame")
         line.pack(fill="x", pady=(6, 0))
         ttk.Label(line, text=t("q.attempts"), style="Panel.TLabel").pack(side="left")
@@ -200,7 +203,59 @@ class QualityPanel(BenchmarkPanel):
         self._update_plan()
 
     def tests(self) -> list[tuple[str, str]]:
-        return [key for key in TESTS if self.test_vars[key].get()]
+        return [key for key, var in self.test_vars.items() if var.get()]
+
+    def _custom_suites(self) -> list[dict]:
+        store = getattr(self.c, "custom_suites", None)
+        try:
+            return store.valid() if store is not None else []
+        except OSError:
+            return []
+
+    def _build_tests(self) -> None:
+        """Pola wyboru testów: standardowe (domyślnie zaznaczone) i własne – każda wersja językowa osobno
+        (np. „Mój test (KO)”, „Mój test (EN)”; domyślnie niezaznaczone). Odświeżane po zapisie w edytorze."""
+        from aibobr.quality import suites
+        old = {key: var.get() for key, var in self.test_vars.items()}
+        for child in self.opts.winfo_children():
+            child.destroy()
+        self.test_vars = {}
+        self.suite_data = {}
+        for data in suites.standard():
+            self.suite_data[data["suite_info"]["id"]] = data
+        for key in TESTS:
+            self._test_box(key, old.get(key, True), 0, len(self.test_vars))
+        custom = self._custom_suites()
+        if custom:
+            ttk.Label(self.opts, text=t("q.custom_tests"), style="Muted.TLabel").grid(
+                row=1, column=0, columnspan=4, sticky="w", pady=(4, 0))
+        n = 0
+        for data in custom:
+            info = data["suite_info"]
+            name = info["name"].get(current_language()) or next(iter(info["name"].values()))
+            CUSTOM_NAMES[info["id"]] = name
+            self.suite_data[info["id"]] = data
+            for lang in info["languages"]:
+                self._test_box((info["id"], lang), old.get((info["id"], lang), False), 2 + n // 3, n % 3)
+                n += 1
+
+    def _test_box(self, key, value: bool, row: int, column: int) -> None:
+        var = tk.BooleanVar(value=value)
+        ttk.Checkbutton(self.opts, text=test_name(*key), variable=var, style="Panel.TCheckbutton",
+                        command=self._update_plan).grid(row=row, column=column, sticky="w", padx=(0, 14))
+        self.test_vars[key] = var
+
+    def _suites_changed(self) -> None:
+        if not self.running:
+            self._build_tests()
+        self._update_plan()
+
+    def _tasks(self, tests) -> int:
+        return sum(len(self.suite_data.get(s, {}).get("tasks") or []) for s, _ in tests)
+
+    def _python_tasks(self, tests) -> int:
+        return sum(1 for s, _ in tests for x in self.suite_data.get(s, {}).get("tasks") or []
+                   if (x.get("check") or {}).get("type") == "python")
 
     def _sandbox(self):
         if getattr(self, "_sandbox_obj", None) is None:
@@ -211,8 +266,8 @@ class QualityPanel(BenchmarkPanel):
     def estimate(self, targets: list[str], tests: list, attempts: int) -> float:
         """Prognoza z ostatniego benchmarku prędkości modelu (wczytanie, tok/s); bez niego – zgrubnie."""
         db = getattr(self.c, "bench_db", None)
-        tasks = 15 * len(tests)
-        python = 3 * sum(1 for suite, _ in tests if suite == "scisly_v1")
+        tasks = self._tasks(tests)
+        python = self._python_tasks(tests)
         total = 0.0
         for tg in targets:
             last = db.last_speed(self._model_name(tg)) if db is not None else None
@@ -226,14 +281,14 @@ class QualityPanel(BenchmarkPanel):
             return
         targets, tests, attempts = self.targets(), self.tests(), int(self.attempts.get())
         self.estimated = self.estimate(targets, tests, attempts)
-        self.steps_total = len(targets) * 15 * len(tests) * attempts
+        self.steps_total = len(targets) * self._tasks(tests) * attempts
         if not targets:
             self.plan.configure(text=t("bench.none_checked"))
         else:
-            self.plan.configure(text=t("q.plan", models=len(targets), tasks=15 * len(tests), attempts=attempts,
+            self.plan.configure(text=t("q.plan", models=len(targets), tasks=self._tasks(tests), attempts=attempts,
                                        minutes=max(1, round(self.estimated / 60))))
         self.start_button.state(["!disabled"] if targets and tests else ["disabled"])
-        if any(suite == "scisly_v1" for suite, _ in tests):
+        if self._python_tasks(tests):
             st = self._sandbox().status()
             self.sandbox_line.configure(text=t("q.sandbox.ok") if st.ready else
                                         t("q.sandbox.no", reason=t(f"q.sandbox.reason.{st.reason.split(':')[0]}")))
@@ -249,7 +304,7 @@ class QualityPanel(BenchmarkPanel):
             win.lift()
             return
         self.editor = TestEditor(self, self.c.custom_suites, sandbox=self._sandbox(), busy=lambda: self.running,
-                                 on_change=self._update_plan)
+                                 on_change=self._suites_changed)
 
     def _three(self) -> None:
         """Trzy próby – komunikat autora o czasie testu i sugestia, by najpierw zrobić test z jedną próbą."""
@@ -381,20 +436,30 @@ class QualityPanel(BenchmarkPanel):
         self._label()
 
     def _label(self) -> None:
+        """Etykieta „w tych testach…” – tylko testy standardowe. Własny test w dwóch wersjach: obie obok siebie
+        (różnica pokazuje, ile model traci we własnym języku)."""
         lines = []
         for model in dict.fromkeys(r["model"] for r in self.q_results):
             mine = {(r["suite"], r["lang"]): r["summary"].overall for r in self.q_results if r["model"] == model}
+            parts = []
             lab = score.label(mine.get(("humanistyczny_v1", "pl")), mine.get(("scisly_v1", "pl")))
-            if lab.kind == "none":
-                continue
-            h, s = mine[("humanistyczny_v1", "pl")], mine[("scisly_v1", "pl")]
-            text = t(f"q.label.{lab.kind}", h=frac(h.correct, h.evaluated), s=frac(s.correct, s.evaluated))
-            if lab.partial:
-                text += " · " + t("q.partial")
-            en = mine.get(("scisly_v1", "en"))
-            if en and en.evaluated and s.evaluated:
-                text += " · " + t("q.pl_en", pl=frac(s.correct, s.evaluated), en=frac(en.correct, en.evaluated))
-            lines.append(f"{model}: {text}")
+            if lab.kind != "none":
+                h, s = mine[("humanistyczny_v1", "pl")], mine[("scisly_v1", "pl")]
+                text = t(f"q.label.{lab.kind}", h=frac(h.correct, h.evaluated), s=frac(s.correct, s.evaluated))
+                if lab.partial:
+                    text += " · " + t("q.partial")
+                en = mine.get(("scisly_v1", "en"))
+                if en and en.evaluated and s.evaluated:
+                    text += " · " + t("q.pl_en", pl=frac(s.correct, s.evaluated), en=frac(en.correct, en.evaluated))
+                parts.append(text)
+            for suite in dict.fromkeys(k[0] for k in mine if k[0] not in ("humanistyczny_v1", "scisly_v1")):
+                langs = (self.suite_data.get(suite) or {}).get("suite_info", {}).get("languages") or []
+                if len(langs) == 2 and all((suite, l) in mine and mine[(suite, l)].evaluated for l in langs):
+                    a, b = mine[(suite, langs[0])], mine[(suite, langs[1])]
+                    parts.append(t("q.versions", name=CUSTOM_NAMES.get(suite, suite), main=langs[0].upper(),
+                                   a=frac(a.correct, a.evaluated), en=frac(b.correct, b.evaluated)))
+            if parts:
+                lines.append(f"{model}: " + " · ".join(parts))
         self.label_line.configure(text="\n".join(lines))
 
     def _show_breakdown(self) -> None:

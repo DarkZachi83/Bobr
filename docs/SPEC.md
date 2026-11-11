@@ -1045,5 +1045,12 @@ szuka fragmentu tekstu, a opcja zawarta w dłuższej znalezionej („是” w �
 **Wynik.** Własne testy nie wchodzą do etykiety humanistyczny/ścisły (ta dotyczy tylko testów standardowych);
 mają osobny wynik w ułamkach według kategorii. Przy dwóch językach drugi pokazuje tłumaczenie z pierwszego.
 
+**Uruchamianie** (PR 3). Zakładka Jakość: pod testami standardowymi „Moje testy” – każda wersja
+językowa osobno („Mój test (KO)”, „Mój test (EN)”), domyślnie niezaznaczone; lista odświeża się po zapisie
+w edytorze. Plan i prognoza liczą rzeczywistą liczbę zadań (nie 15 na test) i zadania w Pythonie z danych
+testu. Przy wersji angielskiej okno pokazuje pytanie w języku głównym testu. Wynik własnego testu w dwóch
+wersjach – obok siebie w etykiecie („Mój test: KO 9/15, EN 12/15”). Historia i eksport bez zmian (wersja
+testu w każdym przebiegu); usunięty test w historii – pod swoim id. `tools/test_jakosci.py --tests moj_test/ko`.
+
 **PR-y:** 1) logika: zapis, walidacja, import/eksport, podgląd; 2) okno edytora; 3) uruchamianie własnych
 testów i Historia; 4) README, SPEC, wersja 0.11.0.

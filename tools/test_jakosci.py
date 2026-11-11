@@ -6,6 +6,7 @@ zadania z kodem nieocenione.
 
   python tools/test_jakosci.py gemma2:9b
   python tools/test_jakosci.py gemma2:9b --attempts 3 --tests humanistyczny_v1/pl scisly_v1/pl
+  python tools/test_jakosci.py gemma2:9b --tests moj_test/ko moj_test/en   # własny test z edytora
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from aibobr import __version__  # noqa: E402
 from aibobr.app.bench_db import BenchDb  # noqa: E402
 from aibobr.bench.ollama import OllamaBench  # noqa: E402
+from aibobr.quality.custom import CustomSuites  # noqa: E402
 from aibobr.quality import score, suites  # noqa: E402
 from aibobr.quality.runner import QualityRunner  # noqa: E402
 from aibobr.quality.sandbox import Sandbox  # noqa: E402
@@ -44,7 +46,7 @@ def printer(e: dict) -> None:
         print(f"Ollama {e['version']} · modele: {', '.join(e['models'])} · próby: {e['attempts']} · "
               f"testy: {', '.join(e['tests'])} · piaskownica: {e['sandbox']}")
     elif kind == "q_run":
-        print(f"\n== {e['model']} – {e['name'].get('pl')} ({e['lang']})")
+        print(f"\n== {e['model']} – {e['name'].get('pl') or next(iter(e['name'].values()))} ({e['lang']})")
     elif kind == "q_task_done":
         t = e["result"]
         fmt = " · niezgodny format" if t.correct and t.format_compliant is False else ""
@@ -72,7 +74,9 @@ def main(argv=None) -> int:
     loaded, tests = {}, []
     for item in a.tests:
         suite_id, lang = item.split("/")
-        loaded.setdefault(suite_id, suites.load(suite_id))
+        if suite_id not in loaded:      # własny test – z folderu quality/ w katalogu ustawień (edytor 0.11)
+            loaded[suite_id] = (suites.load(suite_id) if suite_id in suites.STANDARD
+                                else CustomSuites().load(suite_id))
         tests.append((loaded[suite_id], lang))
     bench = OllamaBench(a.host)
     runner = QualityRunner(bench, Sandbox(), BenchDb(a.out / "benchmarks.sqlite"),

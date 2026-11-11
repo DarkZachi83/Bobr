@@ -156,8 +156,9 @@ class QualityRunner:
                                         lang=lang, started_at=now_iso()) if self.db is not None else None
         report({"event": "q_run", "model": model, "suite": info["id"], "lang": lang, "name": info["name"]})
         tasks = []
+        main = info["languages"][0]          # wersja angielska pokazuje w oknie pytanie w języku głównym
         for n, task in enumerate(suite["tasks"], 1):
-            translation = task["prompt"].get("pl") if lang != "pl" else None
+            translation = task["prompt"].get(main) if lang != main else None
             t = TaskResult(n, task["id"], task["category"], task["level"], lang, task["prompt"][lang], translation,
                            checks.expected_text(task["check"], lang))
             for a in range(attempts):

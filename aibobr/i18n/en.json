@@ -983,5 +983,7 @@
   "q.lang.id": "Indonesian",
   "q.ed.language": "Test language:",
   "q.ed.english": "Also in English",
-  "q.ed.form_lang": "Version:"
+  "q.ed.form_lang": "Version:",
+  "q.custom_tests": "My tests:",
+  "q.versions": "{name}: {main} {a}, EN {en}"
 }
