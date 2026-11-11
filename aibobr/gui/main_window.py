@@ -201,6 +201,7 @@ class MainWindow:
         settings = tk.Menu(bar, tearoff=False)
         settings.add_command(label=t("gui.menu.token"), command=self.set_token)
         settings.add_command(label=t("gui.menu.update_catalog"), command=self.update_catalog)
+        settings.add_command(label=t("q.ed.open"), command=lambda: self.quality.open_editor())
         settings.add_separator()
         style = tk.Menu(settings, tearoff=False)
         self.theme_var = tk.StringVar(value=self.theme)
@@ -209,6 +210,7 @@ class MainWindow:
                                   command=lambda n=name: self.change_theme(n))
         settings.add_cascade(label=t("gui.menu.theme"), menu=style)
         bar.add_cascade(label=t("gui.menu.settings"), menu=settings)
+        self.settings_menu = settings
 
         # Język na wierzchu, nie w Ustawieniach – program startuje w języku systemu, a osoba,
         # która nie zna tego języka, musi szybko znaleźć zmianę (uwaga autora).
