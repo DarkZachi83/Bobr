@@ -563,8 +563,13 @@ class GuiSmokeTest(unittest.TestCase):
         w = self.window()
         q = w.quality
         q._sandbox_obj = NoSandbox()
-        q.open_editor()
+        menu = w.settings_menu
+        entry = next(i for i in range(menu.index("end") + 1)
+                     if menu.type(i) == "command" and menu.entrycget(i, "label") == "Edytor testów…")
+        menu.invoke(entry)                                   # Ustawienia → Edytor testów…
         ed = q.editor
+        q.open_editor()
+        self.assertIs(q.editor, ed)                          # jedno okno naraz
         self.pump(seconds=0.2)
         folder = Path(self.tmp.name) / "cfg" / "quality"
         # testy standardowe: tylko do odczytu, podgląd oceny działa
