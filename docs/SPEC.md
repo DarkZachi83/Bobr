@@ -1018,7 +1018,7 @@ dozwolonych jest błędem – dzięki temu cudzy (importowany) test jest bezpiec
 **Sprawdzanie przy zapisie** (`aibobr/quality/custom.py`, `problems()`): wszystkie błędy naraz, każdy
 z zadaniem, polem i kodem komunikatu (`q.err.<kod>`); błąd blokuje zapis. Liczba musi być liczbą, ułamek
 `a/b` z b > 0, opcja poprawna musi być wśród opcji (w każdym języku), funkcja – poprawną nazwą Pythona,
-tabela testów – niepusta. Języki: pl, en albo oba. Limit 100 zadań, `max_tokens` 16–4096, plik do 1 MB.
+tabela testów – niepusta. Języki: główny i opcjonalnie angielski (niżej). Limit 100 zadań, `max_tokens` 16–4096, plik do 1 MB.
 Rozkład 5/5/5 nie jest wymagany, tylko pokazywany.
 
 **Wersje.** Zapis zmienionego testu, którego wersja ma już wyniki w bazie (`quality_suite_used`), podnosi
@@ -1030,6 +1030,17 @@ pyta: zastąpić (wersja nie cofa się i nie powtarza użytej) czy zapisać jako
 
 **Podgląd oceny bez modelu** – wklejona odpowiedź dostaje werdykt tym samym kodem co w teście; kod Pythona
 z odpowiedzi tylko w gotowej piaskownicy (inaczej „nieocenione”).
+
+**Języki** (decyzja autora 11.11.2026, wariant B). Test ma **język główny** – dowolny, kod ISO 639
+(`lt`, `ko`, `zh`…; w edytorze lista ok. 40 popularnych z nazwami, kod spoza listy z importu też działa) –
+i opcjonalnie **wersję angielską**: `languages` = `[główny]` albo `[główny, "en"]`. Modele uczą się
+głównie po angielsku, więc zadania ścisłe mogą wypaść lepiej po angielsku niż we własnym języku
+(wyjątki: modele uczone mocno w danym języku, np. Qwen po chińsku, Bielik po polsku) – dlatego
+użytkownik wybiera przy uruchomieniu, którą wersję (albo obie) puścić, a różnica pokazuje, ile model traci
+we własnym języku. Testy językowe (ortografia, fleksja) – tylko w języku głównym. Formularz pokazuje jeden
+język naraz (przełącznik „Wersja”), druga wersja zostaje w danych. Ocena działa w każdym piśmie: kropka
+końcowa także „。”, „．”, „।”; wybór z opcji w piśmie bez spacji (chiński, japoński, koreański, tajski…)
+szuka fragmentu tekstu, a opcja zawarta w dłuższej znalezionej („是” w „不是”) się nie liczy.
 
 **Wynik.** Własne testy nie wchodzą do etykiety humanistyczny/ścisły (ta dotyczy tylko testów standardowych);
 mają osobny wynik w ułamkach według kategorii. Przy dwóch językach drugi pokazuje tłumaczenie z pierwszego.

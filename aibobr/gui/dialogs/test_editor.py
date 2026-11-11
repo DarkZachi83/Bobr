@@ -87,6 +87,25 @@ def per_lang(value, lang: str):
     return value.get(lang) if isinstance(value, dict) else value
 
 
+def lang_label(code: str) -> str:
+    """„koreański (KO)”; kod spoza listy – sam kod."""
+    key = f"q.lang.{code}"
+    return f"{t(key)} ({code.upper()})" if has_key(key) else code.upper()
+
+
+def empty_value(kind: str, key: str):
+    return "" if (kind, key) == ("choice", "expected") else []
+
+
+def put_lang(spec: dict, key: str, value, langs: list[str], lang: str) -> None:
+    """Wartość jednego języka; pozostałe zostają (formularz pokazuje jeden język naraz – wariant B)."""
+    current = spec.get(key)
+    values = {l: per_lang(current, l) if current is not None else None for l in langs}
+    values = {l: empty_value(spec["type"], key) if v is None else v for l, v in values.items()}
+    values[lang] = value
+    spec[key] = values[langs[0]] if len(langs) == 1 else values
+
+
 class TestEditor(tk.Toplevel):
     def __init__(self, master, store: CustomSuites, sandbox=None, busy: Callable[[], bool] = lambda: False,
                  on_change: Callable[[], None] = lambda: None):
@@ -112,6 +131,7 @@ class TestEditor(tk.Toplevel):
         self.index: Optional[int] = None          # wybrane zadanie
         self.raw: dict[tuple[str, str], tuple[str, str]] = {}   # (zadanie, pole) → (tekst, kod błędu)
         self.inputs: dict[str, object] = {}
+        self._shown_lang = ""                     # język widoczny w formularzu (przełącznik – wariant B)
         self.list_rows: dict[str, tuple[str, str]] = {}
         self._loading = False
 
@@ -151,16 +171,19 @@ class TestEditor(tk.Toplevel):
         head.pack(fill="x")
         ttk.Label(head, text=t("q.ed.name")).pack(side="left")
         self.name_var = tk.StringVar()
-        self.name_entry = ttk.Entry(head, textvariable=self.name_var, width=36)
+        self.name_entry = ttk.Entry(head, textvariable=self.name_var, width=30)
         self.name_entry.pack(side="left", padx=(6, 14))
-        ttk.Label(head, text=t("q.ed.languages")).pack(side="left")
-        self.lang_vars = {lang: tk.BooleanVar() for lang in custom.LANGUAGES}
-        self.lang_checks = {}
-        for lang in custom.LANGUAGES:
-            c = ttk.Checkbutton(head, text=lang.upper(), variable=self.lang_vars[lang],
-                                command=lambda l=lang: self._toggle_lang(l))
-            c.pack(side="left", padx=3)
-            self.lang_checks[lang] = c
+        ttk.Label(head, text=t("q.ed.language")).pack(side="left")
+        self.lang_codes = sorted(custom.COMMON_LANGUAGES, key=lambda c: lang_label(c).casefold())
+        self.main_lang = ttk.Combobox(head, values=[lang_label(c) for c in self.lang_codes], state="readonly",
+                                      width=20)
+        self.main_lang.pack(side="left", padx=(6, 10))
+        self.main_lang.bind("<<ComboboxSelected>>", lambda e: self._change_main_lang())
+        self.english_var = tk.BooleanVar()
+        self.english_check = ttk.Checkbutton(head, text=t("q.ed.english"), variable=self.english_var,
+                                             command=self._toggle_english)
+        self.english_check.pack(side="left")
+        self.form_lang = tk.StringVar()
         self.info = ttk.Label(main, text="", foreground=COLORS["muted"])
         self.info.pack(anchor="w", pady=(4, 6))
 
@@ -212,7 +235,7 @@ class TestEditor(tk.Toplevel):
         line = ttk.Frame(prev)
         line.pack(fill="x")
         ttk.Label(line, text=t("q.ed.preview"), font=("TkDefaultFont", 10, "bold")).pack(side="left")
-        self.preview_lang = ttk.Combobox(line, values=list(custom.LANGUAGES), state="readonly", width=4)
+        self.preview_lang = ttk.Combobox(line, values=[], state="readonly", width=4)
         self.preview_lang.pack(side="right")
         self.preview_answer = self._text_widget(prev, 4)
         self.preview_answer.pack(fill="both", expand=True, pady=(2, 2))
@@ -308,20 +331,19 @@ class TestEditor(tk.Toplevel):
         self._loading = True
         if data is None:
             self.name_var.set("")
-            for var in self.lang_vars.values():
-                var.set(False)
+            self.main_lang.set("")
+            self.english_var.set(False)
         else:
             self.name_var.set(suite_name(self.data))
-            langs = self.data["suite_info"]["languages"]
-            for lang, var in self.lang_vars.items():
-                var.set(lang in langs)
-            self.preview_lang.configure(values=langs)
-            self.preview_lang.set(langs[0])
+            self.form_lang.set(self.data["suite_info"]["languages"][0])
+            self._show_langs()
         self._loading = False
         state = ["disabled"] if self.readonly else ["!disabled"]
         self.name_entry.state(state)
-        for c in self.lang_checks.values():
-            c.state(state)
+        self.main_lang.state(state)
+        self.english_check.state(state)
+        if not self.readonly and self.data["suite_info"]["languages"][0] == custom.ENGLISH:
+            self.english_check.state(["disabled"])
         for key in ("add", "remove", "up", "down"):
             self.task_buttons[key].state(state)
         self.save_button.state(state)
@@ -362,7 +384,7 @@ class TestEditor(tk.Toplevel):
         name = self.ask_name(t("q.ed.new"), t("q.ed.new_name"))
         if not name or not name.strip():
             return
-        lang = current_language() if current_language() in custom.LANGUAGES else "pl"
+        lang = current_language() if current_language() in custom.COMMON_LANGUAGES else "pl"
         data = custom.new_suite(custom.unique_id(name, self._taken()), name.strip(), [lang])
         data["tasks"].append(custom.new_task(data))
         self._show_suite(data, clean=False)
@@ -443,38 +465,91 @@ class TestEditor(tk.Toplevel):
         self.status.configure(text=t("q.ed.exported", path=str(target)))
 
     # ------------------------------------------------------------------ języki
-    def _toggle_lang(self, lang: str) -> None:
-        if self._loading or self.data is None or self.readonly:
-            return
+    def _show_langs(self) -> None:
+        langs = self.data["suite_info"]["languages"]
+        main = langs[0]
+        if main not in self.lang_codes:                        # kod spoza listy (np. z importu)
+            self.lang_codes.append(main)
+            self.main_lang.configure(values=[lang_label(c) for c in self.lang_codes])
+        self.main_lang.set(lang_label(main))
+        self.english_var.set(len(langs) > 1)
+        if self.form_lang.get() not in langs:
+            self.form_lang.set(main)
+        self.preview_lang.configure(values=[l.upper() for l in langs])
+        if self.preview_lang.get().lower() not in langs:
+            self.preview_lang.set(self.form_lang.get().upper())
+
+    def _set_languages(self, langs: list[str], rename: Optional[tuple[str, str]] = None) -> None:
+        """Nowy zestaw języków testu: [główny] albo [główny, en]. rename – zmiana języka głównego."""
         self._commit()
         info = self.data["suite_info"]
-        langs = [l for l in custom.LANGUAGES if self.lang_vars[l].get()]
-        if not langs:                                    # co najmniej jeden język
-            self.lang_vars[lang].set(True)
-            return
+        old = info["languages"]
         name = self.name_var.get().strip()
         info["languages"] = langs
         info["name"] = {l: name for l in langs}
         for task in self.data["tasks"]:
             prompt = task.setdefault("prompt", {})
+            spec = task.get("check") or {}
+            keys = PER_LANG.get(spec.get("type"), ())
+            if rename:
+                src, dst = rename
+                if src in prompt:
+                    prompt[dst] = prompt.pop(src)
+                for key in keys:
+                    if isinstance(spec.get(key), dict) and src in spec[key]:
+                        spec[key][dst] = spec[key].pop(src)
             for l in langs:
                 prompt.setdefault(l, "")
             for l in list(prompt):
                 if l not in langs:
                     del prompt[l]
-            spec = task.get("check") or {}
-            for key in PER_LANG.get(spec.get("type"), ()):
+            for key in keys:
                 value = spec.get(key)
-                if isinstance(value, dict):
-                    for l in list(value):
-                        if l not in langs:
-                            del value[l]
-                    if len(langs) == 1:
-                        empty = "" if (spec["type"], key) == ("choice", "expected") else []
-                        spec[key] = value.get(langs[0], empty)
-        self.preview_lang.configure(values=langs)
-        if self.preview_lang.get() not in langs:
-            self.preview_lang.set(langs[0])
+                if value is None:
+                    continue
+                if not isinstance(value, dict):          # wspólna wartość – rozpisana na języki
+                    value = {l: copy.deepcopy(value) for l in old}
+                    if rename:
+                        value = {rename[1] if l == rename[0] else l: v for l, v in value.items()}
+                for l in list(value):
+                    if l not in langs:
+                        del value[l]
+                for l in langs:
+                    value.setdefault(l, empty_value(spec["type"], key))
+                spec[key] = value[langs[0]] if len(langs) == 1 else value
+        self._show_langs()
+        self.english_check.state(["disabled"] if langs[0] == custom.ENGLISH else ["!disabled"])
+        self._show_task(self.index)
+
+    def _change_main_lang(self) -> None:
+        if self._loading or self.data is None or self.readonly:
+            return
+        labels = {lang_label(c): c for c in self.lang_codes}
+        new = labels.get(self.main_lang.get())
+        langs = self.data["suite_info"]["languages"]
+        if new is None or new == langs[0]:
+            return
+        if new == custom.ENGLISH:                    # angielski jako główny – bez osobnej wersji angielskiej
+            if len(langs) > 1:
+                self._set_languages([custom.ENGLISH])
+            else:
+                self._set_languages([custom.ENGLISH], rename=(langs[0], custom.ENGLISH))
+            return
+        self._set_languages([new] + langs[1:], rename=(langs[0], new))
+
+    def _toggle_english(self) -> None:
+        if self._loading or self.data is None or self.readonly:
+            return
+        main = self.data["suite_info"]["languages"][0]
+        if main == custom.ENGLISH:
+            self.english_var.set(False)
+            return
+        self._set_languages([main, custom.ENGLISH] if self.english_var.get() else [main])
+
+    def _switch_form_lang(self) -> None:
+        """Przełącznik języka formularza (wariant B): jeden język naraz, drugi zostaje w danych."""
+        self._commit()                                  # zapisuje język, który był widoczny (_shown_lang)
+        self.preview_lang.set(self.form_lang.get().upper())
         self._show_task(self.index)
 
     # ------------------------------------------------------------------ zadania
@@ -596,9 +671,18 @@ class TestEditor(tk.Toplevel):
         sb = ttk.Entry(row, textvariable=mv, width=7)
         sb.pack(side="left", padx=6)
         self.inputs["max_tokens"] = (mv, sb)
-        for lang in langs:
-            self._textbox(f"prompt.{lang}", field_label(f"prompt.{lang}"),
-                          str((task.get("prompt") or {}).get(lang, "")), height=4)
+        if self.form_lang.get() not in langs:
+            self.form_lang.set(langs[0])
+        lang = self._shown_lang = self.form_lang.get()
+        if len(langs) > 1:
+            switch = ttk.Frame(self.form)
+            switch.pack(anchor="w", pady=(10, 0))
+            ttk.Label(switch, text=t("q.ed.form_lang")).pack(side="left", padx=(0, 6))
+            for l in langs:
+                ttk.Radiobutton(switch, text=lang_label(l), value=l, variable=self.form_lang,
+                                command=self._switch_form_lang).pack(side="left", padx=(0, 8))
+        self._textbox(f"prompt.{lang}", field_label(f"prompt.{lang}"),
+                      str((task.get("prompt") or {}).get(lang, "")), height=4)
         spec = task.get("check") or {}
         kind = spec.get("type")
         self._label(t("q.ed.field.check.type"))
@@ -612,7 +696,7 @@ class TestEditor(tk.Toplevel):
         if hint:
             ttk.Label(self.form, text=hint, foreground=COLORS["muted"], wraplength=420, justify="left").pack(
                 anchor="w", pady=(2, 0))
-        self._check_fields(tid, spec, langs)
+        self._check_fields(tid, spec, langs, lang)
         if self.readonly:
             for var, widget in self.inputs.values():
                 if isinstance(widget, tk.Text):
@@ -620,30 +704,23 @@ class TestEditor(tk.Toplevel):
                 else:
                     widget.state(["disabled"])
 
-    def _check_fields(self, tid: str, spec: dict, langs: list[str]) -> None:
+    def _check_fields(self, tid: str, spec: dict, langs: list[str], lang: str) -> None:
         kind = spec.get("type")
-        two = len(langs) > 1
-
-        def suffix(lang):
-            return f" ({lang.upper()})" if two else ""
+        suffix = f" ({lang.upper()})" if len(langs) > 1 else ""
         if kind == "text":
-            for lang in langs:
-                self._textbox(f"expected.{lang}", t("q.ed.field.check.expected") + suffix(lang),
-                              "\n".join(per_lang(spec.get("expected"), lang) or []))
-            for lang in langs:
-                self._textbox(f"sentence.{lang}", t("q.ed.field.check.sentence") + suffix(lang),
-                              "\n".join(per_lang(spec.get("sentence"), lang) or []), height=2)
+            self._textbox(f"expected.{lang}", t("q.ed.field.check.expected") + suffix,
+                          "\n".join(per_lang(spec.get("expected"), lang) or []))
+            self._textbox(f"sentence.{lang}", t("q.ed.field.check.sentence") + suffix,
+                          "\n".join(per_lang(spec.get("sentence"), lang) or []), height=2)
         elif kind == "number":
             self._entry("expected", t("q.ed.field.check.expected"), spec.get("expected"))
             self._entry("tolerance", t("q.ed.field.check.tolerance"), spec.get("tolerance"))
         elif kind == "fraction":
             self._entry("expected", t("q.ed.field.check.expected"), spec.get("expected"))
         elif kind == "choice":
-            for lang in langs:
-                self._textbox(f"options.{lang}", t("q.ed.field.check.options") + suffix(lang),
-                              "\n".join(per_lang(spec.get("options"), lang) or []))
-                self._entry(f"expected.{lang}", t("q.ed.field.check.expected") + suffix(lang),
-                            per_lang(spec.get("expected"), lang))
+            self._textbox(f"options.{lang}", t("q.ed.field.check.options") + suffix,
+                          "\n".join(per_lang(spec.get("options"), lang) or []))
+            self._entry(f"expected.{lang}", t("q.ed.field.check.expected") + suffix, per_lang(spec.get("expected"), lang))
         elif kind == "json":
             raw = self.raw.get((tid, "check.expected"))
             text = raw[0] if raw else json.dumps(spec.get("expected"), ensure_ascii=False, indent=1)
@@ -685,23 +762,23 @@ class TestEditor(tk.Toplevel):
         task["level"] = levels.get(self._get("level"), task.get("level"))
         mt = self._get("max_tokens").strip()
         task["max_tokens"] = int(mt) if mt.isdigit() else mt
-        task["prompt"] = {lang: self._get(f"prompt.{lang}").strip() for lang in langs}
+        lang = self._shown_lang
+        prompt = task.setdefault("prompt", {})
+        prompt[lang] = self._get(f"prompt.{lang}").strip()
+        for l in langs:
+            prompt.setdefault(l, "")
         spec = task.get("check") or {}
         kind = spec.get("type")
         if check and kind in CHECK_TYPES:
-            self._commit_check(tid, spec, kind, langs)
+            self._commit_check(tid, spec, kind, langs, lang)
         self.task_tree.item(str(self.index), values=self._task_values(task))
         self._update_info()
 
-    def _commit_check(self, tid: str, spec: dict, kind: str, langs: list[str]) -> None:
-        def collapse(values: dict):
-            return values[langs[0]] if len(langs) == 1 else values
+    def _commit_check(self, tid: str, spec: dict, kind: str, langs: list[str], lang: str) -> None:
         if kind == "text":
-            spec["expected"] = collapse({l: lines(self._get(f"expected.{l}")) for l in langs})
-            sentence = {l: lines(self._get(f"sentence.{l}")) for l in langs}
-            if any(sentence.values()):
-                spec["sentence"] = collapse(sentence)
-            else:
+            put_lang(spec, "expected", lines(self._get(f"expected.{lang}")), langs, lang)
+            put_lang(spec, "sentence", lines(self._get(f"sentence.{lang}")), langs, lang)
+            if not any(per_lang(spec["sentence"], l) for l in langs):
                 spec.pop("sentence", None)
         elif kind == "number":
             spec["expected"] = parse_number(self._get("expected"))
@@ -713,8 +790,8 @@ class TestEditor(tk.Toplevel):
         elif kind == "fraction":
             spec["expected"] = self._get("expected").replace(" ", "").strip()
         elif kind == "choice":
-            spec["options"] = collapse({l: lines(self._get(f"options.{l}")) for l in langs})
-            spec["expected"] = collapse({l: self._get(f"expected.{l}").strip() for l in langs})
+            put_lang(spec, "options", lines(self._get(f"options.{lang}")), langs, lang)
+            put_lang(spec, "expected", self._get(f"expected.{lang}").strip(), langs, lang)
         elif kind == "json":
             text = self._get("json")
             try:
@@ -738,12 +815,12 @@ class TestEditor(tk.Toplevel):
         found = [Problem(tid, field, code) for (tid, field), (_, code) in sorted(self.raw.items())]
         return found + custom.problems(self.data)
 
-    def _set_problems(self, found: list[Problem]) -> None:
+    def _set_problems(self, found: list[Problem], checked: bool = False) -> None:
         self.problems = list(found)
         self.problem_list.delete(0, "end")
         for p in self.problems:
             self.problem_list.insert("end", problem_text(p))
-        if not self.problems and self.data is not None and not self.readonly:
+        if checked and not self.problems and self.data is not None and not self.readonly:
             self.problem_list.insert("end", t("q.ed.no_problems"))
 
     def _goto_problem(self) -> None:
@@ -796,7 +873,7 @@ class TestEditor(tk.Toplevel):
             self.preview_result.configure(text=t("q.ed.preview_fix") + " " + problem_text(bad[0]))
             return
         answer = self.preview_answer.get("1.0", "end-1c")
-        lang = self.preview_lang.get() or self.data["suite_info"]["languages"][0]
+        lang = self.preview_lang.get().lower() or self.data["suite_info"]["languages"][0]
         c = custom.preview(task["check"], answer, lang, self.sandbox)
         self.preview_result.configure(text=f"{MARK[c.correct]} {t(f'q.reason.{c.reason}')}")
 

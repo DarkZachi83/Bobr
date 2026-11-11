@@ -62,11 +62,18 @@ def unwrap(text: str) -> str:
     return s
 
 
+FULL_STOPS = (".", "。", "．", "।", "။")      # kropka: łacińska, chińsko-japońska, pełnej szerokości, hindi, birmańska
+# Pisma bez spacji między słowami (albo z końcówkami doklejanymi do słowa, jak koreański):
+# chińskie, japońskie, koreańskie, tajskie, laotańskie, birmańskie, khmerskie.
+NO_SPACES = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af\u1100-\u11ff"
+                       r"\u0e00-\u0eff\u1000-\u109f\u1780-\u17ff]")
+
+
 def norm_text(text: str) -> str:
     """Porównanie tekstu: bez kropki na końcu, wielka litera na początku obojętna, spacje
     zwinięte. Znaki diakrytyczne, litery w środku i przecinki zostają – to one są oceniane."""
     s = re.sub(r"\s+", " ", unwrap(text))
-    if s.endswith("."):
+    if s.endswith(FULL_STOPS):
         s = s[:-1].rstrip()
     return s[:1].lower() + s[1:]
 
@@ -169,6 +176,23 @@ def check_fraction(answer: str, expected: str) -> Check:
     return Check(True, bare, OK if bare else FORMAT, f"{num}/{den}")
 
 
+def options_in(text: str, options: list[str]) -> list[str]:
+    """Które opcje padają w tekście. W piśmie ze spacjami – całe słowa („tak” nie w „także”);
+    w piśmie bez spacji (chiński, japoński, koreański…) – fragment tekstu, a opcja zawarta
+    w dłuższej znalezionej opcji w tym samym miejscu się nie liczy („是” w „不是”)."""
+    spans = {}
+    for o in options:
+        core = re.escape(o.strip())
+        pattern = core if NO_SPACES.search(o) else rf"(?<!\w){core}(?!\w)"
+        found = [m.span() for m in re.finditer(pattern, text, re.IGNORECASE)]
+        if found:
+            spans[o] = found
+    def covered(o):
+        return all(any(a2 <= a and b <= b2 and (a2, b2) != (a, b) for other, sp in spans.items() if other != o
+                       for a2, b2 in sp) for a, b in spans[o])
+    return [o for o in options if o in spans and not covered(o)]
+
+
 def check_choice(answer: str, expected: str, options: list[str]) -> Check:
     """Odpowiedź z zamkniętej listy (tak/nie, dni tygodnia): oceniamy, gdy w tekście pada
     dokładnie jedna z możliwych odpowiedzi."""
@@ -176,8 +200,7 @@ def check_choice(answer: str, expected: str, options: list[str]) -> Check:
     if not s:
         return Check(False, None, EMPTY)
     def mentioned(text):
-        words = {w.casefold() for w in re.findall(r"\w+", text)}
-        return [o for o in options if o.casefold() in words]
+        return options_in(text, options)
     found = mentioned(s)
     if len(found) > 1:                     # rozwiązanie krok po kroku: wynik z ostatniej linii (propozycja E)
         found = mentioned(final_line(s))

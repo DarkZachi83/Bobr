@@ -22,7 +22,14 @@ from typing import Any, Callable, Iterable, Optional
 from aibobr.quality import checks, suites
 from aibobr.quality.checks import CHECK_TYPES
 
-LANGUAGES = ("pl", "en")
+# Języki testu (decyzja autora 11.11.2026): język główny – dowolny – i opcjonalnie wersja angielska
+# („litewski → angielski”, „koreański → angielski”). Modele uczą się głównie po angielsku, więc różnica
+# między wersjami pokazuje, ile model traci we własnym języku. Testy językowe – tylko w języku głównym.
+ENGLISH = "en"
+COMMON_LANGUAGES = ("pl", "en", "de", "fr", "es", "it", "pt", "nl", "cs", "sk", "uk", "ru", "be", "lt", "lv",
+                    "et", "fi", "sv", "no", "da", "hu", "ro", "bg", "hr", "sr", "sl", "el", "tr", "ar", "he",
+                    "hi", "zh", "ja", "ko", "vi", "th", "id")
+LANG_CODE = re.compile(r"^[a-z]{2,3}$")
 MAX_TASKS = 100
 MIN_TOKENS, MAX_TOKENS = 16, 4096
 MAX_FILE_BYTES = 1_000_000
@@ -142,8 +149,7 @@ def problems(data: Any) -> list[Problem]:
     if not isinstance(info.get("version"), str) or not info["version"].strip():
         out.append(Problem(None, "suite_info.version", "missing"))
     langs = info.get("languages")
-    if not (isinstance(langs, list) and langs and len(set(langs)) == len(langs)
-            and all(lang in LANGUAGES for lang in langs)):
+    if not languages_ok(langs):
         out.append(Problem(None, "suite_info.languages", "languages"))
         langs = []
     name = info.get("name")
@@ -185,6 +191,14 @@ def problems(data: Any) -> list[Problem]:
         else:
             out += _check_problems(tid, spec, langs)
     return out
+
+
+def languages_ok(langs: Any) -> bool:
+    """[główny] albo [główny, "en"] – kod ISO 639 (2–3 małe litery); angielski tylko jako druga wersja."""
+    if not (isinstance(langs, list) and 1 <= len(langs) <= 2 and all(isinstance(l, str) and LANG_CODE.match(l)
+                                                                       for l in langs)):
+        return False
+    return len(langs) == 1 or (langs[1] == ENGLISH and langs[0] != ENGLISH)
 
 
 def level_counts(data: dict) -> dict[str, int]:

@@ -52,9 +52,20 @@ class Validation(unittest.TestCase):
         self.assertIn((None, "suite_info.id", "bad_id"), codes(sample(id="Mój test!")))
         self.assertIn((None, "suite_info.id", "standard_id"), codes(sample(id="scisly_v1")))
         self.assertIn((None, "suite_info.kind", "kind"), codes(sample(kind="science")))
-        self.assertIn((None, "suite_info.languages", "languages"), codes(sample(languages=["de"])))
+        for bad in (["en", "pl"], ["pl", "de"], ["PL"], [], ["pl", "en", "de"], ["polski"], "pl"):
+            self.assertIn((None, "suite_info.languages", "languages"), codes(sample(languages=bad)), bad)
         self.assertIn((None, "suite_info.name", "name"), codes(sample(name={"pl": "x"})))
         self.assertEqual(codes([1]), {(None, "file", "not_object")})
+
+    def test_any_main_language_with_optional_english(self):
+        for langs in (["lt"], ["ko", "en"], ["en"], ["zh", "en"], ["fil"]):
+            data = sample(languages=langs, name={l: "Test" for l in langs})
+            for task in data["tasks"]:
+                task["prompt"] = {l: "p" for l in langs}
+                for key in ("expected", "options"):
+                    if isinstance(task["check"].get(key), dict):
+                        task["check"][key] = {l: task["check"][key]["en"] for l in langs}
+            self.assertEqual(problems(data), [], langs)
 
     def test_task_errors_point_at_task_and_field(self):
         data = sample()

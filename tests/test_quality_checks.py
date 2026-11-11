@@ -4,6 +4,7 @@ import unittest
 from collections import Counter
 
 from aibobr.quality import checks as c
+from aibobr.quality.checks import FORMAT, OK, WRONG
 from aibobr.quality import suites
 
 
@@ -184,6 +185,35 @@ class PythonTest(unittest.TestCase):
         self.assertEqual(calls[0], ("f", [{"args": [1], "expected": 2}]))
         self.assertEqual(c.check("def f(x):\n    return 1", self.SPEC, run_python=lambda *a: (None, "")).reason,
                          "not_run")                                    # piaskownica odmówiła
+
+
+class OtherScripts(unittest.TestCase):
+    """Język główny testu może być dowolny (decyzja autora 11.11.2026): cyrylica, chiński, koreański."""
+
+    def test_full_stops_of_other_scripts(self):
+        from aibobr.quality.checks import check_text
+        self.assertEqual(check_text("北京。", ["北京"]).reason, OK)
+        self.assertEqual(check_text("Москва.", ["Москва"]).reason, OK)
+        self.assertEqual(check_text("москва", ["Москва"]).reason, OK)       # wielka litera na początku obojętna
+        self.assertEqual(check_text("Масква", ["Москва"]).reason, WRONG)
+
+    def test_choice_without_spaces(self):
+        from aibobr.quality.checks import check_choice
+        days = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+        self.assertEqual(check_choice("星期六", "星期六", days).reason, OK)
+        self.assertEqual(check_choice("答案是星期六。", "星期六", days).reason, FORMAT)
+        self.assertEqual(check_choice("答案是星期五", "星期六", days).reason, WRONG)
+        yes_no = ["是", "不是"]
+        self.assertEqual(check_choice("不是", "不是", yes_no).reason, OK)       # „是” w „不是” się nie liczy
+        self.assertEqual(check_choice("是", "不是", yes_no).reason, WRONG)
+        ko = ["예", "아니요"]
+        self.assertEqual(check_choice("아니요입니다", "아니요", ko).reason, FORMAT)
+
+    def test_choice_with_spaces_keeps_whole_words(self):
+        from aibobr.quality.checks import check_choice
+        self.assertEqual(check_choice("Także tak.", "tak", ["tak", "nie"]).reason, FORMAT)
+        self.assertEqual(check_choice("Да", "да", ["да", "нет"]).reason, OK)
+        self.assertEqual(check_choice("Нет, это не так", "да", ["да", "нет"]).reason, WRONG)
 
 
 if __name__ == "__main__":
