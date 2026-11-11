@@ -5,6 +5,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from aibobr.app.bench_db import BenchDb
@@ -291,7 +292,17 @@ class SessionTest(unittest.TestCase):
         return db, out, events
 
     def test_two_models_two_runs_saved(self):
-        db, out, events = self.run_session()
+        # Faza długiego kontekstu trwa tu kilkadziesiąt ms, a próbnik działa co 20 ms – na wolniejszej maszynie
+        # (Windows w CI: zegar co ~16 ms) zdarzało się, że nie trafiła w nią żadna próbka. Próbka przy każdej
+        # zmianie fazy czyni test niezależnym od tempa maszyny; w programie fazy trwają sekundy.
+        original = telemetry.Sampler.set_phase
+
+        def set_phase(sampler, phase, run_id=None, task_no=None):
+            original(sampler, phase, run_id, task_no)
+            if phase != "idle":
+                sampler.sample_once()
+        with mock.patch.object(telemetry.Sampler, "set_phase", set_phase):
+            db, out, events = self.run_session()
         self.assertEqual(out["status"], "finished")
         session = db.sessions()[0]
         self.assertEqual((session["status"], session["run_count"], session["runs_per_model"]), ("finished", 4, 2))
