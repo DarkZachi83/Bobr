@@ -557,6 +557,113 @@ class GuiSmokeTest(unittest.TestCase):
         q.delete_history()
         self.assertEqual(q.htable.get_children(), ())
 
+    def test_quality_test_editor(self):
+        import json
+        from tests.test_quality_runner import NoSandbox
+        w = self.window()
+        q = w.quality
+        q._sandbox_obj = NoSandbox()
+        q.open_editor()
+        ed = q.editor
+        self.pump(seconds=0.2)
+        folder = Path(self.tmp.name) / "cfg" / "quality"
+        # testy standardowe: tylko do odczytu, podgląd oceny działa
+        rows = {v: k for k, v in ed.list_rows.items()}
+        ed.tests.selection_set(rows[("std", "scisly_v1")])
+        self.pump(lambda: ed.data is not None, 2)
+        self.assertTrue(ed.readonly)
+        self.assertIn("disabled", ed.save_button.state())
+        self.assertIn("tylko do odczytu", ed.info.cget("text"))
+        ed.preview_answer.insert("1.0", "17 × 23 = 391")
+        ed.run_preview()
+        self.assertEqual(ed.preview_result.cget("text"),
+                         "✓ poprawnie, ale nie zachowano wymaganego formatu odpowiedzi")
+        # nowy test: błędy blokują zapis i wskazują zadanie i pole
+        ed.ask_name = lambda title, initial: "Mój test"
+        ed.new_suite()
+        self.assertEqual((ed.data["suite_info"]["id"], len(ed.data["tasks"])), ("moj_test", 1))
+        self.assertFalse(ed.save())
+        texts = ed.problem_list.get(0, "end")
+        self.assertIn("T1 · Kategoria – brak wartości", texts)
+        self.assertIn("T1 · Treść zadania (PL) – brak treści zadania", texts)
+        self.assertFalse(folder.exists() and any(folder.iterdir()))
+        # wypełnienie: liczba
+        ed.inputs["category"][0].set("rachunki")
+        ed.inputs["prompt.pl"][1].insert("1.0", "Ile to 6 × 7? Podaj tylko liczbę.")
+        ed.inputs["type"][0].set("liczba")
+        ed._change_type()
+        ed.inputs["expected"][0].set("42")
+        self.assertTrue(ed.save())
+        saved = json.loads((folder / "moj_test.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["tasks"][0]["check"], {"type": "number", "expected": 42})
+        self.assertIn("Zapisano (wersja 1)", ed.status.cget("text"))
+        # drugie zadanie: Python z tabelą przypadków, błąd składni wiersza
+        ed.add_task()
+        self.assertEqual(ed.data["tasks"][1]["id"], "T2")
+        ed.inputs["category"][0].set("kod")
+        ed.inputs["prompt.pl"][1].insert("1.0", "Napisz add(a, b).")
+        ed.inputs["type"][0].set("kod Pythona")
+        ed._change_type()
+        ed.inputs["function"][0].set("add")
+        ed.inputs["tests"][1].insert("1.0", "[1, 2] -> 3\n[0, 0] => 0")
+        self.assertFalse(ed.save())
+        self.assertIn("T2 · Przypadki testowe – nie da się odczytać wiersza – zapis: [argumenty] -> wynik, w JSON",
+                      ed.problem_list.get(0, "end"))
+        ed.inputs["tests"][1].delete("1.0", "end")
+        ed.inputs["tests"][1].insert("1.0", "[1, 2] -> 3\n[\"a\", \"b\"] -> \"ab\"")
+        ed.preview_answer.delete("1.0", "end")
+        ed.preview_answer.insert("1.0", "def add(a, b):\n    return a + b")
+        ed.run_preview()
+        self.assertIn("nieoceniony", ed.preview_result.cget("text"))           # bez piaskownicy – nie uruchamia
+        # angielski: drugi język dochodzi do treści i do błędów
+        ed.lang_vars["en"].set(True)
+        ed._toggle_lang("en")
+        self.assertFalse(ed.save())
+        self.assertIn("T1 · Treść zadania (EN) – brak treści zadania", ed.problem_list.get(0, "end"))
+        ed.lang_vars["en"].set(False)
+        ed._toggle_lang("en")
+        q.running = True                                                     # w trakcie pomiaru – bez zapisu
+        messages = []
+        ed.inform = messages.append
+        self.assertFalse(ed.save())
+        self.assertIn("Trwa test jakości", messages[0])
+        q.running = False
+        self.assertTrue(ed.save())
+        saved = json.loads((folder / "moj_test.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["tasks"][1]["check"]["tests"][1], {"args": ["a", "b"], "expected": "ab"})
+        # wersja rośnie tylko, gdy ta wersja ma już wyniki
+        db = w.c.bench_db
+        qs = db.start_quality_session(started_at="2026-11-11T10:00:00+01:00", attempts=1)
+        db.start_quality_run(qs, model="m", suite="moj_test", suite_version="1", lang="pl", started_at="x")
+        ed.store = w.c.custom_suites
+        ed.inputs["function"][0].set("add2")
+        self.assertTrue(ed.save())
+        self.assertIn("Zapisano (wersja 2)", ed.status.cget("text"))
+        # eksport, import jako kopia, kopia testu standardowego
+        out = Path(self.tmp.name) / "eksport.json"
+        ed.export_suite(str(out))
+        ed.ask_replace = lambda name: False
+        ed.import_suite(str(out))
+        self.assertEqual(ed.saved_id, "moj_test_2")
+        ed.tests.selection_set(next(k for k, v in ed.list_rows.items() if v == ("std", "humanistyczny_v1")))
+        self.pump(lambda: ed.readonly, 2)
+        ed.ask_name = lambda title, initial: initial
+        ed.copy_suite()
+        self.assertEqual(ed.data["suite_info"]["id"], "kopia_test_humanistyczny")
+        self.assertEqual(len(ed.data["tasks"]), 15)
+        self.assertTrue(ed.save())
+        self.assertEqual(sorted(p.name for p in folder.iterdir()),
+                         ["kopia_test_humanistyczny.json", "moj_test.json", "moj_test_2.json"])
+        # niezapisane zmiany przy zamykaniu: „Anuluj” zostawia okno
+        ed.inputs["category"][0].set("inna")
+        ed.ask_save = lambda: None
+        ed.close()
+        self.assertTrue(ed.winfo_exists())
+        ed.ask_save = lambda: False
+        ed.close()
+        self.pump(seconds=0.1)
+        self.assertFalse(ed.winfo_exists())
+
     def test_benchmark_tab_finds_models_and_remembers(self):
         from aibobr.scan.model import FoundModel, Kind, ScanReport
         calls = []

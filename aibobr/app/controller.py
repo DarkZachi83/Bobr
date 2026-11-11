@@ -304,6 +304,14 @@ class AppController:
             self._bench_db.prune_telemetry(self.settings.get("telemetry_retention_days"))
         return self._bench_db
 
+    @property
+    def custom_suites(self):
+        """Własne testy jakości – folder quality/ obok zapisanych modeli (edytor testów 0.11)."""
+        from aibobr.quality.custom import CustomSuites
+        db = self.bench_db
+        base = self.saved.path.parent / "quality" if self.saved is not None else None
+        return CustomSuites(base, used=db.quality_suite_used if db is not None else None)
+
     def bench_suite(self) -> dict:
         import json
         from aibobr import resources
