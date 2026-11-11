@@ -251,7 +251,23 @@ speaks only about these tests, e.g. *"In these tests it did better on text tasks
 *"…did similarly in both"*. Fifteen tasks are a short indicative test, not a verdict on the model's
 general abilities. Bielik-Minitron 7B on the author's laptop: humanities 11/15, science 12/15 (Polish).
 Results go to the **History** tab (details, export to a folder with CSV files and `manifest.json`,
-delete) and do not affect the speed verdict. Your own tests (with an editor) come in a later version.
+delete) and do not affect the speed verdict.
+
+**Your own tests – the test editor.** *Settings → Test editor…* (or the button in the Quality tab) opens a
+window where you write your own tests: tasks, difficulty, category and how the answer is checked – text,
+number, fraction, a choice from options, JSON, Python code (function name plus `arguments -> result` cases)
+or manual grading. Every error points at its task and field and blocks saving; a **grading preview** grades
+a pasted answer with the same code as the test, without a model. The standard tests stay read-only – *Copy
+as my test* gives you an editable copy. A test has a **main language** – any of about 40 (Lithuanian,
+Korean, Chinese…) – and optionally an **English version**: most models learn mostly in English, so maths and
+logic may go better in English than in your language (models trained heavily in one language – Qwen in
+Chinese, Bielik in Polish – are the exception). Pick one version or both in the Quality tab; with both, the
+result shows them side by side ("My test: KO 9/15, EN 12/15"). Language tasks (spelling, inflection) belong
+only in the main language. A test file **never contains code** – only the model's code runs, in the sandbox
+– so a test you import from someone else is safe. Changing a test that already has results raises its
+version; History keeps its own copy of the tasks. Import and export as one `.json` file; tests live in
+`~/.config/ai-bobr/quality/` (`%APPDATA%\AI-Bobr\quality\` on Windows). Your own tests are not part of the
+humanities/science label.
 
 ### Models on your disk
 
@@ -277,6 +293,7 @@ python tools/try_detection.py [--json]        # what it detects on this PC (JSON
 python tools/calibrate.py                     # predictions vs. real memory use in Ollama
 python tools/pomiar_predkosci.py <model> [--runs 3]   # speed benchmark from the terminal (separate database)
 python tools/test_jakosci.py <model> [--attempts 3]   # quality tests from the terminal (separate database)
+python tools/test_jakosci.py <model> --tests my_test/ko my_test/en   # your own test from the editor
 python main.py --fake-hw tests/fake_hardware/windows_amd_rx7900xtx.json   # pretend hardware
 python tools/build_catalog.py                 # rebuild the model list from catalog_sources.txt
 python tools/build_exe.py                     # PyInstaller build (CI does this for v* tags)
@@ -534,8 +551,23 @@ tylko o tych testach, np. *„W tych testach lepiej wypadł w zadaniach tekstowy
 *„…wypadł podobnie w obu”*. Piętnaście zadań to krótki test orientacyjny, a nie werdykt o ogólnych
 zdolnościach modelu. Bielik-Minitron 7B na laptopie autora: humanistyczny 11/15, ścisły 12/15 (po
 polsku). Wyniki trafiają do zakładki **Historia** (szczegóły, eksport do folderu z plikami CSV i
-`manifest.json`, usuwanie) i nie wpływają na werdykt prędkości. Własne testy (z edytorem) – w kolejnej
-wersji.
+`manifest.json`, usuwanie) i nie wpływają na werdykt prędkości.
+
+**Własne testy – edytor testów.** *Ustawienia → Edytor testów…* (albo przycisk w zakładce Jakość) otwiera
+okno, w którym piszesz własne testy: zadania, poziom trudności, kategorię i sposób sprawdzenia odpowiedzi –
+tekst, liczba, ułamek, wybór z opcji, JSON, kod Pythona (nazwa funkcji i przypadki `argumenty -> wynik`)
+albo ocena ręczna. Każdy błąd wskazuje zadanie i pole i blokuje zapis; **podgląd oceny** ocenia wklejoną
+odpowiedź tym samym kodem co test, bez modelu. Testy standardowe są tylko do odczytu – *Utwórz kopię jako
+mój test* daje kopię do edycji. Test ma **język główny** – dowolny z ok. 40 (litewski, koreański,
+chiński…) – i opcjonalnie **wersję angielską**: większość modeli uczy się głównie po angielsku, więc
+matematyka i logika mogą wypaść lepiej po angielsku niż w Twoim języku (wyjątek to modele uczone mocno
+w jednym języku – Qwen po chińsku, Bielik po polsku). W zakładce Jakość wybierasz jedną wersję albo obie;
+przy obu wynik pokazuje je obok siebie („Mój test: KO 9/15, EN 12/15”). Zadania językowe (ortografia,
+fleksja) mają sens tylko w języku głównym. Plik testu **nigdy nie zawiera kodu** – uruchamiany jest tylko
+kod modelu, w piaskownicy – więc test zaimportowany od kogoś innego jest bezpieczny. Zmiana testu, który ma
+już wyniki, podnosi jego wersję; Historia ma własną kopię zadań. Import i eksport – jeden plik `.json`;
+testy leżą w `~/.config/ai-bobr/quality/` (na Windowsie `%APPDATA%\AI-Bobr\quality\`). Własne testy nie
+wchodzą do etykiety humanistyczny/ścisły.
 
 ### Modele na dysku
 
@@ -556,7 +588,7 @@ się z internetem sam z siebie. Sprawdzany model zawsze pochodzi z Twojego linku
 
 Polecenia jak w części angielskiej (testy, `tools/try_source.py`, `tools/try_detection.py`,
 `tools/pomiar_predkosci.py` – benchmark prędkości z terminala, do osobnej bazy,
-`tools/test_jakosci.py` – testy jakości z terminala, do osobnej bazy,
+`tools/test_jakosci.py` – testy jakości z terminala, do osobnej bazy (także własne: `--tests moj_test/ko`),
 `--fake-hw`, `tools/build_catalog.py`, `tools/build_exe.py`). Decyzje projektowe:
 [docs/SPEC.md](docs/SPEC.md). Zmienione ustawienia i token Hugging Face są zapisywane poza
 repozytorium (`~/.config/ai-bobr/`, `%APPDATA%\AI-Bobr\`).
