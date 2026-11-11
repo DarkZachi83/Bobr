@@ -358,7 +358,9 @@ class AppController:
         loaded = {}
         chosen = []
         for suite_id, lang in tests:
-            loaded.setdefault(suite_id, suites.load(suite_id))
+            if suite_id not in loaded:      # standardowy z data/quality, własny z folderu quality/ (edytor 0.11)
+                loaded[suite_id] = (suites.load(suite_id) if suite_id in suites.STANDARD
+                                    else self.custom_suites.load(suite_id))
             chosen.append((loaded[suite_id], lang))
         models = [t[len(OLLAMA_PREFIX):] if t.startswith(OLLAMA_PREFIX) else t for t in targets]
         info = {"app_version": __version__, "runtime_version": bench.version(),

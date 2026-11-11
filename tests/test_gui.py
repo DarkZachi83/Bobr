@@ -557,6 +557,53 @@ class GuiSmokeTest(unittest.TestCase):
         q.delete_history()
         self.assertEqual(q.htable.get_children(), ())
 
+    def test_quality_custom_test_run(self):
+        from aibobr.quality import custom
+        from tests.test_quality_runner import Bench, NoSandbox
+        w = self.window()
+        q = w.quality
+        q._sandbox_obj = NoSandbox()
+        data = custom.new_suite("moj_test", "Mój test", ["ko", "en"])
+        data["tasks"] = [
+            {"id": "T1", "category": "arytmetyka", "level": "easy", "max_tokens": 64,
+             "prompt": {"ko": "7 곱하기 6은? 숫자만.", "en": "7 times 6? Number only."},
+             "check": {"type": "number", "expected": 42}},
+            {"id": "T2", "category": "logika", "level": "medium", "max_tokens": 64,
+             "prompt": {"ko": "7은 소수입니까? 예/아니요", "en": "Is 7 prime? yes/no"},
+             "check": {"type": "choice", "expected": {"ko": "예", "en": "yes"},
+                       "options": {"ko": ["예", "아니요"], "en": ["yes", "no"]}}}]
+        w.c.custom_suites.save(data)
+        q._suites_changed()                                   # jak po zapisie w edytorze
+        self.assertIn(("moj_test", "ko"), q.test_vars)
+        self.assertFalse(q.test_vars[("moj_test", "ko")].get())         # własne – domyślnie niezaznaczone
+        for key, var in q.test_vars.items():
+            var.set(key[0] == "moj_test")
+        answers = {"7 곱하기 6은? 숫자만.": "42", "7은 소수입니까? 예/아니요": "아니요",
+                   "7 times 6? Number only.": "42", "Is 7 prime? yes/no": "yes"}
+        original = w.c.run_quality
+        clock = [0.0]
+
+        def fake(targets, tests, report, stop, attempts=1, hw=None, sandbox=None):
+            return original(targets, tests, report, stop, attempts=attempts, bench=Bench(lambda p, n: answers[p]),
+                            sandbox=NoSandbox(), runner_kw={"clock": lambda: clock[0],
+                                                            "sleep": lambda x: clock.__setitem__(0, clock[0] + x),
+                                                            "unload_timeout": 1})
+        w.c.run_quality = fake
+        q.select_targets(["ollama:llama3.1:8b"])
+        self.assertIn("zadania: 4", q.plan.cget("text"))
+        self.assertEqual(q.sandbox_line.cget("text"), "")                # bez zadań w Pythonie
+        q.start()
+        self.pump(lambda: not q.running, 15)
+        rows = [q.rtable.item(i, "values") for i in q.rtable.get_children()]
+        self.assertEqual([(r[1], r[2]) for r in rows], [("Mój test (KO)", "1/2 (50%)"), ("Mój test (EN)", "2/2 (100%)")])
+        self.assertIn("Mój test: KO 1/2, EN 2/2", q.label_line.cget("text"))
+        live = q.live.get("1.0", "end")
+        self.assertIn("Tłumaczenie pytania (model go nie widzi): 7은 소수입니까? 예/아니요", live)
+        runs = w.c.bench_db.quality_runs(q.q_session)
+        self.assertEqual({(r["suite"], r["suite_version"], r["lang"]) for r in runs},
+                         {("moj_test", "1", "ko"), ("moj_test", "1", "en")})
+        self.assertTrue(w.c.bench_db.quality_suite_used("moj_test", "1"))
+
     def test_quality_test_editor(self):
         import json
         from tests.test_quality_runner import NoSandbox
