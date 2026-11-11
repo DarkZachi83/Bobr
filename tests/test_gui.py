@@ -621,12 +621,33 @@ class GuiSmokeTest(unittest.TestCase):
         ed.run_preview()
         self.assertIn("nieoceniony", ed.preview_result.cget("text"))           # bez piaskownicy – nie uruchamia
         # angielski: drugi język dochodzi do treści i do błędów
-        ed.lang_vars["en"].set(True)
-        ed._toggle_lang("en")
+        self.assertEqual(ed.main_lang.get(), "polski (PL)")
+        ed.english_var.set(True)
+        ed._toggle_english()
+        self.assertEqual(ed.data["suite_info"]["languages"], ["pl", "en"])
         self.assertFalse(ed.save())
         self.assertIn("T1 · Treść zadania (EN) – brak treści zadania", ed.problem_list.get(0, "end"))
-        ed.lang_vars["en"].set(False)
-        ed._toggle_lang("en")
+        # wariant B: jedno pole treści i przełącznik wersji; druga wersja zostaje w danych
+        self.assertIn("prompt.pl", ed.inputs)
+        self.assertNotIn("prompt.en", ed.inputs)
+        ed.form_lang.set("en")
+        ed._switch_form_lang()
+        self.assertEqual((list(ed.inputs).count("prompt.en"), "prompt.pl" in ed.inputs), (1, False))
+        ed.inputs["prompt.en"][1].insert("1.0", "Write add(a, b).")
+        ed.form_lang.set("pl")
+        ed._switch_form_lang()
+        self.assertEqual(ed.inputs["prompt.pl"][1].get("1.0", "end-1c"), "Napisz add(a, b).")
+        self.assertEqual(ed.data["tasks"][1]["prompt"], {"pl": "Napisz add(a, b).", "en": "Write add(a, b)."})
+        # język główny: koreański – treść przechodzi z polskiego, angielski zostaje
+        ed.main_lang.set("koreański (KO)")
+        ed._change_main_lang()
+        self.assertEqual(ed.data["suite_info"]["languages"], ["ko", "en"])
+        self.assertEqual(ed.data["tasks"][1]["prompt"], {"ko": "Napisz add(a, b).", "en": "Write add(a, b)."})
+        ed.main_lang.set("polski (PL)")
+        ed._change_main_lang()
+        ed.english_var.set(False)
+        ed._toggle_english()
+        self.assertEqual(ed.data["tasks"][1]["prompt"], {"pl": "Napisz add(a, b)."})
         q.running = True                                                     # w trakcie pomiaru – bez zapisu
         messages = []
         ed.inform = messages.append
