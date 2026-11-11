@@ -71,6 +71,7 @@ class QualityPanel(BenchmarkPanel):
                         command=self._update_plan).pack(side="left", padx=4)
         ttk.Radiobutton(line, text="3", value=3, variable=self.attempts, style="Panel.TRadiobutton",
                         command=self._three).pack(side="left", padx=4)
+        ttk.Button(line, text=t("q.ed.open"), command=self.open_editor).pack(side="right")
         self.plan = ttk.Label(top, text="", style="Panel.TLabel", wraplength=640, justify="left")
         self.plan.pack(anchor="w", pady=(8, 0), fill="x")
         self.sandbox_line = ttk.Label(top, text="", style="Note.TLabel", wraplength=640, justify="left")
@@ -238,6 +239,17 @@ class QualityPanel(BenchmarkPanel):
                                         t("q.sandbox.no", reason=t(f"q.sandbox.reason.{st.reason.split(':')[0]}")))
         else:
             self.sandbox_line.configure(text="")
+
+    def open_editor(self) -> None:
+        """Edytor testów – osobne okno (tworzenie testów jest opcjonalne); jedno naraz."""
+        from aibobr.gui.dialogs.test_editor import TestEditor
+        win = getattr(self, "editor", None)
+        if win is not None and win.winfo_exists():
+            win.deiconify()
+            win.lift()
+            return
+        self.editor = TestEditor(self, self.c.custom_suites, sandbox=self._sandbox(), busy=lambda: self.running,
+                                 on_change=self._update_plan)
 
     def _three(self) -> None:
         """Trzy próby – komunikat autora o czasie testu i sugestia, by najpierw zrobić test z jedną próbą."""
