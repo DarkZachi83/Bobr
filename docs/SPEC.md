@@ -1002,3 +1002,37 @@ odpowiedzi wszystkich prób; ocena ręczna tylko dla nieocenionych – kod bez p
 (pytanie, tłumaczenie, odpowiedź strumieniowo, dziennik), **Historia** (sesje, szczegóły, eksport do
 `jakosc_RRRR-MM-DD_GGMM_<id8>/` z `wyniki.csv`, `zadania.csv`, `manifest.json`, usuwanie).
 
+
+## Edytor testów 0.11 (decyzje autora 11.11.2026)
+
+**Gdzie.** Własne testy to pliki JSON w formacie testów standardowych, w `<katalog ustawień>/quality/<id>.json`
+(`~/.config/ai-bobr/quality/`, `%APPDATA%\AI-Bobr\quality\`). Testy standardowe są tylko do odczytu
+(„constans”); „Utwórz kopię jako mój test” daje własny test z polem `based_on`. Edytor to **osobne okno**
+(tworzenie testów jest opcjonalne, więc nie jest wyeksponowane): przycisk „Edytor testów…” pod listą testów
+w zakładce Jakość; zapis zablokowany w trakcie pomiaru.
+
+**Plik testu nigdy nie zawiera kodu.** Zadanie `python` to nazwa funkcji i tabela `args → expected` jako
+wartości JSON; uruchamiany jest wyłącznie kod modelu, w piaskownicy. Każde pole sprawdzenia spoza listy
+dozwolonych jest błędem – dzięki temu cudzy (importowany) test jest bezpieczny.
+
+**Sprawdzanie przy zapisie** (`aibobr/quality/custom.py`, `problems()`): wszystkie błędy naraz, każdy
+z zadaniem, polem i kodem komunikatu (`q.err.<kod>`); błąd blokuje zapis. Liczba musi być liczbą, ułamek
+`a/b` z b > 0, opcja poprawna musi być wśród opcji (w każdym języku), funkcja – poprawną nazwą Pythona,
+tabela testów – niepusta. Języki: pl, en albo oba. Limit 100 zadań, `max_tokens` 16–4096, plik do 1 MB.
+Rozkład 5/5/5 nie jest wymagany, tylko pokazywany.
+
+**Wersje.** Zapis zmienionego testu, którego wersja ma już wyniki w bazie (`quality_suite_used`), podnosi
+wersję (`1` → `2`, `1.1` → `1.2`). Historia ma własną kopię zadań i odpowiedzi, więc stare wyniki zostają
+czytelne; wyników różnych wersji nie porównujemy – tabela pokazuje wersję obok nazwy testu.
+
+**Import i eksport** – jeden plik `.json`; import sprawdza plik przed przyjęciem. Gdy id już istnieje, edytor
+pyta: zastąpić (wersja nie cofa się i nie powtarza użytej) czy zapisać jako kopię (nowe id, wersja 1).
+
+**Podgląd oceny bez modelu** – wklejona odpowiedź dostaje werdykt tym samym kodem co w teście; kod Pythona
+z odpowiedzi tylko w gotowej piaskownicy (inaczej „nieocenione”).
+
+**Wynik.** Własne testy nie wchodzą do etykiety humanistyczny/ścisły (ta dotyczy tylko testów standardowych);
+mają osobny wynik w ułamkach według kategorii. Przy dwóch językach drugi pokazuje tłumaczenie z pierwszego.
+
+**PR-y:** 1) logika: zapis, walidacja, import/eksport, podgląd; 2) okno edytora; 3) uruchamianie własnych
+testów i Historia; 4) README, SPEC, wersja 0.11.0.
