@@ -1102,5 +1102,19 @@ odpowiedzi (np. „niejednoznaczne”) – cała wypowiedź. `tools/kruchosc.py 
 cała wypowiedź; pusty token pokazywany jako „‹koniec›”. Ollama bez logprobs – „nie
 podaje prawdopodobieństw”, przebieg się kończy. Odstęp liczy się tylko na ścieżce wybranej przez model.
 
+**Zakładka Diagnostyka** (`aibobr/gui/widgets/diag_panel.py`, PR 3): lista modeli jak w Benchmarku; karty
+„Token początku” (tabela: wynik, oczekuje, w szablonie, Ollama dodaje, model dostaje, kiedy; szczegóły
+z flagą, szablonem GGUF i jego źródłem; „Sprawdź wybrane modele” – zapamiętany wynik dla tej wersji pliku,
+„Sprawdź ponownie” – pomiar od nowa), „Kruchość” (wybór testu – standardowe i własne, każda wersja językowa;
+progi w polach, zapamiętywane w ustawieniach `fragile_threshold`/`tie_threshold`, złe progi – komunikat, bez
+zapisu; tabela zadań i szczegóły: zakres liczenia, najwęższe miejsce, pierwszy prawie remis, odpowiedź)
+i „Historia” (przebiegi kruchości z progami i stanem tokenu początku z chwili pomiaru; szczegóły, usuwanie).
+W zakładce Jakość kolumna „Kruchość” w zadaniach – z ostatniej zakończonej diagnostyki tego testu (model,
+test, język, wersja testu).
+
+**Baza – schemat 3** (kopia `.bak-RRRR-MM-DD` przed migracją): `bos_checks` (każde sprawdzenie; zapamiętany
+wynik = ostatni dla modelu i skrótu pliku), `diag_sessions`, `diag_tasks`; kolumna `bos_status` w `runs`
+i `quality_runs` (wypełniana od PR 4).
+
 **PR-y:** 1) token początku – logika i narzędzie terminalowe; 2) kruchość; 3) zakładka, baza (schemat 3),
 Historia; 4) naprawa i wybór rodzaju testu; 5) README, SPEC, wersja 0.12.0.

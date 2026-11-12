@@ -369,6 +369,124 @@ class AppController:
                                db if db is not None else self.bench_db, info, **(runner_kw or {}))
         return runner.run(models, chosen, attempts, report, stop)
 
+    # ------------------------------------------------------------------ diagnostyka (0.12)
+    def fragility_thresholds(self):
+        """Progi kruchości z ustawień użytkownika (zakładka Diagnostyka); błędne – domyślne."""
+        from aibobr.diagnostics.fragility import FRAGILE, TIE, Thresholds
+        try:
+            return Thresholds(float(self.settings.get("fragile_threshold", FRAGILE)),
+                              float(self.settings.get("tie_threshold", TIE)))
+        except (TypeError, ValueError):
+            return Thresholds()
+
+    def set_fragility_thresholds(self, fragile: float, tie: float):
+        from aibobr.diagnostics.fragility import Thresholds
+        th = Thresholds(float(fragile), float(tie))             # ValueError przy złych progach – nic nie zapisujemy
+        self.settings.update(fragile_threshold=th.fragile, tie_threshold=th.tie)
+        self.config.save_user({"fragile_threshold": th.fragile, "tie_threshold": th.tie})
+        return th
+
+    @staticmethod
+    def _model_name(target: str) -> str:
+        from aibobr.sources.factory import OLLAMA_PREFIX
+        return target[len(OLLAMA_PREFIX):] if target.startswith(OLLAMA_PREFIX) else target
+
+    def check_bos(self, targets, report=lambda e: None, stop=lambda: False, *, force: bool = False,
+                  bench=None, db=None, probe_kw=None) -> list:
+        """Token początku dla modeli z Ollamy. Wynik zapamiętany na wersję pliku (skrót z /api/tags):
+        bez force – zapamiętany, jeśli jest; force – pomiar od nowa (przycisk „Sprawdź ponownie”)."""
+        import time
+        from datetime import datetime
+        from aibobr import __version__
+        from aibobr.bench.ollama import OllamaBench
+        from aibobr.diagnostics.bos import BosProbe
+        bench = bench or OllamaBench(self.ollama_host())
+        db = db if db is not None else self.bench_db
+        stop = getattr(stop, "is_set", stop)                    # threading.Event z okna albo funkcja
+        kw = {"clock": time.monotonic, "sleep": time.sleep, **(probe_kw or {})}
+        probe = BosProbe(bench, **kw)
+        try:
+            version = bench.version()
+        except Exception:
+            version = None
+        out = []
+        for target in targets:
+            if stop():
+                break
+            model = self._model_name(target)
+            try:
+                digest = bench.digest(model)
+            except Exception:
+                digest = None
+            cached = db.bos_check(model, digest) if (db is not None and not force and digest) else None
+            if cached is not None:
+                report({"event": "bos", "model": model, "check": cached, "cached": True})
+                out.append(cached)
+                continue
+            report({"event": "bos_start", "model": model})
+            check = probe.run(model)
+            if db is not None:
+                db.add_bos_check(check, checked_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+                                 runtime_version=version, app_version=__version__)
+            report({"event": "bos", "model": model, "check": check, "cached": False})
+            out.append(check)
+        return out
+
+    def run_fragility(self, target: str, test, report=lambda e: None, stop=lambda: False, *, thresholds=None,
+                      tasks=None, bench=None, db=None, probe_kw=None) -> dict:
+        """Kruchość promptu: zadania testu jakości (standardowego albo własnego) dla jednego modelu; osobny
+        przebieg z logprobs, zapis w diag_sessions/diag_tasks. test = (id testu, język)."""
+        import time
+        from datetime import datetime
+        from aibobr import __version__
+        from aibobr.bench.ollama import OllamaBench
+        from aibobr.diagnostics.fragility import FragilityProbe, suite_tasks
+        from aibobr.quality import suites
+        bench = bench or OllamaBench(self.ollama_host())
+        db = db if db is not None else self.bench_db
+        stop = getattr(stop, "is_set", stop)                    # threading.Event z okna albo funkcja
+        thresholds = thresholds or self.fragility_thresholds()
+        model = self._model_name(target)
+        suite_id, lang = test
+        data = suites.load(suite_id) if suite_id in suites.STANDARD else self.custom_suites.load(suite_id)
+        chosen = [t for t in suite_tasks(data, lang) if not tasks or t[0] in tasks]
+        now = lambda: datetime.now().astimezone().isoformat(timespec="seconds")   # noqa: E731
+        try:
+            digest, version = bench.digest(model), bench.version()
+        except Exception:
+            digest = version = None
+        cached = db.bos_check(model, digest) if db is not None else None     # skrót nieznany – ostatnie sprawdzenie
+        sid = None
+        if db is not None:
+            sid = db.start_diag_session(started_at=now(), model=model, digest=digest, suite=suite_id,
+                                        suite_version=data["suite_info"].get("version"), lang=lang,
+                                        fragile_threshold=thresholds.fragile, tie_threshold=thresholds.tie,
+                                        bos_status=cached.status if cached else None, app_version=__version__,
+                                        runtime_version=version)
+        report({"event": "f_start", "model": model, "session": sid, "tasks": len(chosen),
+                "suite": suite_id, "lang": lang})
+        n = [0]
+
+        def forward(e):
+            if e.get("event") == "f_task_done" and sid is not None:
+                n[0] += 1
+                db.add_diag_task(sid, n[0], e["task"])
+            report(e)
+        kw = {"clock": time.monotonic, "sleep": time.sleep, **(probe_kw or {})}
+        status = "failed"
+        try:
+            run = FragilityProbe(bench, **kw).run(model, chosen, thresholds, report=forward, stop=stop)
+            status = "stopped" if stop() and len(run.tasks) < len(chosen) else "finished"
+        finally:
+            if sid is not None:
+                counts = run.counts() if status != "failed" else {}
+                db.finish_diag_session(sid, status, finished_at=now(), stable=counts.get("stable"),
+                                       fragile=counts.get("fragile"), tie=counts.get("tie"),
+                                       not_run=(counts.get("not_run", 0) + counts.get("unsupported", 0))
+                                       if counts else None)
+        report({"event": "f_done", "model": model, "session": sid, "counts": run.counts(), "status": status})
+        return {"session": sid, "run": run, "status": status}
+
     def speed_pack(self) -> dict:
         """Benchmark prędkości 0.9: 15 zadań z pakietów polszczyzny i formatu (bez oceniania treści)."""
         from aibobr.bench import speed

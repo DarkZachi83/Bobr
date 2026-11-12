@@ -557,6 +557,89 @@ class GuiSmokeTest(unittest.TestCase):
         q.delete_history()
         self.assertEqual(q.htable.get_children(), ())
 
+    def test_diagnostics_tab(self):
+        from aibobr.quality import custom
+        from tests.test_diagnostics_bos import FakeOllama as BosOllama
+        from tests.test_diagnostics_fragility import TIE, FakeOllama as FragOllama, STABLE
+        w = self.window()
+        names = [w.tabs.tab(i, "text") for i in range(len(w.tabs.tabs()))]
+        self.assertEqual(names[names.index("Jakość") + 1], "Diagnostyka")          # między Jakością a Statystyką
+        self.assertEqual(names[names.index("Diagnostyka") + 1], "Statystyka")
+        menu = w.settings_menu
+        entry = next(i for i in range(menu.index("end") + 1)
+                     if menu.type(i) == "command" and menu.entrycget(i, "label") == "Diagnostyka")
+        menu.invoke(entry)                                     # Ustawienia → Diagnostyka
+        self.assertEqual(w.tabs.select(), str(w.diag))
+        d = w.diag
+        clock = [0.0]
+        kw = {"clock": lambda: clock[0], "sleep": lambda s: clock.__setitem__(0, clock[0] + s), "unload_timeout": 1}
+        bos_fake = BosOllama(expects=False, chat="{{bos_token}}{% for m in messages %}")      # jak Minitron
+        original_bos, original_frag = w.c.check_bos, w.c.run_fragility
+        w.c.check_bos = lambda targets, report, stop, force=False: original_bos(
+            targets, report, stop, force=force, bench=bos_fake, probe_kw=kw)
+        d.select_targets(["ollama:minitron"])
+        self.assertIn("Wybrane modele: 1", d.plan.cget("text"))
+        d.check_bos(False)
+        self.pump(lambda: not d.running, 10)
+        row = d.btable.item(d.btable.get_children()[0], "values")
+        self.assertEqual((row[0], row[1], row[2], row[3], row[5]), ("minitron", "⚠ BRAK tokenu początku", "tak", "nie", "0"))
+        d.btable.selection_set(d.btable.get_children()[0])
+        self.pump(seconds=0.1)
+        text = d.bos_text.get("1.0", "end")
+        self.assertIn("Ollama go nie podaje", text)
+        self.assertIn("szablon czatu z pliku GGUF podaje bos_token: tak", text)
+        probes = len(bos_fake.prompts)
+        d.check_bos(False)                                     # ta sama wersja pliku – zapamiętany wynik
+        self.pump(lambda: not d.running, 10)
+        self.assertEqual(len(bos_fake.prompts), probes)
+        self.assertIn("z zapamiętanych wyników: 1", d.stage.cget("text"))
+        d.check_bos(True)                                      # „Sprawdź ponownie”
+        self.pump(lambda: not d.running, 10)
+        self.assertGreater(len(bos_fake.prompts), probes)
+        # kruchość na własnym teście
+        data = custom.new_suite("diag_test", "Diag", ["pl"])
+        data["tasks"] = [
+            {"id": "T1", "category": "x", "level": "easy", "max_tokens": 64, "prompt": {"pl": "Stolica Francji?"},
+             "check": {"type": "text", "expected": ["Paryż"]}},
+            {"id": "T2", "category": "x", "level": "easy", "max_tokens": 64, "prompt": {"pl": "Popraw znaki"},
+             "check": {"type": "text", "expected": ["Zażółć gęślą"]}}]
+        w.c.custom_suites.save(data)
+        frag_fake = FragOllama({"Stolica Francji?": STABLE, "Popraw znaki": TIE})
+        w.c.run_fragility = lambda target, test, report, stop, thresholds=None: original_frag(
+            target, test, report, stop, thresholds=thresholds, bench=frag_fake, probe_kw=kw)
+        d.tabs.select(1)
+        self.pump(seconds=0.1)
+        d.f_test.set("Diag (PL)")
+        d.f_fragile.set("0,15")
+        d.f_tie.set("0.3")                                     # remis > kruche – błąd, nic nie rusza
+        d.run_fragility()
+        self.assertFalse(d.running)
+        self.assertIn("remis nie większy niż kruche", d.f_note.cget("text"))
+        d.f_tie.set("0,02")
+        d.run_fragility()
+        self.pump(lambda: not d.running, 10)
+        self.assertEqual((w.c.settings["fragile_threshold"], w.c.settings["tie_threshold"]), (0.15, 0.02))
+        rows = [d.ftable.item(i, "values") for i in d.ftable.get_children()]
+        self.assertEqual([(r[0], r[1]) for r in rows], [("T1", "stabilne"), ("T2", "remis")])
+        d.ftable.selection_set(d.ftable.get_children()[1])
+        self.pump(seconds=0.1)
+        self.assertIn("Pierwszy prawie remis", d.f_text.get("1.0", "end"))
+        self.assertIn("'żółć' 0.410", d.f_text.get("1.0", "end"))
+        # historia i znacznik w zakładce Jakość
+        d.tabs.select(2)
+        self.pump(seconds=0.1)
+        hrow = d.htable.item(d.htable.get_children()[0], "values")
+        self.assertEqual((hrow[1], hrow[3], hrow[5]), ("minitron", "stabilne 1 · kruche 0 · remis 1",
+                                                       "⚠ BRAK tokenu początku"))
+        q = w.quality
+        q._suites_changed()
+        self.assertEqual(q._fragility("minitron", "diag_test", "pl", "T2"), "remis")
+        self.assertEqual(q._fragility("minitron", "diag_test", "pl", "T9"), "")
+        d.htable.selection_set(d.htable.get_children()[0])
+        d.confirm = lambda title, text: True
+        d.delete_history()
+        self.assertEqual(d.htable.get_children(), ())
+
     def test_quality_custom_test_run(self):
         from aibobr.quality import custom
         from tests.test_quality_runner import Bench, NoSandbox
