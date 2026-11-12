@@ -47,7 +47,7 @@ does it fit, and where?
 It reads only the header of the model file – a few MB, not gigabytes – so checking a 40 GB
 model from Hugging Face takes seconds. Nothing is downloaded or installed.
 
-The window has five tabs – **Check**, **Benchmark**, **Quality**, **Statistics**, **Advanced**
+The window has six tabs – **Check**, **Benchmark**, **Quality**, **Diagnostics**, **Statistics**, **Advanced**
 (the same model on hardware you type in: "what if I had a 16 GB card?") – and a **dark or light theme** (☀/☾ icon or
 Settings → Theme). The language is in its own **Language** menu.
 
@@ -269,6 +269,35 @@ version; History keeps its own copy of the tasks. Import and export as one `.jso
 `~/.config/ai-bobr/quality/` (`%APPDATA%\AI-Bobr\quality\` on Windows). Your own tests are not part of the
 humanities/science label.
 
+### Diagnostics – what the model was really fed, and is the prompt fragile
+
+Before you compare answers, pin down the input. The **Diagnostics** tab (also *Settings → Diagnostics*) has
+two instruments; neither changes benchmark or quality results.
+
+**Beginning token (BOS).** Many models expect a special token at the very start of the text. AI Bobr reads what
+the model file expects – the `add_bos_token` flag **and** the chat template stored in the GGUF file (Ollama does
+not show it, so it is read from the file header) – checks the Ollama template and sends two tiny queries without
+a template, each from scratch, to count how many beginning tokens the model really gets. Result: *one* (fine),
+*not used* (fine), **missing** or **double** (warning), or *unknown* (no warning). Example from the author's
+machine: Bielik-Minitron pulled from `hf.co/…` has `add_bos_token = false`, but its GGUF template starts with
+`{{bos_token}}` – Ollama's template drops it, so the model gets no beginning token at all; Gemma, Llama and
+Qwen from the Ollama library are fine. The check runs by itself before the benchmark and the quality test (once
+per model file). When a token is missing or doubled you choose what to run: **as Ollama serves it** (how the
+model runs for you every day), **with the beginning token fixed** (AI Bobr creates a separate model in Ollama,
+e.g. `bielik-minitron-7b-v3.0-instruct-gguf-bos:Q4_K_M` – the same file, no copy, a template with one beginning
+token; the original stays untouched) or **both – comparison** (the result shows both side by side).
+
+**Prompt fragility.** For every token of the answer the model also reports its runner-up. When the two are
+nearly tied, a tiny change in the input can flip the answer. AI Bobr runs the tasks of a quality test (standard
+or your own) with these probabilities, each from scratch, and marks every task **stable**, **fragile**
+(gap below 0.10) or **tie** (below 0.02) – thresholds are yours to set. Only the answer and what precedes it
+count; near-ties in an explanation after the answer are shown separately (and docstrings in code do not
+count). The Quality tab then shows fragility next to each task, and in a *both – comparison* run every task
+that changed gets a note: **tie tipped over** (the task was fragile) or **real input difference** (it was
+stable). The author's own BOS experiment turned out to sit on a fragile prompt – a good reason to measure
+before concluding. Results go to History and export to CSV (`kruchosc.csv`, `token_poczatku.csv`,
+`manifest.json`).
+
 ### Models on your disk
 
 The **Benchmark** tab (or `--scan [FOLDER]`) lists the models you already have – from Ollama,
@@ -294,6 +323,8 @@ python tools/calibrate.py                     # predictions vs. real memory use 
 python tools/pomiar_predkosci.py <model> [--runs 3]   # speed benchmark from the terminal (separate database)
 python tools/test_jakosci.py <model> [--attempts 3]   # quality tests from the terminal (separate database)
 python tools/test_jakosci.py <model> --tests my_test/ko my_test/en   # your own test from the editor
+python tools/sprawdz_bos.py [models]                  # beginning token (BOS) check, changes nothing in Ollama
+python tools/kruchosc.py <model> [--test scisly_v1/pl] [--prompt "..."]   # prompt fragility (logprobs)
 python main.py --fake-hw tests/fake_hardware/windows_amd_rx7900xtx.json   # pretend hardware
 python tools/build_catalog.py                 # rebuild the model list from catalog_sources.txt
 python tools/build_exe.py                     # PyInstaller build (CI does this for v* tags)
@@ -351,7 +382,7 @@ czy się zmieści i gdzie?
 Program czyta tylko nagłówek pliku modelu – kilka MB, nie gigabajty – więc sprawdzenie modelu
 40 GB z Hugging Face trwa kilka sekund. Nic nie jest pobierane ani instalowane.
 
-Okno ma pięć zakładek – **Sprawdź**, **Benchmark**, **Jakość**, **Statystyka**, **Zaawansowane**
+Okno ma sześć zakładek – **Sprawdź**, **Benchmark**, **Jakość**, **Diagnostyka**, **Statystyka**, **Zaawansowane**
 (ten sam model na sprzęcie, który wpiszesz: „co by było z kartą 16 GB?”) – i **styl ciemny albo jasny** (ikona ☀/☾
 albo Ustawienia → Styl). Język zmienisz w osobnym menu **Język**.
 
@@ -569,6 +600,35 @@ już wyniki, podnosi jego wersję; Historia ma własną kopię zadań. Import i 
 testy leżą w `~/.config/ai-bobr/quality/` (na Windowsie `%APPDATA%\AI-Bobr\quality\`). Własne testy nie
 wchodzą do etykiety humanistyczny/ścisły.
 
+### Diagnostyka – co model naprawdę dostał i czy prompt jest kruchy
+
+Zanim porównasz odpowiedzi, ustal wejście. Zakładka **Diagnostyka** (też *Ustawienia → Diagnostyka*) ma dwa
+narzędzia; żadne nie zmienia wyników benchmarku ani testu jakości.
+
+**Token początku (BOS).** Wiele modeli oczekuje specjalnego tokenu na samym początku tekstu. AI Bóbr odczytuje,
+czego oczekuje plik modelu – flagę `add_bos_token` **i** szablon czatu zapisany w pliku GGUF (Ollama go nie
+pokazuje, więc czytamy nagłówek pliku) – sprawdza szablon Ollamy i wysyła dwa malutkie zapytania bez szablonu,
+każde od zera, żeby policzyć, ile tokenów początku model naprawdę dostaje. Wynik: *jeden* (w porządku), *model
+go nie używa* (w porządku), **brak** albo **podwójny** (ostrzeżenie), *nie wiadomo* (bez ostrzeżenia). Przykład
+z komputera autora: Bielik-Minitron pobrany z `hf.co/…` ma `add_bos_token = false`, ale jego szablon GGUF
+zaczyna się od `{{bos_token}}` – szablon Ollamy go gubi, więc model nie dostaje tokenu początku wcale; Gemma,
+Llama i Qwen z biblioteki Ollamy są w porządku. Sprawdzenie uruchamia się samo przed benchmarkiem i testem
+jakości (raz na plik modelu). Przy braku albo podwójnym tokenie wybierasz, co uruchomić: **jak podaje Ollama**
+(tak model działa u Ciebie na co dzień), **z poprawionym tokenem początku** (AI Bóbr tworzy w Ollamie osobny
+model, np. `bielik-minitron-7b-v3.0-instruct-gguf-bos:Q4_K_M` – ten sam plik, bez kopiowania, szablon z jednym
+tokenem początku; oryginał zostaje nietknięty) albo **oba – porównanie** (wynik pokazuje oba obok siebie).
+
+**Kruchość promptu.** Przy każdym tokenie odpowiedzi model podaje też drugiego kandydata. Gdy obaj są prawie
+na remis, drobna zmiana na wejściu może przestawić odpowiedź. AI Bóbr uruchamia zadania testu jakości
+(standardowego albo własnego) z tymi prawdopodobieństwami, każde od zera, i oznacza każde zadanie jako
+**stabilne**, **kruche** (odstęp poniżej 0,10) albo **remis** (poniżej 0,02) – progi ustawiasz sam. Liczą się
+tylko odpowiedź i to, co przed nią; prawie remisy w objaśnieniu po odpowiedzi są pokazane osobno (docstringi
+w kodzie się nie liczą). Zakładka Jakość pokazuje potem kruchość przy każdym zadaniu, a w przebiegu *oba –
+porównanie* każde zadanie, które zmieniło wynik, dostaje opis: **przeważony remis** (zadanie było kruche) albo
+**rzeczywista różnica wejścia** (było stabilne). Eksperyment BOS autora okazał się stać na kruchym prompcie –
+dobry powód, żeby mierzyć, zanim się wyciągnie wnioski. Wyniki trafiają do Historii i eksportu CSV
+(`kruchosc.csv`, `token_poczatku.csv`, `manifest.json`).
+
 ### Modele na dysku
 
 Zakładka **Benchmark** (albo `--scan [FOLDER]`) pokazuje modele, które już masz – z Ollamy, LM Studio,
@@ -589,6 +649,8 @@ się z internetem sam z siebie. Sprawdzany model zawsze pochodzi z Twojego linku
 Polecenia jak w części angielskiej (testy, `tools/try_source.py`, `tools/try_detection.py`,
 `tools/pomiar_predkosci.py` – benchmark prędkości z terminala, do osobnej bazy,
 `tools/test_jakosci.py` – testy jakości z terminala, do osobnej bazy (także własne: `--tests moj_test/ko`),
+`tools/sprawdz_bos.py` – sprawdzenie tokenu początku (niczego nie zmienia w Ollamie),
+`tools/kruchosc.py` – kruchość promptu (test albo dowolne polecenie `--prompt`),
 `--fake-hw`, `tools/build_catalog.py`, `tools/build_exe.py`). Decyzje projektowe:
 [docs/SPEC.md](docs/SPEC.md). Zmienione ustawienia i token Hugging Face są zapisywane poza
 repozytorium (`~/.config/ai-bobr/`, `%APPDATA%\AI-Bobr\`).
