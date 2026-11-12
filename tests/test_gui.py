@@ -577,7 +577,7 @@ class GuiSmokeTest(unittest.TestCase):
         clock = [0.0]
         kw = {"clock": lambda: clock[0], "sleep": lambda s: clock.__setitem__(0, clock[0] + s), "unload_timeout": 1}
         bos_fake = BosOllama(expects=False, chat="{{bos_token}}{% for m in messages %}")      # jak Minitron
-        original_bos, original_frag = w.c.check_bos, w.c.run_fragility
+        original_bos, original_frag = type(w.c).check_bos.__get__(w.c), w.c.run_fragility
         w.c.check_bos = lambda targets, report, stop, force=False: original_bos(
             targets, report, stop, force=force, bench=bos_fake, probe_kw=kw)
         d.select_targets(["ollama:minitron"])
@@ -656,7 +656,7 @@ class GuiSmokeTest(unittest.TestCase):
         clock = [0.0]
         kw = {"clock": lambda: clock[0], "sleep": lambda s: clock.__setitem__(0, clock[0] + s), "unload_timeout": 1}
         fake = FakeOllamaWithCreate(expects=False, chat="{{bos_token}}{% for m in messages %}")
-        orig_check, orig_create, orig_quality = w.c.check_bos, w.c.create_bos_variant, w.c.run_quality
+        orig_check, orig_create, orig_quality = type(w.c).check_bos.__get__(w.c), w.c.create_bos_variant, w.c.run_quality
 
         def check(targets, report=lambda e: None, stop=lambda: False, force=False, **_):
             return orig_check(targets, report, stop, force=force, bench=fake, probe_kw=kw)
