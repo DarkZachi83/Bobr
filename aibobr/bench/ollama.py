@@ -51,7 +51,7 @@ class OllamaBench:
 
     def generate(self, model: str, prompt: str, num_ctx: int, num_predict: int,
                  temperature: float = 0, seed: int = 42,
-                 on_chunk: Optional[Callable[[str], None]] = None) -> Generation:
+                 on_chunk: Optional[Callable[[str], None]] = None, raw: bool = False) -> Generation:
         """on_chunk(tekst) – podgląd na żywo (etap 12c): Ollama wysyła odpowiedź kawałkami
         (stream). Czasy i tak przychodzą w ostatnim kawałku i liczy je serwer – pomiar się
         nie zmienia."""
@@ -59,6 +59,8 @@ class OllamaBench:
         payload = {"model": model, "prompt": prompt, "stream": stream, "think": False, "keep_alive": "5m",
                    "options": {"num_ctx": num_ctx, "num_predict": num_predict,
                                "temperature": temperature, "seed": seed}}
+        if raw:                       # bez szablonu – tekst trafia do modelu tak, jak jest (diagnostyka wejścia)
+            payload["raw"] = True
         url = f"{self.host}/api/generate"
         if stream:
             parts, r = [], {}
@@ -86,6 +88,20 @@ class OllamaBench:
             prompt_cached=None if r.get("prompt_eval_cached_count") is None else int(r["prompt_eval_cached_count"]),
             total_seconds=float(r["total_duration"]) / ns if r.get("total_duration") is not None else None,
             done_reason=str(r["done_reason"]) if r.get("done_reason") else None)
+
+    def show(self, model: str, verbose: bool = False) -> dict:
+        """/api/show: szablon Ollamy i opis modelu z pliku GGUF (model_info). verbose dokłada słownik tokenów –
+        duży, więc tylko gdy potrzebny tekst tokenu początku."""
+        data = self.http.post_json(f"{self.host}/api/show", {"model": model, "verbose": verbose}, timeout=120)
+        return data if isinstance(data, dict) else {}
+
+    def digest(self, model: str) -> Optional[str]:
+        """Skrót pliku modelu z /api/tags – ta sama nazwa po ponownym pobraniu może być innym modelem."""
+        data = self.http.get_json(f"{self.host}/api/tags")
+        for m in (data.get("models") or []) if isinstance(data, dict) else []:
+            if m.get("name") == model or m.get("model") == model:
+                return m.get("digest") or None
+        return None
 
     def load(self, model: str, num_ctx: int) -> Optional[float]:
         """Wczytuje model bez liczenia promptu (puste zapytanie) z tym samym num_ctx, co zadanie –
