@@ -22,8 +22,9 @@ TESTS = (("humanistyczny_v1", "pl"), ("scisly_v1", "pl"), ("scisly_v1", "en"))
 MARK = {True: "✓", False: "✗", None: "–"}
 RCOLS = ("model", "test", "score", "coverage", "format", "levels")
 RWIDTHS = {"model": 170, "test": 170, "score": 130, "coverage": 230, "format": 120, "levels": 260}
-TCOLS = ("model", "test", "task", "level", "category", "result", "reason")
-TWIDTHS = {"model": 110, "test": 115, "task": 45, "level": 65, "category": 125, "result": 30, "reason": 260}
+TCOLS = ("model", "test", "task", "level", "category", "result", "reason", "frag")
+TWIDTHS = {"model": 110, "test": 115, "task": 45, "level": 65, "category": 125, "result": 30, "reason": 230,
+           "frag": 80}
 HCOLS = ("date", "models", "tests", "attempts", "status")
 HWIDTHS = {"date": 130, "models": 260, "tests": 260, "attempts": 60, "status": 100}
 
@@ -330,6 +331,7 @@ class QualityPanel(BenchmarkPanel):
             tree.delete(*tree.get_children())
         self.task_rows.clear()
         self.result_by_row.clear()
+        self.__dict__.pop("frag_cache", None)              # świeże znaczniki kruchości przy każdym teście
         self.label_line.configure(text="")
         self.summary.configure(text="")
         self.start_button.state(["disabled"])
@@ -412,11 +414,31 @@ class QualityPanel(BenchmarkPanel):
         self.log_lines.append(line)
         self._append("\n" + line + "\n", kind)
 
+    def _fragility(self, model: str, suite: str, lang: str, task_id: str) -> str:
+        """Znacznik z ostatniej diagnostyki kruchości tego testu (zakładka Diagnostyka); pusty – nie było.
+        Niezaliczone zadanie kruche to „mogło wyjść inaczej”, a nie twardy błąd."""
+        key = (model, suite, lang)
+        cache = self.__dict__.setdefault("frag_cache", {})
+        if key not in cache:
+            db = self.c.bench_db
+            version = (self.suite_data.get(suite) or {}).get("suite_info", {}).get("version")
+            try:
+                cache[key] = db.last_fragility(model, suite, lang, version) if db is not None else {}
+            except Exception:
+                cache[key] = {}
+        label = cache[key].get(task_id)
+        return t(f"d.label.{label}") if label in ("stable", "fragile", "tie") else ""
+
+    @staticmethod
+    def _category(category: str) -> str:
+        return t(f"q.cat.{category}") if has_key(f"q.cat.{category}") else category
+
     def _add_task(self, model: str, suite: str, lang: str, r) -> None:
         tag = "ok" if r.correct else "bad" if r.correct is False else "none"
         reason = t(f"q.reason.{r.reason}") + (" · " + t("q.differing") if r.differing else "")
         iid = self.ttable.insert("", "end", values=(model, test_name(suite, lang), r.task_id, t(f"q.level.{r.level}"),
-                                                     t(f"q.cat.{r.category}"), MARK[r.correct], reason), tags=(tag,))
+                                                     self._category(r.category), MARK[r.correct], reason,
+                                                     self._fragility(model, suite, lang, r.task_id)), tags=(tag,))
         self.task_rows[iid] = (model, suite, lang, r, None, None)
 
     def _add_result(self, run: dict) -> None:
@@ -519,7 +541,8 @@ class QualityPanel(BenchmarkPanel):
         values = set_manual(db, run_id, task_row, passed)
         r.correct, r.manual, r.reason = passed, True, "manual"
         self.ttable.item(sel[0], values=(model, test_name(suite, lang), r.task_id, t(f"q.level.{r.level}"),
-                                          t(f"q.cat.{r.category}"), MARK[passed], t("q.reason.manual")),
+                                          self._category(r.category), MARK[passed], t("q.reason.manual"),
+                                          self._fragility(model, suite, lang, r.task_id)),
                          tags=("ok" if passed else "bad",))
         run = next(x for x in self.q_results if x.get("id") == run_id)
         tasks = [x[3] for x in self.task_rows.values() if x[4] == run_id]

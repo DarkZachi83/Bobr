@@ -6,6 +6,10 @@ Wersja schematu w `PRAGMA user_version`:
   1 – od 0.9: benchmark prędkości. `sessions` (jeden pomiar: ustawienia wspólne), `runs` (jeden
       przebieg jednego modelu: surowe sumy + werdykt z dnia testu + kopia progów), `tasks` (15 zadań
       z odpowiedziami, bez oceny treści), `telemetry` (próbka co 1 s), `long_context` (pomiar 1k/8k).
+  2 – od 0.10: moduł jakości (`quality_sessions`, `quality_runs`, `quality_tasks`).
+  3 – od 0.12: diagnostyka – `bos_checks` (token początku, jeden wynik na model i wersję pliku),
+      `diag_sessions` + `diag_tasks` (kruchość promptu); kolumna `bos_status` w `runs` i `quality_runs`
+      (z jakim tokenem początku liczono wynik).
 
 Brak odczytu (czujnik niedostępny, pole nieobecne w odpowiedzi silnika) = NULL, nigdy 0.
 Przed migracją robimy kopię pliku (API kopii SQLite), migracja idzie w jednej transakcji.
@@ -20,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS perf (
@@ -272,8 +276,78 @@ CREATE TABLE quality_tasks (
 );
 CREATE INDEX quality_tasks_run ON quality_tasks(run_id, task_no);
 """
-MIGRATIONS = {1: SCHEMA_V1, 2: SCHEMA_V2}
+# Schemat 3 (0.12): diagnostyka – token początku i kruchość promptu.
+SCHEMA_V3 = """
+CREATE TABLE bos_checks (
+    id INTEGER PRIMARY KEY,
+    model TEXT NOT NULL,
+    digest TEXT,
+    checked_at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    reason TEXT,
+    expects INTEGER,
+    add_bos INTEGER,
+    gguf_template_has INTEGER,
+    gguf_template_source TEXT,
+    bos_text TEXT,
+    template_has INTEGER,
+    without_count INTEGER,
+    with_text_count INTEGER,
+    effective INTEGER,
+    runtime_version TEXT,
+    app_version TEXT
+);
+CREATE INDEX bos_checks_model ON bos_checks(model, digest);
+CREATE TABLE diag_sessions (
+    id TEXT PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    status TEXT NOT NULL DEFAULT 'running',
+    model TEXT NOT NULL,
+    digest TEXT,
+    suite TEXT,
+    suite_version TEXT,
+    lang TEXT,
+    fragile_threshold REAL,
+    tie_threshold REAL,
+    bos_status TEXT,
+    app_version TEXT,
+    runtime_version TEXT,
+    stable INTEGER,
+    fragile INTEGER,
+    tie INTEGER,
+    not_run INTEGER
+);
+CREATE INDEX diag_sessions_model ON diag_sessions(model, suite, lang);
+CREATE TABLE diag_tasks (
+    id INTEGER PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES diag_sessions(id) ON DELETE CASCADE,
+    task_no INTEGER NOT NULL,
+    task_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    steps INTEGER,
+    min_margin REAL,
+    min_pos INTEGER,
+    min_pair_json TEXT,
+    fragile_steps INTEGER,
+    tie_steps INTEGER,
+    first_pos INTEGER,
+    first_pair_json TEXT,
+    first_context TEXT,
+    scope TEXT,
+    answer_steps INTEGER,
+    after_fragile INTEGER,
+    after_tie INTEGER,
+    answer TEXT,
+    reason TEXT
+);
+CREATE INDEX diag_tasks_session ON diag_tasks(session_id, task_no);
+ALTER TABLE runs ADD COLUMN bos_status TEXT;
+ALTER TABLE quality_runs ADD COLUMN bos_status TEXT
+"""
+MIGRATIONS = {1: SCHEMA_V1, 2: SCHEMA_V2, 3: SCHEMA_V3}
 QUALITY_TABLES = ("quality_sessions", "quality_runs", "quality_tasks")
+DIAG_TABLES = ("bos_checks", "diag_sessions", "diag_tasks")
 
 NEW_TABLES = ("sessions", "runs", "tasks", "telemetry", "long_context")
 ARCHIVE_TABLES = ("perf", "quality")
@@ -372,7 +446,7 @@ class BenchDb:
     def _read_columns(self) -> dict[str, set[str]]:
         with closing(self._connect()) as db:
             return {t: {row[1] for row in db.execute(f"PRAGMA table_info({t})")}
-                    for t in NEW_TABLES + QUALITY_TABLES}
+                    for t in NEW_TABLES + QUALITY_TABLES + DIAG_TABLES}
 
     def schema_version(self) -> int:
         with closing(self._connect()) as db:
@@ -551,6 +625,100 @@ class BenchDb:
             db.execute("DELETE FROM quality_sessions WHERE id = ?", [session_id])
 
     # ------------------------------------------------------------------ archiwum do 0.8.1
+    # ------------------------------------------------------------------ diagnostyka (schemat 3)
+    BOS_FIELDS = {"status": "status", "reason": "reason", "expects": "expects", "add_bos": "add_bos",
+                  "gguf_template_has": "gguf_template_has", "gguf_template_source": "gguf_template_source",
+                  "bos_text": "bos_text", "template_has": "template_has", "without": "without_count",
+                  "with_text": "with_text_count", "effective": "effective"}
+
+    def add_bos_check(self, check, *, checked_at: str, runtime_version: Optional[str] = None,
+                      app_version: Optional[str] = None) -> int:
+        """Wynik sprawdzenia tokenu początku (aibobr.diagnostics.bos.BosCheck); każde sprawdzenie osobno."""
+        values = {"model": check.model, "digest": check.digest, "checked_at": checked_at,
+                  "runtime_version": runtime_version, "app_version": app_version}
+        for attr, col in self.BOS_FIELDS.items():
+            v = getattr(check, attr)
+            values[col] = int(v) if isinstance(v, bool) else v
+        return self._insert("bos_checks", values)
+
+    def bos_check(self, model: str, digest: Optional[str] = None):
+        """Ostatnie sprawdzenie dla modelu (i tej wersji pliku, gdy podany skrót) → BosCheck albo None."""
+        from aibobr.diagnostics.bos import BosCheck
+        if not self.path.exists():
+            return None
+        sql, args = "SELECT * FROM bos_checks WHERE model = ?", [model]
+        if digest is not None:
+            sql += " AND digest = ?"
+            args.append(digest)
+        rows = self._select(sql + " ORDER BY id DESC LIMIT 1", args)
+        if not rows:
+            return None
+        row = rows[0]
+        data = {"model": row["model"], "digest": row["digest"]}
+        for attr, col in self.BOS_FIELDS.items():
+            v = row[col]
+            data[attr] = bool(v) if attr in ("expects", "add_bos", "gguf_template_has", "template_has") \
+                and v is not None else v
+        return BosCheck.from_dict(data)
+
+    def bos_checks(self) -> list[dict]:
+        """Ostatnie sprawdzenie każdego modelu (do tabeli w zakładce Diagnostyka)."""
+        return self._select("SELECT * FROM bos_checks WHERE id IN (SELECT MAX(id) FROM bos_checks GROUP BY model) "
+                            "ORDER BY model")
+
+    def start_diag_session(self, **values) -> str:
+        sid = values.pop("id", None) or new_id()
+        self._insert("diag_sessions", {"id": sid, **values})
+        return sid
+
+    def finish_diag_session(self, session_id: str, status: str = "finished", **values) -> None:
+        self._update("diag_sessions", session_id, {"status": status, **values})
+
+    def add_diag_task(self, session_id: str, task_no: int, item) -> int:
+        """Wynik kruchości jednego zadania (aibobr.diagnostics.fragility.TaskFragility)."""
+        d = item.as_dict() if hasattr(item, "as_dict") else dict(item)
+        return self._insert("diag_tasks", {
+            "session_id": session_id, "task_no": task_no, "task_id": d["task_id"], "label": d["label"],
+            "steps": d.get("steps"), "min_margin": d.get("min_margin"), "min_pos": d.get("min_pos"),
+            "min_pair_json": d.get("min_pair"), "fragile_steps": d.get("fragile_steps"),
+            "tie_steps": d.get("tie_steps"), "first_pos": d.get("first_pos"), "first_pair_json": d.get("first_pair"),
+            "first_context": d.get("first_context"), "scope": d.get("scope"), "answer_steps": d.get("answer_steps"),
+            "after_fragile": d.get("after_fragile"), "after_tie": d.get("after_tie"), "answer": d.get("answer"),
+            "reason": d.get("reason")})
+
+    def diag_sessions(self, model: Optional[str] = None) -> list[dict]:
+        if not self.path.exists():
+            return []
+        if model:
+            return self._select("SELECT * FROM diag_sessions WHERE model = ? ORDER BY started_at DESC", [model])
+        return self._select("SELECT * FROM diag_sessions ORDER BY started_at DESC")
+
+    def diag_tasks(self, session_id: str) -> list[dict]:
+        rows = self._select("SELECT * FROM diag_tasks WHERE session_id = ? ORDER BY task_no", [session_id])
+        for row in rows:
+            for key in ("min_pair_json", "first_pair_json"):
+                row[key] = json.loads(row[key]) if row[key] else None
+        return rows
+
+    def last_fragility(self, model: str, suite: str, lang: str, suite_version: Optional[str] = None) -> dict:
+        """Ostatnia zakończona diagnostyka kruchości tego testu dla modelu: {zadanie: etykieta} – do znacznika
+        w zakładce Jakość. Pusty słownik – nie było."""
+        if not self.path.exists():
+            return {}
+        sql = ("SELECT id FROM diag_sessions WHERE model = ? AND suite = ? AND lang = ? AND status = 'finished'")
+        args = [model, suite, lang]
+        if suite_version is not None:
+            sql += " AND suite_version = ?"
+            args.append(suite_version)
+        rows = self._select(sql + " ORDER BY started_at DESC LIMIT 1", args)
+        if not rows:
+            return {}
+        return {t["task_id"]: t["label"] for t in self.diag_tasks(rows[0]["id"])}
+
+    def delete_diag_session(self, session_id: str) -> None:
+        with closing(self._connect()) as db, db:
+            db.execute("DELETE FROM diag_sessions WHERE id = ?", [session_id])
+
     def add_perf(self, r, *, measured_at: str, runtime: str, runtime_version: Optional[str],
                  hardware: str, power: Optional[str], suite: str,
                  power_limit_w: Optional[float] = None, power_max_w: Optional[float] = None,

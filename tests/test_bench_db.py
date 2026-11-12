@@ -110,9 +110,11 @@ class QualitySchemaTest(unittest.TestCase):
             old.start_run(sid, model="m", run_no=1, started_at="x", gen_tps=61.2, verdict="fast")
         before = dump(path, "runs")
         db = BenchDb(path, today="2026-11-10")
-        self.assertEqual(db.schema_version(), 2)
+        self.assertEqual(db.schema_version(), bench_db.SCHEMA_VERSION)
         self.assertEqual(db.backup.name, "benchmarks.sqlite.bak-2026-11-10")
-        self.assertEqual(dump(path, "runs"), before)                        # historia prędkości nietknięta
+        after = [row[:-1] for row in dump(path, "runs")]                    # bez nowej kolumny bos_status (3)
+        self.assertEqual(after, before)                                     # historia prędkości nietknięta
+        self.assertEqual([row[-1] for row in dump(path, "runs")], [None])
         self.assertEqual(dump(db.backup, "runs"), before)
 
     def test_quality_session_cascade(self):
@@ -126,6 +128,53 @@ class QualitySchemaTest(unittest.TestCase):
         self.assertEqual(db.quality_sessions(model="m")[0]["id"], qs)
         db.delete_quality_session(qs)
         self.assertEqual((db.quality_runs(qs), db.quality_tasks(qr)), ([], []))
+
+
+class DiagnosticsSchemaTest(unittest.TestCase):
+    def test_upgrade_from_010_keeps_quality_history(self):
+        path = Path(tempfile.mkdtemp()) / "benchmarks.sqlite"
+        with mock.patch.object(bench_db, "SCHEMA_VERSION", 2):              # baza z 0.10 / 0.11
+            old = BenchDb(path, today="2026-11-11")
+            qs = old.start_quality_session(started_at="2026-11-11T10:00:00+01:00", attempts=1)
+            old.start_quality_run(qs, model="m", suite="scisly_v1", lang="pl", started_at="x", correct=12)
+        before = dump(path, "quality_runs")
+        db = BenchDb(path, today="2026-11-12")
+        self.assertEqual(db.schema_version(), 3)
+        self.assertEqual(db.backup.name, "benchmarks.sqlite.bak-2026-11-12")
+        self.assertEqual([row[:-1] for row in dump(path, "quality_runs")], before)
+        self.assertEqual(dump(db.backup, "quality_runs"), before)
+        self.assertEqual(db.bos_checks(), [])
+
+    def test_bos_checks_latest_per_model_and_digest(self):
+        from aibobr.diagnostics.bos import BosCheck
+        db = BenchDb(Path(tempfile.mkdtemp()) / "benchmarks.sqlite")
+        self.assertIsNone(db.bos_check("m"))
+        first = BosCheck("m", "d1", "missing", "measured", True, "<s>", False, 0, 1, 0, False, True, "file")
+        second = BosCheck("m", "d2", "ok", "measured", True, "<s>", True, 0, 1, 1, False, True, "file")
+        db.add_bos_check(first, checked_at="2026-11-12T10:00:00+01:00", runtime_version="0.40.14")
+        db.add_bos_check(second, checked_at="2026-11-12T11:00:00+01:00")
+        self.assertEqual(db.bos_check("m", "d1"), first)                    # ta sama wersja pliku
+        self.assertEqual(db.bos_check("m"), second)                         # ostatnie
+        self.assertIsNone(db.bos_check("m", "d3"))
+        self.assertEqual([r["status"] for r in db.bos_checks()], ["ok"])
+
+    def test_diag_session_tasks_and_last_fragility(self):
+        from aibobr.diagnostics.fragility import TaskFragility
+        db = BenchDb(Path(tempfile.mkdtemp()) / "benchmarks.sqlite")
+        ds = db.start_diag_session(started_at="2026-11-12T10:00:00+01:00", model="m", suite="scisly_v1",
+                                   suite_version="1.1", lang="pl", fragile_threshold=0.1, tie_threshold=0.02)
+        self.assertEqual(db.last_fragility("m", "scisly_v1", "pl"), {})      # niezakończona – nie liczy się
+        db.add_diag_task(ds, 1, TaskFragility("S1", "stable", 4, 0.9, 0, (("3", 0.95), ("4", 0.05))))
+        db.add_diag_task(ds, 2, TaskFragility("S2", "fragile", 10, 0.09, 3, (("a", 0.5), ("b", 0.41)),
+                                              1, 0, 3, (("a", 0.5), ("b", 0.41)), "przed", "odp"))
+        db.finish_diag_session(ds, finished_at="x", stable=1, fragile=1, tie=0, not_run=0)
+        tasks = db.diag_tasks(ds)
+        self.assertEqual(tasks[1]["first_pair_json"], [["a", 0.5], ["b", 0.41]])
+        self.assertEqual(db.last_fragility("m", "scisly_v1", "pl"), {"S1": "stable", "S2": "fragile"})
+        self.assertEqual(db.last_fragility("m", "scisly_v1", "pl", "1.0"), {})
+        self.assertEqual(db.diag_sessions("m")[0]["fragile"], 1)
+        db.delete_diag_session(ds)
+        self.assertEqual((db.diag_sessions(), db.diag_tasks(ds)), ([], []))
 
 
 class SessionDataTest(unittest.TestCase):

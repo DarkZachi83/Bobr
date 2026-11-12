@@ -127,6 +127,16 @@ class MainWindow:
         if old_quality is not None and old_quality.checked:
             self.quality.select_targets(sorted(old_quality.checked))
 
+        # --- Diagnostyka (0.12): co model dostał (token początku) i czy prompt jest kruchy
+        from aibobr.gui.widgets.diag_panel import DiagnosticsPanel
+        old_diag = getattr(self, "diag", None)
+        self.diag = DiagnosticsPanel(self.tabs, self.c, self.worker, self.current, self.check_from_disk,
+                                     self.set_status)
+        self.tabs.add(self.diag, text=t("d.tab"))
+        self.pages["diag"] = self.diag
+        if old_diag is not None and old_diag.checked:
+            self.diag.select_targets(sorted(old_diag.checked))
+
         # --- Statystyka
         self.stats = StatsPanel(self.tabs, self.c.saved, self.open_saved, self.compare_saved,
                                 self.fetch_hf, kind=(state or {}).get("stats_kind")) if self.c.saved else None
@@ -202,6 +212,7 @@ class MainWindow:
         settings.add_command(label=t("gui.menu.token"), command=self.set_token)
         settings.add_command(label=t("gui.menu.update_catalog"), command=self.update_catalog)
         settings.add_command(label=t("q.ed.open"), command=lambda: self.quality.open_editor())
+        settings.add_command(label=t("d.menu"), command=lambda: self.tabs.select(self.pages["diag"]))
         settings.add_separator()
         style = tk.Menu(settings, tearoff=False)
         self.theme_var = tk.StringVar(value=self.theme)
@@ -244,6 +255,7 @@ class MainWindow:
             self.recompute()
             self.bench.refresh_verdicts()
             self.quality.refresh_verdicts()
+            self.diag.refresh_verdicts()
 
         def done(hw):
             self.hw = hw
@@ -350,7 +362,8 @@ class MainWindow:
         self.tabs.select(self.pages["bench"])
 
     def close(self) -> None:
-        running = [p for p in (self.bench, getattr(self, "quality", None)) if p is not None and p.running]
+        running = [p for p in (self.bench, getattr(self, "quality", None), getattr(self, "diag", None))
+                   if p is not None and p.running]
         if running:
             if not messagebox.askyesno(t("bench.title"), t("bench.confirm_close"), parent=self.root):
                 return
@@ -496,7 +509,7 @@ class MainWindow:
     # ------------------------------------------------------------------ menu
     def _busy(self) -> bool:
         """Trwa benchmark – przebudowa okna (język, styl) przerwałaby wyświetlanie wyników."""
-        if any(getattr(getattr(self, name, None), "running", False) for name in ("bench", "quality")):
+        if any(getattr(getattr(self, name, None), "running", False) for name in ("bench", "quality", "diag")):
             messagebox.showinfo(t("bench.title"), t("bench.wait_rebuild"), parent=self.root)
             self.lang_var.set(str(self.c.settings.get("language") or ""))
             self.theme_var.set(self.theme)
