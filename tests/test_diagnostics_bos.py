@@ -1,7 +1,10 @@
+import struct
+import tempfile
 import unittest
+from pathlib import Path
 
 from aibobr.bench.ollama import Generation, OllamaBench
-from aibobr.diagnostics import bos
+from aibobr.diagnostics import bos, gguf
 from aibobr.diagnostics.bos import BosCheck, BosProbe
 
 CHATML = "{{- range .Messages }}<|im_start|>{{ .Role }}\n{{ .Content }}<|im_end|>\n{{ end }}<|im_start|>assistant\n"
@@ -12,10 +15,14 @@ class FakeOllama:
     „a” to 1 token, a sama Ollama dodaje token początku, gdy auto=True. Pamięć promptu, gdy model nie zwolniony."""
 
     def __init__(self, expects=True, bos_text="<s>", template=CHATML, auto=False, special=True,
-                 verbose_only=False, info=True, release_ok=True, single=True, cache_once=False):
+                 verbose_only=False, info=True, release_ok=True, single=True, cache_once=False,
+                 chat="auto", chat_where="info", modelfile=""):
         self.expects, self.bos_text, self.template, self.auto = expects, bos_text, template, auto
         self.special, self.verbose_only, self.info, self.release_ok = special, verbose_only, info, release_ok
         self.single, self.cache_once = single, cache_once
+        if chat == "auto":                  # szablon czatu z pliku GGUF zgodny z flagą (typowy przypadek)
+            chat = ("{{ bos_token }}" if expects else "") + "{% for m in messages %}{{ m.content }}{% endfor %}"
+        self.chat, self.chat_where, self.modelfile = chat, chat_where, modelfile
         self.loaded, self.calls, self.prompts = False, [], []
 
     def digest(self, model):
@@ -30,7 +37,9 @@ class FakeOllama:
             info["tokenizer.ggml.add_bos_token"] = self.expects
         if not self.verbose_only or verbose:
             info["tokenizer.ggml.tokens"] = ["<unk>", self.bos_text, "a"]
-        return {"template": self.template, "model_info": info}
+        if self.chat is not None and (self.chat_where == "info" or (self.chat_where == "verbose" and verbose)):
+            info["tokenizer.chat_template"] = self.chat
+        return {"template": self.template, "model_info": info, "modelfile": self.modelfile}
 
     def unload(self, model):
         if self.release_ok:
@@ -89,8 +98,11 @@ class Verdicts(unittest.TestCase):
         self.assertFalse(c.warning)
 
     def test_unknown_expectation(self):
-        self.assertEqual(probe(FakeOllama(expects=None, auto=True)).run("m").status, "ok")
-        c = probe(FakeOllama(expects=None, auto=False)).run("m")
+        self.assertEqual(probe(FakeOllama(expects=None, auto=True, chat=None)).run("m").status, "ok")
+        llama = probe(FakeOllama(expects=None, bos_text="<|begin_of_text|>", auto=True,
+                                 chat="{{- bos_token }}{%- if messages %}")).run("llama3.1")
+        self.assertEqual((llama.status, llama.expects), ("ok", True))        # Llama 3.1 z pomiaru autora
+        c = probe(FakeOllama(expects=None, auto=False, chat=None)).run("m")
         self.assertEqual((c.status, c.effective), ("unknown", 0))
         self.assertFalse(c.warning)
 
@@ -99,9 +111,89 @@ class Verdicts(unittest.TestCase):
         c = probe(fake).run("m")
         self.assertEqual((c.status, c.bos_text), ("missing", "<s>"))
         self.assertEqual(fake.calls, [("show", False), ("show", True)])
-        fake = FakeOllama(verbose_only=True, expects=False)
+        fake = FakeOllama(verbose_only=False)
         probe(fake).run("m")
-        self.assertEqual(fake.calls, [("show", False)])          # model bez tokenu początku – słownik niepotrzebny
+        self.assertEqual(fake.calls, [("show", False)])          # wszystko w zwykłej odpowiedzi – bez verbose
+
+
+class GgufTemplate(unittest.TestCase):
+    """Pomiar u autora 12.11.2026: Minitron z hf.co ma add_bos_token = false, a szablon GGUF „{{bos_token}}…”."""
+
+    MINITRON_CHAT = "{{bos_token}}{% for message in messages %}<|im_start|>{{ message['role'] }}"
+
+    def test_minitron_flag_false_but_gguf_template_has_bos(self):
+        c = probe(FakeOllama(expects=False, chat=self.MINITRON_CHAT)).run("hf.co/minitron")
+        self.assertEqual((c.status, c.add_bos, c.gguf_template_has, c.expects, c.effective),
+                         ("missing", False, True, True, 0))
+        self.assertEqual(c.gguf_template_source, "model_info")
+
+    def test_flag_false_and_template_unknown_is_not_a_verdict(self):
+        c = probe(FakeOllama(expects=False, chat=None)).run("m")
+        self.assertEqual((c.status, c.expects, c.gguf_template_source), ("unknown", None, None))
+        self.assertFalse(c.warning)
+
+    def test_qwen_template_without_bos(self):
+        c = probe(FakeOllama(expects=False, chat="{% for m in messages %}<|im_start|>{% endfor %}")).run("qwen")
+        self.assertEqual((c.status, c.gguf_template_has), ("not_used", False))
+
+    def test_template_from_verbose(self):
+        c = probe(FakeOllama(expects=False, chat=self.MINITRON_CHAT, chat_where="verbose")).run("m")
+        self.assertEqual((c.status, c.gguf_template_source), ("missing", "model_info"))
+
+    def test_template_from_gguf_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "sha256-abc"
+            write_gguf(path, {"general.architecture": "llama", "tokenizer.ggml.add_bos_token": False,
+                              "tokenizer.ggml.tokens": ["<unk>", "<s>", "a"],
+                              "tokenizer.chat_template": self.MINITRON_CHAT})
+            fake = FakeOllama(expects=False, chat=self.MINITRON_CHAT, chat_where="nowhere",
+                              modelfile=f"# Modelfile\nFROM {path}\nTEMPLATE x\n")
+            c = probe(fake).run("m")
+        self.assertEqual((c.status, c.gguf_template_source), ("missing", "file"))
+
+    def test_bielik_11b_template_has_bos_text_from_verbose(self):
+        """Bielik 11B z biblioteki SpeakLeash: szablon Ollamy ma <s>, tekst tokenu tylko w verbose."""
+        fake = FakeOllama(expects=False, template="<s>" + CHATML, verbose_only=True, chat=None)
+        c = probe(fake).run("bielik11")
+        self.assertEqual((c.bos_text, c.template_has, c.effective, c.status), ("<s>", True, 1, "ok"))
+
+
+def write_gguf(path: Path, keys: dict) -> None:
+    def s(text):
+        b = text.encode("utf-8")
+        return struct.pack("<Q", len(b)) + b
+    out = b"GGUF" + struct.pack("<I", 3) + struct.pack("<Q", 0) + struct.pack("<Q", len(keys))
+    for k, v in keys.items():
+        out += s(k)
+        if isinstance(v, bool):
+            out += struct.pack("<I", 7) + struct.pack("<?", v)
+        elif isinstance(v, str):
+            out += struct.pack("<I", 8) + s(v)
+        elif isinstance(v, list):
+            out += struct.pack("<I", 9) + struct.pack("<I", 8) + struct.pack("<Q", len(v)) + b"".join(s(x) for x in v)
+    path.write_bytes(out + b"\0" * 64)
+
+
+class GgufReader(unittest.TestCase):
+    def test_reads_scalars_skips_arrays(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "m.gguf"
+            write_gguf(path, {"a.flag": True, "tokenizer.ggml.tokens": ["x"] * 1000, "tokenizer.chat_template": "T"})
+            self.assertEqual(gguf.read_keys(path, ["tokenizer.chat_template", "a.flag"]),
+                             {"a.flag": True, "tokenizer.chat_template": "T"})
+            self.assertEqual(gguf.read_keys(path, ["missing"]), {})
+            bad = Path(d) / "x.bin"
+            bad.write_bytes(b"NOPE")
+            with self.assertRaises(gguf.GgufError):
+                gguf.read_keys(bad, ["a"])
+
+    def test_model_path_from_modelfile(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "sha256-1"
+            path.write_bytes(b"GGUF")
+            self.assertEqual(gguf.model_path({"modelfile": f"FROM {path}\nPARAMETER x 1"}), path)
+            self.assertIsNone(gguf.model_path({"modelfile": "FROM hf.co/nie/istnieje"}))
+            self.assertIsNone(gguf.model_path({}))
 
 
 class Unknowns(unittest.TestCase):

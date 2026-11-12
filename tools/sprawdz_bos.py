@@ -36,7 +36,10 @@ def main(argv=None) -> int:
         print(f"\n== {model}")
         c = probe.run(model)
         print(f"   wynik: {LABEL.get(c.status, c.status)}  ({c.reason})")
-        print(f"   model oczekuje: {c.expects}   token: {c.bos_text!r}   w szablonie Ollamy: {c.template_has}")
+        source = {"model_info": "z Ollamy", "file": "z pliku modelu", None: "niedostępny"}[c.gguf_template_source]
+        print(f"   model oczekuje: {c.expects}   (flaga add_bos_token: {c.add_bos}, szablon GGUF z bos_token: "
+              f"{c.gguf_template_has} – {source})")
+        print(f"   token: {c.bos_text!r}   w szablonie Ollamy: {c.template_has}")
         print(f"   Ollama dodaje sama: {c.without}   z tokenem w tekście: {c.with_text}   "
               f"zwykłe zapytanie: {c.effective}")
     return 0
