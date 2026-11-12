@@ -85,6 +85,9 @@ class GuiSmokeTest(unittest.TestCase):
     def window(self, profile="real_laptop_rtx5050_linux.json", model=None):
         from aibobr.gui.main_window import MainWindow
         w = MainWindow(self.root, self.build(profile), str(model or self.gguf))
+        # Sprawdzenie tokenu początku przed pomiarem bez prawdziwej Ollamy: na Windowsie w CI odmowa połączenia
+        # z localhost trwa sekundy, a testy czekają na start pomiaru. Testy diagnostyki podmieniają to same.
+        w.c.check_bos = lambda targets, report=None, stop=None, **kw: []
         self.pump(lambda: w.model is not None and w.hw is not None and w.verdict.cget("text"))
         return w
 
