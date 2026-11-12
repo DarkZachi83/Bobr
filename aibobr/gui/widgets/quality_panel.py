@@ -297,7 +297,7 @@ class QualityPanel(BenchmarkPanel):
 
     def open_editor(self) -> None:
         """Edytor testów – osobne okno (tworzenie testów jest opcjonalne); jedno naraz."""
-        from aibobr.gui.dialogs.test_editor import TestEditor
+        from aibobr.gui.dialogs.quality_editor import TestEditor
         win = getattr(self, "editor", None)
         if win is not None and win.winfo_exists():
             win.deiconify()

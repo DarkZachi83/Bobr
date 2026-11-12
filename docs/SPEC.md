@@ -1054,3 +1054,35 @@ testu w każdym przebiegu); usunięty test w historii – pod swoim id. `tools/t
 
 **PR-y:** 1) logika: zapis, walidacja, import/eksport, podgląd; 2) okno edytora; 3) uruchamianie własnych
 testów i Historia; 4) README, SPEC, wersja 0.11.0.
+
+
+## Diagnostyka 0.12 (decyzje autora 12.11.2026)
+
+Zanim porówna się odpowiedzi, trzeba ustalić, **co model naprawdę dostał** i **czy prompt jest kruchy**
+(wskazówka z r/LocalLLaMA po eksperymencie BOS). Różnica wyniku na zadaniu kruchym może być przeważonym
+remisem; na stabilnym – rzeczywistą różnicą wejścia. Osobna główna zakładka **Diagnostyka** (między Jakością
+a Statystyką) i Ustawienia → Diagnostyka.
+
+**Token początku** (`aibobr/diagnostics/bos.py`, `tools/sprawdz_bos.py`). Trzy źródła: opis z pliku GGUF
+w `/api/show` (`tokenizer.ggml.add_bos_token`, `bos_token_id`, tekst tokenu ze słownika – tryb verbose tylko
+w razie potrzeby), szablon Ollamy (tekst tokenu albo `bos_token`/`.BOS`) i pomiar: dwa zapytania w trybie raw,
+każde po zwolnieniu modelu (potwierdzonym w `/api/ps`; przy pamięci promptu jedna powtórka) – „a” oraz
+„<token>a”; `prompt_eval_count − 1` = liczba tokenów początku bez tokenu w tekście (dodaje je Ollama) i z nim.
+Sam brak tokenu w szablonie niczego nie dowodzi (część modeli dostaje go od Ollamy). Przy zwykłym zapytaniu
+model dostaje: z tokenem w szablonie – wartość „z tekstem”, bez – „bez”. Wynik: `ok` (jeden), `missing`
+(zero, a model oczekuje – przypadek Minitrona z hf.co), `double` (dwa), `not_used` (model nie używa) albo
+`unknown` (brak opisu modelu, nieudane zwolnienie, „a” nie jest jednym tokenem, tekst tokenu nie jest
+rozpoznawany jako specjalny) – bez ostrzeżenia. Sprawdzenie automatyczne przed benchmarkiem i testem jakości,
+raz na wersję modelu (skrót z `/api/tags`), oraz ręczne w zakładce Diagnostyka.
+
+**Naprawa – decyduje użytkownik.** Przy `missing`/`double` przed pomiarem pytanie o rodzaj testu, z podpowiedzią:
+„jak podaje Ollama” (tak model działa na co dzień; wynik może być zaniżony), „z poprawionym tokenem początku”
+(osobna wersja w Ollamie, np. `…-bos`, tworzona raz za zgodą; oryginał nietknięty) albo „oba – porównanie”.
+
+**Kruchość promptu** – osobny przebieg z `logprobs` (nie w trakcie benchmarku ani testu jakości: sama prośba
+o logprobs zmieniała pamięć promptu w eksperymencie z 7.11). Odstęp między pierwszym a drugim kandydatem przy
+każdym tokenie; progi ustawiane przez użytkownika w zakładce Diagnostyka (domyślnie: kruche < 0,10, remis
+< 0,02).
+
+**PR-y:** 1) token początku – logika i narzędzie terminalowe; 2) kruchość; 3) zakładka, baza (schemat 3),
+Historia; 4) naprawa i wybór rodzaju testu; 5) README, SPEC, wersja 0.12.0.
