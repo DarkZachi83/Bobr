@@ -1065,7 +1065,13 @@ a Statystyką) i Ustawienia → Diagnostyka.
 
 **Token początku** (`aibobr/diagnostics/bos.py`, `tools/sprawdz_bos.py`). Trzy źródła: opis z pliku GGUF
 w `/api/show` (`tokenizer.ggml.add_bos_token`, `bos_token_id`, tekst tokenu ze słownika – tryb verbose tylko
-w razie potrzeby), szablon Ollamy (tekst tokenu albo `bos_token`/`.BOS`) i pomiar: dwa zapytania w trybie raw,
+w razie potrzeby) **i szablon czatu z pliku GGUF** (`tokenizer.chat_template` z `/api/show`, a gdy Ollama go
+nie podaje – z nagłówka pliku modelu wskazanego linią FROM, `aibobr/diagnostics/gguf.py`, tylko odczyt). Model
+oczekuje tokenu początku, gdy dodaje go tokenizer (flaga) **albo** szablon GGUF (`bos_token`); nie oczekuje –
+tylko gdy szablon GGUF jest znany i go nie ma. Pomiar autora 12.11: Minitron z hf.co ma flagę `false`, a szablon
+GGUF „{{bos_token}}…” – sama flaga dała fałszywe „model nie używa”. Pozostałe modele z pomiaru (Gemma 2/3,
+Llama 3.1/3.2, Qwen 2.5/3, Bielik 11B) – zgodnie z oczekiwaniem; Ollama nie dubluje tokenu początku, gdy
+dodaje go sama, a tekst zaczyna się od niego (Gemma: 1 i 1), szablon Ollamy (tekst tokenu albo `bos_token`/`.BOS`) i pomiar: dwa zapytania w trybie raw,
 każde po zwolnieniu modelu (potwierdzonym w `/api/ps`; przy pamięci promptu jedna powtórka) – „a” oraz
 „<token>a”; `prompt_eval_count − 1` = liczba tokenów początku bez tokenu w tekście (dodaje je Ollama) i z nim.
 Sam brak tokenu w szablonie niczego nie dowodzi (część modeli dostaje go od Ollamy). Przy zwykłym zapytaniu
