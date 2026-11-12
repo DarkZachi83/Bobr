@@ -715,6 +715,13 @@ class BenchDb:
             return {}
         return {t["task_id"]: t["label"] for t in self.diag_tasks(rows[0]["id"])}
 
+    def set_bos_status(self, kind: str, session_id: str, model: str, status: Optional[str]) -> None:
+        """Z jakim tokenem początku liczono wynik (kolumna bos_status, schemat 3): kind speed/quality."""
+        table = {"speed": "runs", "quality": "quality_runs"}[kind]
+        with closing(self._connect()) as db, db:
+            db.execute(f"UPDATE {table} SET bos_status = ? WHERE session_id = ? AND model = ?",
+                       [status, session_id, model])
+
     def delete_diag_session(self, session_id: str) -> None:
         with closing(self._connect()) as db, db:
             db.execute("DELETE FROM diag_sessions WHERE id = ?", [session_id])

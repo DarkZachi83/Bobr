@@ -272,3 +272,41 @@ class Client(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Fix(unittest.TestCase):
+    def test_variant_name(self):
+        self.assertEqual(bos.variant_name("hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M"),
+                         "bielik-minitron-7b-v3.0-instruct-gguf-bos:Q4_K_M")
+        self.assertEqual(bos.variant_name("gemma3"), "gemma3-bos")
+
+    def test_fixed_template(self):
+        missing = probe(FakeOllama(expects=False, chat="{{bos_token}}")).run("m")
+        self.assertEqual(bos.fixed_template(CHATML, missing), "<s>" + CHATML)
+        double = probe(FakeOllama(template="<s>" + CHATML, auto=True)).run("m")
+        self.assertEqual(bos.fixed_template("<s>" + CHATML, double), CHATML)
+        ok = probe(FakeOllama(auto=True)).run("m")
+        self.assertIsNone(bos.fixed_template(CHATML, ok))
+
+
+class FakeOllamaWithCreate(FakeOllama):
+    """Udawana Ollama z tworzeniem modeli: nowy model ma ten sam plik (opis), inny szablon."""
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.models = {}
+        self.created = []
+
+    def digest(self, model):
+        return "sha256:abc" if model not in self.models and not model.endswith("-bos") else (
+            "sha256:" + model if model in self.models else None)
+
+    def show(self, model, verbose=False):
+        out = super().show(model, verbose)
+        if model in self.models and out:
+            out["template"] = self.models[model]
+        return out
+
+    def create(self, name, source, template):
+        self.created.append((name, source))
+        self.models[name] = template

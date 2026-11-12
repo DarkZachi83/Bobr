@@ -85,6 +85,9 @@ class GuiSmokeTest(unittest.TestCase):
     def window(self, profile="real_laptop_rtx5050_linux.json", model=None):
         from aibobr.gui.main_window import MainWindow
         w = MainWindow(self.root, self.build(profile), str(model or self.gguf))
+        # Sprawdzenie tokenu początku przed pomiarem bez prawdziwej Ollamy: na Windowsie w CI odmowa połączenia
+        # z localhost trwa sekundy, a testy czekają na start pomiaru. Testy diagnostyki podmieniają to same.
+        w.c.check_bos = lambda targets, report=None, stop=None, **kw: []
         self.pump(lambda: w.model is not None and w.hw is not None and w.verdict.cget("text"))
         return w
 
@@ -574,7 +577,7 @@ class GuiSmokeTest(unittest.TestCase):
         clock = [0.0]
         kw = {"clock": lambda: clock[0], "sleep": lambda s: clock.__setitem__(0, clock[0] + s), "unload_timeout": 1}
         bos_fake = BosOllama(expects=False, chat="{{bos_token}}{% for m in messages %}")      # jak Minitron
-        original_bos, original_frag = w.c.check_bos, w.c.run_fragility
+        original_bos, original_frag = type(w.c).check_bos.__get__(w.c), w.c.run_fragility
         w.c.check_bos = lambda targets, report, stop, force=False: original_bos(
             targets, report, stop, force=force, bench=bos_fake, probe_kw=kw)
         d.select_targets(["ollama:minitron"])
@@ -639,6 +642,113 @@ class GuiSmokeTest(unittest.TestCase):
         d.confirm = lambda title, text: True
         d.delete_history()
         self.assertEqual(d.htable.get_children(), ())
+
+    def test_fragility_checks_bos_itself(self):
+        """Kruchość bez wcześniejszego sprawdzenia tokenu początku: sprawdza sama, okno bez błędu (zgłoszenie
+        autora 12.11: AttributeError cached_count), stan tokenu w historii."""
+        from tests.test_diagnostics_bos import FakeOllama as BosOllama
+        from tests.test_diagnostics_fragility import FakeOllama as FragOllama, STABLE
+        from aibobr.quality import suites
+        errors = []
+        self.root.report_callback_exception = lambda *exc: errors.append(exc)
+        w = self.window()
+        d = w.diag
+        clock = [0.0]
+        kw = {"clock": lambda: clock[0], "sleep": lambda s: clock.__setitem__(0, clock[0] + s), "unload_timeout": 1}
+        real_check, real_frag = type(w.c).check_bos.__get__(w.c), w.c.run_fragility
+        bos_fake = BosOllama(expects=False, chat="{{bos_token}}{% x %}")
+        w.c.check_bos = lambda targets, report=lambda e: None, stop=lambda: False, force=False, **_: real_check(
+            targets, report, stop, force=force, bench=bos_fake, probe_kw=kw)
+        answers = {t_["prompt"]["pl"]: STABLE for t_ in suites.load("humanistyczny_v1")["tasks"]}
+        w.c.run_fragility = lambda target, test, report, stop, thresholds=None: real_frag(
+            target, test, report, stop, thresholds=thresholds, bench=FragOllama(answers), probe_kw=kw)
+        d.select_targets(["ollama:minitron"])
+        d.tabs.select(1)
+        self.pump(seconds=0.1)
+        d.f_test.set("Test humanistyczny (PL)")
+        d.run_fragility()
+        self.pump(lambda: not d.running, 10)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(d.ftable.get_children()), 15)
+        self.assertEqual(w.c.bench_db.diag_sessions()[0]["bos_status"], "missing")
+        self.assertEqual(int(d.bar.cget("value")), 100)
+
+    def test_bos_gate_both_comparison(self):
+        """Pkt 5 (12.11.2026): brak tokenu początku → pytanie; „oba” – poprawiona wersja, dwa przebiegi, porównanie
+        zmienionych zadań z opisem z diagnostyki kruchości; z jakim tokenem liczono – w bazie."""
+        from aibobr.diagnostics.fragility import TaskFragility
+        from aibobr.quality import custom
+        from tests.test_diagnostics_bos import FakeOllamaWithCreate
+        from tests.test_quality_runner import Bench, NoSandbox
+        w = self.window()
+        q = w.quality
+        q._sandbox_obj = NoSandbox()
+        clock = [0.0]
+        kw = {"clock": lambda: clock[0], "sleep": lambda s: clock.__setitem__(0, clock[0] + s), "unload_timeout": 1}
+        fake = FakeOllamaWithCreate(expects=False, chat="{{bos_token}}{% for m in messages %}")
+        orig_check, orig_create, orig_quality = type(w.c).check_bos.__get__(w.c), w.c.create_bos_variant, w.c.run_quality
+
+        def check(targets, report=lambda e: None, stop=lambda: False, force=False, **_):
+            return orig_check(targets, report, stop, force=force, bench=fake, probe_kw=kw)
+        w.c.check_bos = check
+        w.c.create_bos_variant = lambda target, c, report=lambda e: None: orig_create(target, c, report, bench=fake,
+                                                                                      probe_kw=kw)
+        data = custom.new_suite("bos_test", "Bos", ["pl"])
+        data["tasks"] = [
+            {"id": "T1", "category": "x", "level": "easy", "max_tokens": 64, "prompt": {"pl": "Ile to 6 × 7?"},
+             "check": {"type": "number", "expected": 42}},
+            {"id": "T2", "category": "x", "level": "easy", "max_tokens": 64, "prompt": {"pl": "Popraw: Zazolc"},
+             "check": {"type": "text", "expected": ["Zażółć"]}}]
+        w.c.custom_suites.save(data)
+        db = w.c.bench_db
+        ds = db.start_diag_session(started_at="2026-11-12T10:00:00+01:00", model="minitron", suite="bos_test",
+                                   suite_version="1", lang="pl", fragile_threshold=0.1, tie_threshold=0.02)
+        db.add_diag_task(ds, 1, TaskFragility("T1", "tie"))
+        db.add_diag_task(ds, 2, TaskFragility("T2", "stable"))
+        db.finish_diag_session(ds, finished_at="x")
+        q._suites_changed()
+        for key, var in q.test_vars.items():
+            var.set(key[0] == "bos_test")
+
+        class ModelBench(Bench):
+            def generate(self, model, prompt, *a, **k):
+                self.model = model
+                return super().generate(model, prompt, *a, **k)
+        answers = {("minitron", "Ile to 6 × 7?"): "41", ("minitron", "Popraw: Zazolc"): "Zazółć",
+                   ("minitron-bos", "Ile to 6 × 7?"): "42", ("minitron-bos", "Popraw: Zazolc"): "Zażółć"}
+        bench = ModelBench(lambda p, n: answers[(bench.model, p)])
+        w.c.run_quality = lambda targets, tests, report, stop, attempts=1, hw=None, sandbox=None: orig_quality(
+            targets, tests, report, stop, attempts=attempts, bench=bench, sandbox=NoSandbox(),
+            runner_kw={"clock": lambda: clock[0], "sleep": lambda x: clock.__setitem__(0, clock[0] + x),
+                       "unload_timeout": 1})
+        asked = []
+        q.ask_bos = lambda checks, variants: (asked.append((checks, variants)), "both")[1]
+        q.select_targets(["ollama:minitron"])
+        q.start()
+        self.assertTrue(q.running)                                      # sprawdzenie w tle – przycisk zablokowany
+        self.pump(lambda: q.q_results and not q.running, 15)
+        self.assertEqual([c.status for c in asked[0][0]], ["missing"])
+        self.assertEqual(asked[0][1], {"minitron": "minitron-bos"})
+        self.assertEqual(fake.created, [("minitron-bos", "minitron")])
+        self.assertEqual(fake.models["minitron-bos"][:3], "<s>")         # szablon z tokenem początku
+        self.assertEqual(sorted(q.targets()), ["ollama:minitron", "ollama:minitron-bos"])
+        label = q.label_line.cget("text")
+        self.assertIn("Token początku – minitron, Bos (PL): jak podaje Ollama 0/2, poprawiony 2/2", label)
+        self.assertIn("T1 ✗→✓ (przeważony remis)", label)
+        self.assertIn("T2 ✗→✓ (rzeczywista różnica wejścia)", label)
+        runs = db.quality_runs(q.q_session)
+        self.assertEqual({r["model"]: r["bos_status"] for r in runs}, {"minitron": "missing", "minitron-bos": "ok"})
+        # drugi raz: wersja już jest – bez tworzenia; „jak podaje Ollama” – tylko oryginał
+        q.ask_bos = lambda checks, variants: "as_is"
+        q.select_targets(["ollama:minitron"])
+        q.start()
+        self.pump(lambda: not q.running and len(db.quality_sessions()) == 2, 15)
+        self.assertEqual(fake.created, [("minitron-bos", "minitron")])
+        # anulowanie – nic się nie uruchamia
+        q.ask_bos = lambda checks, variants: None
+        q.start()
+        self.pump(lambda: not q.running, 5)
+        self.assertEqual(len(db.quality_sessions()), 2)
 
     def test_quality_custom_test_run(self):
         from aibobr.quality import custom
