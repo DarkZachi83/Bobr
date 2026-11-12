@@ -643,6 +643,36 @@ class GuiSmokeTest(unittest.TestCase):
         d.delete_history()
         self.assertEqual(d.htable.get_children(), ())
 
+    def test_fragility_checks_bos_itself(self):
+        """Kruchość bez wcześniejszego sprawdzenia tokenu początku: sprawdza sama, okno bez błędu (zgłoszenie
+        autora 12.11: AttributeError cached_count), stan tokenu w historii."""
+        from tests.test_diagnostics_bos import FakeOllama as BosOllama
+        from tests.test_diagnostics_fragility import FakeOllama as FragOllama, STABLE
+        from aibobr.quality import suites
+        errors = []
+        self.root.report_callback_exception = lambda *exc: errors.append(exc)
+        w = self.window()
+        d = w.diag
+        clock = [0.0]
+        kw = {"clock": lambda: clock[0], "sleep": lambda s: clock.__setitem__(0, clock[0] + s), "unload_timeout": 1}
+        real_check, real_frag = type(w.c).check_bos.__get__(w.c), w.c.run_fragility
+        bos_fake = BosOllama(expects=False, chat="{{bos_token}}{% x %}")
+        w.c.check_bos = lambda targets, report=lambda e: None, stop=lambda: False, force=False, **_: real_check(
+            targets, report, stop, force=force, bench=bos_fake, probe_kw=kw)
+        answers = {t_["prompt"]["pl"]: STABLE for t_ in suites.load("humanistyczny_v1")["tasks"]}
+        w.c.run_fragility = lambda target, test, report, stop, thresholds=None: real_frag(
+            target, test, report, stop, thresholds=thresholds, bench=FragOllama(answers), probe_kw=kw)
+        d.select_targets(["ollama:minitron"])
+        d.tabs.select(1)
+        self.pump(seconds=0.1)
+        d.f_test.set("Test humanistyczny (PL)")
+        d.run_fragility()
+        self.pump(lambda: not d.running, 10)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(d.ftable.get_children()), 15)
+        self.assertEqual(w.c.bench_db.diag_sessions()[0]["bos_status"], "missing")
+        self.assertEqual(int(d.bar.cget("value")), 100)
+
     def test_bos_gate_both_comparison(self):
         """Pkt 5 (12.11.2026): brak tokenu początku → pytanie; „oba” – poprawiona wersja, dwa przebiegi, porównanie
         zmienionych zadań z opisem z diagnostyki kruchości; z jakim tokenem liczono – w bazie."""

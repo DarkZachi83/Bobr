@@ -58,6 +58,7 @@ class DiagnosticsPanel(BenchmarkPanel):
         self.f_rows: dict[str, dict] = {}              # wiersz → wynik zadania
         self.h_rows: dict[str, str] = {}               # wiersz historii → id sesji
         self.mode = ""
+        self.total = self.done_count = self.cached_count = 0
         top = ttk.Frame(self.right, style="Panel.TFrame", padding=12)
         top.pack(fill="x")
         ttk.Label(top, text=t("d.title"), style="Title.TLabel").pack(anchor="w")
@@ -385,8 +386,9 @@ class DiagnosticsPanel(BenchmarkPanel):
         if kind == "bos_start":
             self.stage.configure(text=t("d.bos.running", model=e["model"]))
         elif kind == "bos":
-            self.done_count += 1
-            self.cached_count += 1 if e.get("cached") else 0
+            if self.mode == "bos":                    # przy kruchości to samoczynne sprawdzenie – nie krok przebiegu
+                self.done_count += 1
+                self.cached_count += 1 if e.get("cached") else 0
             self._put_bos(e["check"], time.strftime("%Y-%m-%dT%H:%M"))
             self.stage.configure(text=t("d.bos.done_one", model=e["model"], status=t(f"d.bos.{e['check'].status}"))
                                  + (" " + t("d.bos.cached") if e.get("cached") else ""))
