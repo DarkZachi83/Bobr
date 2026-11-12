@@ -119,6 +119,9 @@ def answer_end(text: str, spec: Optional[dict], lang: str) -> Optional[int]:
     except Exception:
         return None
     value = c.value
+    if isinstance(value, str) and checks.unwrap(value) == checks.unwrap(checks.body(text)) and \
+            (c.reason in (checks.AMBIGUOUS, checks.WRONG, checks.EMPTY) or kind not in ("text", "choice")):
+        return None                 # ocena nie wydzieliła odpowiedzi – oddała całą wypowiedź (H15 Minitrona)
     if kind in ("text", "choice") and isinstance(value, str) and value.strip():
         i = text.casefold().rfind(value.strip().casefold())
         return i + len(value.strip()) if i >= 0 else None

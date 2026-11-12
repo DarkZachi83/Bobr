@@ -1098,5 +1098,6 @@
   "d.bos.fix": "Create fixed version",
   "d.bos.fix_confirm": "Create the fixed version {name} in Ollama? The same model file (no copy), a template with one beginning token; the original stays untouched.",
   "d.bos.fixed": "Created {name}: {status}",
-  "d.bos.nothing_to_fix": "This model needs no fix."
+  "d.bos.nothing_to_fix": "This model needs no fix.",
+  "d.bos.export": "Export to CSV..."
 }

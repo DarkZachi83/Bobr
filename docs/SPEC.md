@@ -1108,7 +1108,12 @@ z flagą, szablonem GGUF i jego źródłem; „Sprawdź wybrane modele” – za
 „Sprawdź ponownie” – pomiar od nowa), „Kruchość” (wybór testu – standardowe i własne, każda wersja językowa;
 progi w polach, zapamiętywane w ustawieniach `fragile_threshold`/`tie_threshold`, złe progi – komunikat, bez
 zapisu; tabela zadań i szczegóły: zakres liczenia, najwęższe miejsce, pierwszy prawie remis, odpowiedź)
-i „Historia” (przebiegi kruchości z progami i stanem tokenu początku z chwili pomiaru; szczegóły, usuwanie).
+i „Historia” (przebiegi kruchości z progami i stanem tokenu początku z chwili pomiaru; szczegóły, eksport,
+usuwanie). **Eksport CSV** (`aibobr/bench/export.py`, średnik, UTF-8 z BOM jak pozostałe eksporty): przebieg
+kruchości – folder `diagnostyka_RRRR-MM-DD_GGMM_<id8>` z `kruchosc.csv` (zadania: etykieta, odstępy, pary
+kandydatów w JSON, kontekst, zakres, odpowiedź), `token_poczatku.csv` (sprawdzenia tego modelu) i
+`manifest.json` (ustawienia, progi); z karty Kruchość – ostatni przebieg, z Historii – wybrany. Karta Token
+początku: „Eksportuj do CSV…” – wszystkie sprawdzenia, każde z datą.
 W zakładce Jakość kolumna „Kruchość” w zadaniach – z ostatniej zakończonej diagnostyki tego testu (model,
 test, język, wersja testu).
 
