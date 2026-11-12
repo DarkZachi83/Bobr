@@ -25,6 +25,7 @@ class Generation:
     prompt_cached: Optional[int] = None   # prompt_eval_cached_count: tokeny promptu z pamięci; None = Ollama nie podaje
     total_seconds: Optional[float] = None  # total_duration – cały czas zapytania po stronie silnika
     done_reason: Optional[str] = None      # „stop” (model skończył) / „length” (limit tokenów)
+    logprobs: Optional[list] = None        # tylko na prośbę (diagnostyka kruchości); None – Ollama nie podała
 
     @property
     def pp_tps(self) -> Optional[float]:
@@ -51,16 +52,22 @@ class OllamaBench:
 
     def generate(self, model: str, prompt: str, num_ctx: int, num_predict: int,
                  temperature: float = 0, seed: int = 42,
-                 on_chunk: Optional[Callable[[str], None]] = None, raw: bool = False) -> Generation:
+                 on_chunk: Optional[Callable[[str], None]] = None, raw: bool = False,
+                 top_logprobs: Optional[int] = None) -> Generation:
         """on_chunk(tekst) – podgląd na żywo (etap 12c): Ollama wysyła odpowiedź kawałkami
         (stream). Czasy i tak przychodzą w ostatnim kawałku i liczy je serwer – pomiar się
         nie zmienia."""
-        stream = on_chunk is not None and hasattr(self.http, "post_lines")
+        # logprobs Ollama podaje tylko bez strumienia; prośba o nie zmienia zachowanie pamięci promptu
+        # (eksperyment 7.11), więc tylko w osobnym przebiegu diagnostyki – nigdy w benchmarku i teście jakości.
+        stream = on_chunk is not None and hasattr(self.http, "post_lines") and top_logprobs is None
         payload = {"model": model, "prompt": prompt, "stream": stream, "think": False, "keep_alive": "5m",
                    "options": {"num_ctx": num_ctx, "num_predict": num_predict,
                                "temperature": temperature, "seed": seed}}
         if raw:                       # bez szablonu – tekst trafia do modelu tak, jak jest (diagnostyka wejścia)
             payload["raw"] = True
+        if top_logprobs is not None:
+            payload["logprobs"] = True
+            payload["top_logprobs"] = int(top_logprobs)
         url = f"{self.host}/api/generate"
         if stream:
             parts, r = [], {}
@@ -87,7 +94,8 @@ class OllamaBench:
             text=text,
             prompt_cached=None if r.get("prompt_eval_cached_count") is None else int(r["prompt_eval_cached_count"]),
             total_seconds=float(r["total_duration"]) / ns if r.get("total_duration") is not None else None,
-            done_reason=str(r["done_reason"]) if r.get("done_reason") else None)
+            done_reason=str(r["done_reason"]) if r.get("done_reason") else None,
+            logprobs=r.get("logprobs") if isinstance(r.get("logprobs"), list) else None)
 
     def show(self, model: str, verbose: bool = False) -> dict:
         """/api/show: szablon Ollamy i opis modelu z pliku GGUF (model_info). verbose dokłada słownik tokenów –

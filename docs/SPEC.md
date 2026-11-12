@@ -1085,10 +1085,16 @@ raz na wersję modelu (skrót z `/api/tags`), oraz ręczne w zakładce Diagnosty
 „jak podaje Ollama” (tak model działa na co dzień; wynik może być zaniżony), „z poprawionym tokenem początku”
 (osobna wersja w Ollamie, np. `…-bos`, tworzona raz za zgodą; oryginał nietknięty) albo „oba – porównanie”.
 
-**Kruchość promptu** – osobny przebieg z `logprobs` (nie w trakcie benchmarku ani testu jakości: sama prośba
-o logprobs zmieniała pamięć promptu w eksperymencie z 7.11). Odstęp między pierwszym a drugim kandydatem przy
-każdym tokenie; progi ustawiane przez użytkownika w zakładce Diagnostyka (domyślnie: kruche < 0,10, remis
-< 0,02).
+**Kruchość promptu** (`aibobr/diagnostics/fragility.py`, `tools/kruchosc.py`) – osobny przebieg z `logprobs`
+(nie w trakcie benchmarku ani testu jakości: sama prośba o logprobs zmieniała pamięć promptu w eksperymencie
+z 7.11; Ollama podaje logprobs tylko bez strumienia). Zadania testu jakości (standardowego albo własnego), każde
+od zera (model zwolniony; zapamiętany prompt – wynik nieważny), te same ustawienia co test jakości (num_ctx 2048,
+limit tokenów zadania, temperatura 0, seed 42), dwóch najlepszych kandydatów przy każdym tokenie. Odstęp
+= p1 − p2 (różnica prawdopodobieństw; bez drugiego kandydata p1). Zadanie: **stabilne** (żaden krok poniżej
+progu), **kruche** (jakiś krok < próg „kruche”), **remis** (jakiś krok < próg „remis”); do tego najwęższe
+miejsce, liczba kroków poniżej progów i pierwszy prawie remis z tekstem tuż przed nim. Progi ustawiane przez
+użytkownika (domyślnie kruche < 0,10, remis < 0,02; 0 ≤ remis ≤ kruche ≤ 1). Ollama bez logprobs – „nie
+podaje prawdopodobieństw”, przebieg się kończy. Odstęp liczy się tylko na ścieżce wybranej przez model.
 
 **PR-y:** 1) token początku – logika i narzędzie terminalowe; 2) kruchość; 3) zakładka, baza (schemat 3),
 Historia; 4) naprawa i wybór rodzaju testu; 5) README, SPEC, wersja 0.12.0.
