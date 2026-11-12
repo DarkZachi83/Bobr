@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import time
 import tkinter as tk
-from tkinter import ttk
+from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
 from aibobr.gui.widgets.bench_panel import LOG_COLORS, BenchmarkPanel
@@ -58,6 +58,7 @@ class DiagnosticsPanel(BenchmarkPanel):
         self.f_rows: dict[str, dict] = {}              # wiersz → wynik zadania
         self.h_rows: dict[str, str] = {}               # wiersz historii → id sesji
         self.mode = ""
+        self.last_session: Optional[str] = None       # ostatni przebieg kruchości (eksport z karty Kruchość)
         top = ttk.Frame(self.right, style="Panel.TFrame", padding=12)
         top.pack(fill="x")
         ttk.Label(top, text=t("d.title"), style="Title.TLabel").pack(anchor="w")
@@ -138,6 +139,7 @@ class DiagnosticsPanel(BenchmarkPanel):
         self.bos_button.pack(side="left")
         self.bos_again = ttk.Button(bar, text=t("d.bos.again"), command=lambda: self.check_bos(True))
         self.bos_again.pack(side="left", padx=6)
+        ttk.Button(bar, text=t("d.bos.export"), command=self.export_bos).pack(side="right")
         pane = ttk.Panedwindow(tab, orient="vertical")
         pane.pack(fill="both", expand=True)
         top = ttk.Frame(pane, style="Inner.TFrame")
@@ -228,6 +230,8 @@ class DiagnosticsPanel(BenchmarkPanel):
         line.pack(fill="x", pady=(0, 6))
         self.f_button = ttk.Button(line, text="▶ " + t("d.f.run"), style="Accent.TButton", command=self.run_fragility)
         self.f_button.pack(side="left")
+        ttk.Button(line, text=t("speed.export"), command=lambda: self.export_session(self.last_session)).pack(
+            side="right")
         self.f_note = ttk.Label(line, text="", style="Note.TLabel")
         self.f_note.pack(side="left", padx=10)
         pane = ttk.Panedwindow(tab, orient="horizontal")
@@ -368,6 +372,8 @@ class DiagnosticsPanel(BenchmarkPanel):
             self._add_task(e["model"], e["task"])
             if e["task"]["label"] == "unsupported":
                 self.f_note.configure(text=t("d.f.unsupported"))
+        elif kind == "f_start":
+            self.last_session = e.get("session")
         elif kind == "f_done":
             c = e["counts"]
             self.stage.configure(text=t("d.f.summary", model=e["model"], stable=c["stable"], fragile=c["fragile"],
@@ -416,7 +422,9 @@ class DiagnosticsPanel(BenchmarkPanel):
         bar = ttk.Frame(tab, style="Inner.TFrame")
         bar.pack(fill="x", pady=(0, 6))
         ttk.Button(bar, text=t("hist.details"), command=self.history_details).pack(side="left")
-        ttk.Button(bar, text=t("hist.delete"), command=self.delete_history).pack(side="left", padx=6)
+        ttk.Button(bar, text=t("speed.export"), command=lambda: self.export_session(self._hist_selected())).pack(
+            side="left", padx=6)
+        ttk.Button(bar, text=t("hist.delete"), command=self.delete_history).pack(side="left")
         self.htable = self._tree(tab, HCOLS, HWIDTHS, "d.hcol", height=10, stretch=("model", "test"))
         self.htable.bind("<Double-Button-1>", lambda e: self.history_details())
 
@@ -452,6 +460,7 @@ class DiagnosticsPanel(BenchmarkPanel):
         if not sid or db is None:
             return
         session = next((s for s in db.diag_sessions() if s["id"] == sid), None)
+        self.last_session = sid
         if session is not None:
             self._fill_tests()
             name = self.test_name(session["suite"], session["lang"])
@@ -465,6 +474,38 @@ class DiagnosticsPanel(BenchmarkPanel):
             self._add_task(session["model"] if session else "", task)
         self._set(self.f_text, "")
         self.tabs.select(1)
+
+    # ------------------------------------------------------------------ eksport CSV
+    def ask_folder(self) -> str:                       # zaczepy na okna wyboru – testy podmieniają
+        return filedialog.askdirectory(parent=self, title=t("speed.export"), mustexist=True)
+
+    def ask_file(self) -> str:
+        return filedialog.asksaveasfilename(parent=self, title=t("d.bos.export"), defaultextension=".csv",
+                                            initialfile="token_poczatku.csv", filetypes=[("CSV", "*.csv")])
+
+    def export_session(self, sid: Optional[str]) -> None:
+        """Przebieg kruchości: folder z kruchosc.csv, token_poczatku.csv i manifest.json."""
+        from aibobr.bench import export
+        db = self.c.bench_db
+        if not sid or db is None:
+            messagebox.showinfo(t("speed.export"), t("hist.pick"), parent=self)
+            return
+        parent = self.ask_folder()
+        if parent:
+            folder = export.export_diag_session(db, sid, parent)
+            self.on_status(t("speed.exported", path=str(folder)))
+            self.stage.configure(text=t("speed.exported", path=str(folder)))
+
+    def export_bos(self) -> None:
+        from aibobr.bench import export
+        db = self.c.bench_db
+        if db is None:
+            return
+        path = self.ask_file()
+        if path:
+            out = export.export_bos_checks(db, path)
+            self.on_status(t("speed.exported", path=str(out)))
+            self.stage.configure(text=t("speed.exported", path=str(out)))
 
     def delete_history(self) -> None:
         sid = self._hist_selected()

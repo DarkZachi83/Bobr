@@ -239,3 +239,47 @@ def export_quality_session(db, session_id: str, parent: str | Path) -> Path:
                 "files": ["wyniki.csv", "zadania.csv"]}
     (folder / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return folder
+
+
+D_TASK_COLS = ("task_no", "task_id", "label", "steps", "min_margin", "min_pos", "min_pair_json", "fragile_steps",
+               "tie_steps", "first_pos", "first_pair_json", "first_context", "scope", "answer_steps", "after_fragile",
+               "after_tie", "reason", "answer")
+BOS_COLS = ("model", "digest", "checked_at", "status", "reason", "expects", "add_bos", "gguf_template_has",
+            "gguf_template_source", "bos_text", "template_has", "without_count", "with_text_count", "effective",
+            "runtime_version", "app_version")
+
+
+def export_diag_session(db, session_id: str, parent: str | Path) -> Path:
+    """Folder diagnostyka_RRRR-MM-DD_GGMM_<id8>: kruchosc.csv (zadania z odstępami i odpowiedziami),
+    token_poczatku.csv (sprawdzenia tego modelu), manifest.json (ustawienia przebiegu, progi)."""
+    import json
+    session = next((s for s in db.diag_sessions() if s["id"] == session_id), None)
+    if session is None:
+        raise KeyError(session_id)
+    stamp = (session.get("started_at") or "")[:16].replace("T", "_").replace(":", "")
+    folder = Path(parent) / f"diagnostyka_{stamp}_{session_id[:8]}"
+    folder.mkdir(parents=True, exist_ok=True)
+
+    def cell(task, col):
+        value = task.get(col)
+        return json.dumps(value, ensure_ascii=False) if col.endswith("_json") and value is not None else exact(value)
+    _write(folder / "kruchosc.csv", ["model", "suite", "suite_version", "lang", *D_TASK_COLS],
+           ([session["model"], session["suite"], session["suite_version"], session["lang"],
+             *(cell(x, c) for c in D_TASK_COLS)] for x in db.diag_tasks(session_id)))
+    checks = db._select("SELECT * FROM bos_checks WHERE model = ? ORDER BY id", [session["model"]])
+    _write(folder / "token_poczatku.csv", list(BOS_COLS), ([exact(r.get(c)) for c in BOS_COLS] for r in checks))
+    manifest = {"export_schema_version": EXPORT_SCHEMA_VERSION, "kind": "diagnostics",
+                "db_schema_version": db.schema_version(), "session": session,
+                "files": ["kruchosc.csv", "token_poczatku.csv"]}
+    (folder / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    return folder
+
+
+def export_bos_checks(db, path: str | Path) -> Path:
+    """Wszystkie sprawdzenia tokenu początku (każde osobno, z datą) do jednego pliku CSV."""
+    path = Path(path)
+    if path.suffix.lower() != ".csv":
+        path = path.with_suffix(".csv")
+    rows = db._select("SELECT * FROM bos_checks ORDER BY model, id")
+    _write(path, list(BOS_COLS), ([exact(r.get(c)) for c in BOS_COLS] for r in rows))
+    return path

@@ -631,6 +631,25 @@ class GuiSmokeTest(unittest.TestCase):
         hrow = d.htable.item(d.htable.get_children()[0], "values")
         self.assertEqual((hrow[1], hrow[3], hrow[5]), ("minitron", "stabilne 1 · kruche 0 · remis 1",
                                                        "⚠ BRAK tokenu początku"))
+        # eksport CSV: przebieg kruchości (folder) i wszystkie sprawdzenia tokenu początku (plik)
+        import csv
+        out = Path(self.tmp.name) / "eksport"
+        out.mkdir()
+        d.ask_folder = lambda: str(out)
+        d.htable.selection_set(d.htable.get_children()[0])
+        d.export_session(d._hist_selected())
+        folder = next(out.iterdir())
+        self.assertTrue(folder.name.startswith("diagnostyka_"))
+        self.assertEqual(sorted(p.name for p in folder.iterdir()), ["kruchosc.csv", "manifest.json", "token_poczatku.csv"])
+        with open(folder / "kruchosc.csv", encoding="utf-8-sig", newline="") as f:
+            rows = list(csv.DictReader(f, delimiter=";"))
+        self.assertEqual([(r["task_id"], r["label"]) for r in rows], [("T1", "stable"), ("T2", "tie")])
+        self.assertEqual(rows[1]["first_pair_json"], '[["żółć", 0.41], ["zółć", 0.4]]')
+        with open(folder / "token_poczatku.csv", encoding="utf-8-sig", newline="") as f:
+            self.assertEqual({r["status"] for r in csv.DictReader(f, delimiter=";")}, {"missing"})
+        d.ask_file = lambda: str(out / "bos")
+        d.export_bos()
+        self.assertTrue((out / "bos.csv").exists())
         q = w.quality
         q._suites_changed()
         self.assertEqual(q._fragility("minitron", "diag_test", "pl", "T2"), "remis")

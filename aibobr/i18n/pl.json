@@ -1076,5 +1076,6 @@
   "d.h.status.stopped": "zatrzymany",
   "d.h.status.failed": "błąd",
   "d.h.delete_confirm": "Usunąć ten przebieg diagnostyki?",
-  "q.tcol.frag": "Kruchość"
+  "q.tcol.frag": "Kruchość",
+  "d.bos.export": "Eksportuj do CSV…"
 }

@@ -1076,5 +1076,6 @@
   "d.h.status.stopped": "stopped",
   "d.h.status.failed": "error",
   "d.h.delete_confirm": "Delete this diagnostics run?",
-  "q.tcol.frag": "Fragility"
+  "q.tcol.frag": "Fragility",
+  "d.bos.export": "Export to CSV..."
 }
