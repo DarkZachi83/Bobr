@@ -1098,5 +1098,6 @@
   "d.bos.fix": "Utwórz poprawioną wersję",
   "d.bos.fix_confirm": "Utworzyć w Ollamie poprawioną wersję {name}? Ten sam plik modelu (bez kopiowania), szablon z jednym tokenem początku; oryginał zostaje nietknięty.",
   "d.bos.fixed": "Utworzono {name}: {status}",
-  "d.bos.nothing_to_fix": "Ten model nie wymaga poprawki."
+  "d.bos.nothing_to_fix": "Ten model nie wymaga poprawki.",
+  "d.bos.export": "Eksportuj do CSV…"
 }
