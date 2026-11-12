@@ -51,6 +51,59 @@ class Classify(unittest.TestCase):
         self.assertEqual(fr.classify("x", []).label, "not_run")
 
 
+def toks(*parts):
+    """Wypowiedź z tokenów: zwykłe (p=0,95, drugi 0,02) albo remis (token, p1, drugi, p2)."""
+    out = []
+    for part in parts:
+        if isinstance(part, tuple):
+            out.append(lp(part[0], part[1], (part[2], part[3])))
+        else:
+            out.append(lp(part, 0.95, ("~", 0.02)))
+    return out
+
+
+class AnswerScope(unittest.TestCase):
+    """Wariant A (12.11.2026): etykieta z kroków w odpowiedzi i przed nią; objaśnienie po odpowiedzi – osobno."""
+    NUMBER = {"type": "number", "expected": 204}
+
+    def test_tie_after_the_answer_does_not_make_it_fragile(self):
+        lps = toks("Wynik", ":", " 204", ".", " Bo", (" rabat", 0.50, " zniżka", 0.49), " jest", " duży")
+        f = fr.classify("S5", lps, spec=self.NUMBER)
+        self.assertEqual((f.label, f.scope, f.answer_steps, f.after_tie, f.after_fragile),
+                         ("stable", "answer", 3, 1, 1))
+
+    def test_tie_before_the_answer_counts(self):
+        lps = toks((" Najpierw", 0.5, " Obliczmy", 0.49), " 240", " ×", " 0,85", " =", " 204")
+        f = fr.classify("S5", lps, spec=self.NUMBER)
+        self.assertEqual((f.label, f.scope, f.first_pos), ("tie", "answer", 0))
+
+    def test_answer_not_found_means_whole_text(self):
+        lps = toks("Nie", " wiem", (" dokładnie", 0.5, " na", 0.49))
+        f = fr.classify("S5", lps, spec=self.NUMBER)
+        self.assertEqual((f.scope, f.label), ("whole", "tie"))
+        self.assertEqual(fr.classify("x", lps).scope, "whole")              # bez sprawdzenia – cała wypowiedź
+
+    def test_choice_and_json(self):
+        choice = {"type": "choice", "expected": "Środa", "options": ["Poniedziałek", "Wtorek", "Środa"]}
+        lps = toks("Środa", ".", (" Bo", 0.5, " Ponieważ", 0.49))
+        self.assertEqual(fr.classify("S9", lps, spec=choice).label, "stable")
+        js = {"type": "json", "expected": {"a": 1}}
+        lps = toks('{"a": 1}', (" Gotowe", 0.5, " Proszę", 0.49))
+        self.assertEqual(fr.classify("S11", lps, spec=js).label, "stable")
+
+    def test_docstring_in_code_is_not_the_answer(self):
+        """S14 Gemmy 3: remis „czy”/„jest” w docstringu – poza odpowiedzią; remis w samym kodzie – liczy się."""
+        spec = {"type": "python", "function": "is_palindrome", "tests": [{"args": ["aba"], "expected": True}]}
+        lps = toks("```python\n", "def is_palindrome(s):\n", '    """Sprawdza,', (" czy", 0.491, " jest", 0.485),
+                   ' tekst."""\n', "    return s == s[::-1]\n", "```")
+        f = fr.classify("S14", lps, spec=spec)
+        self.assertEqual((f.label, f.after_tie), ("stable", 1))
+        lps = toks("```python\n", "def is_palindrome(s):\n", "    return s ==",
+                   (" s[::-1]", 0.5, " s.reverse()", 0.49), "\n```")
+        self.assertEqual(fr.classify("S14", lps, spec=spec).label, "tie")
+        self.assertEqual(fr.code_notes("def f(:\n  '''x"), [])                 # kod niepoprawny – liczy się wszystko
+
+
 class FakeOllama:
     def __init__(self, answers, support=True, release_ok=True):
         self.answers, self.support, self.release_ok = answers, support, release_ok
@@ -112,7 +165,7 @@ class Run(unittest.TestCase):
     def test_suite_tasks(self):
         tasks = fr.suite_tasks(suites.load("scisly_v1"), "en")
         self.assertEqual(len(tasks), 15)
-        self.assertTrue(all(isinstance(t[1], str) and t[2] >= 256 for t in tasks))
+        self.assertTrue(all(isinstance(t[1], str) and t[2] >= 256 and t[3]["type"] and t[4] == "en" for t in tasks))
 
 
 class Client(unittest.TestCase):

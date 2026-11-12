@@ -1093,7 +1093,13 @@ limit tokenów zadania, temperatura 0, seed 42), dwóch najlepszych kandydatów 
 = p1 − p2 (różnica prawdopodobieństw; bez drugiego kandydata p1). Zadanie: **stabilne** (żaden krok poniżej
 progu), **kruche** (jakiś krok < próg „kruche”), **remis** (jakiś krok < próg „remis”); do tego najwęższe
 miejsce, liczba kroków poniżej progów i pierwszy prawie remis z tekstem tuż przed nim. Progi ustawiane przez
-użytkownika (domyślnie kruche < 0,10, remis < 0,02; 0 ≤ remis ≤ kruche ≤ 1). Ollama bez logprobs – „nie
+użytkownika (domyślnie kruche < 0,10, remis < 0,02; 0 ≤ remis ≤ kruche ≤ 1). **Etykieta liczy tylko kroki
+w odpowiedzi i przed nią** (decyzja autora 12.11, wariant A – pomiar Gemmy 3 i Minitrona: prawie remisy
+w objaśnieniu po odpowiedzi i w docstringach dawały fałszywe „kruche”): miejsce odpowiedzi wskazuje ten sam
+kod oceny co test jakości (ostatnie wystąpienie wydzielonej liczby, słowa, opcji; blok JSON; kod – bez
+docstringów i komentarzy); kroki po odpowiedzi – osobna liczba, bez etykiety. Gdy ocena nie wydziela
+odpowiedzi (np. „niejednoznaczne”) – cała wypowiedź. `tools/kruchosc.py --prompt "…"` – dowolne polecenie,
+cała wypowiedź; pusty token pokazywany jako „‹koniec›”. Ollama bez logprobs – „nie
 podaje prawdopodobieństw”, przebieg się kończy. Odstęp liczy się tylko na ścieżce wybranej przez model.
 
 **PR-y:** 1) token początku – logika i narzędzie terminalowe; 2) kruchość; 3) zakładka, baza (schemat 3),

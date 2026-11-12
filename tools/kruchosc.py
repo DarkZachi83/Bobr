@@ -4,9 +4,12 @@
     python tools/kruchosc.py gemma3:4b --test humanistyczny_v1/pl --tasks H1 H5
     python tools/kruchosc.py hf.co/…Minitron…:Q4_K_M --test scisly_v1/en --fragile 0.15 --tie 0.03
     python tools/kruchosc.py gemma3:4b --test moj_test/ko                # własny test z edytora
+    python tools/kruchosc.py hf.co/…Minitron…:Q4_K_M --prompt "Przywróć polskie znaki: Zazolc gesla jazn"
 
 Każde zadanie: model zwolniony, odpowiedź z logprobs (dwóch najlepszych kandydatów przy każdym tokenie), te same
 ustawienia co test jakości. Wynik: stabilne / kruche / remis, najwęższe miejsce i pierwszy prawie remis.
+Etykieta liczy kroki w odpowiedzi i przed nią (miejsce odpowiedzi wskazuje kod oceny testu; w kodzie bez
+docstringów i komentarzy); prawie remisy po odpowiedzi – osobno. Przy --prompt – cała wypowiedź.
 Osobny przebieg – nie wpływa na wyniki benchmarku ani testu jakości. Niczego nie zmienia w Ollamie.
 """
 from __future__ import annotations
@@ -27,11 +30,15 @@ LABEL = {"stable": "stabilne", "fragile": "KRUCHE", "tie": "REMIS", "unsupported
          "not_run": "nie wykonano"}
 
 
+def tok(t) -> str:
+    return "‹koniec›" if t == "" else repr(t)          # pusty token – koniec odpowiedzi
+
+
 def pair(p) -> str:
     if not p:
         return "—"
     (t1, p1), second = p
-    return f"{t1!r} {p1:.3f}" + (f" | {second[0]!r} {second[1]:.3f}" if second else "")
+    return f"{tok(t1)} {p1:.3f}" + (f" | {tok(second[0])} {second[1]:.3f}" if second else "")
 
 
 def main(argv=None) -> int:
@@ -39,14 +46,19 @@ def main(argv=None) -> int:
     ap.add_argument("model")
     ap.add_argument("--test", default="scisly_v1/pl", help="test/język, np. humanistyczny_v1/pl, moj_test/ko")
     ap.add_argument("--tasks", nargs="*", help="tylko te zadania, np. S1 S9")
+    ap.add_argument("--prompt", help="dowolne polecenie zamiast testu (ocena całej wypowiedzi)")
+    ap.add_argument("--max-tokens", type=int, default=256, help="limit tokenów dla --prompt")
     ap.add_argument("--fragile", type=float, default=FRAGILE, help=f"próg „kruche” (domyślnie {FRAGILE})")
     ap.add_argument("--tie", type=float, default=TIE, help=f"próg „remis” (domyślnie {TIE})")
     ap.add_argument("--ollama", default="http://localhost:11434")
     args = ap.parse_args(argv)
-    suite_id, _, lang = args.test.partition("/")
-    data = suites.load(suite_id) if suite_id in suites.STANDARD else CustomSuites().load(suite_id)
-    lang = lang or data["suite_info"]["languages"][0]
-    tasks = [t for t in suite_tasks(data, lang) if not args.tasks or t[0] in args.tasks]
+    if args.prompt:
+        suite_id, lang, tasks = "--prompt", "-", [("P", args.prompt, args.max_tokens)]
+    else:
+        suite_id, _, lang = args.test.partition("/")
+        data = suites.load(suite_id) if suite_id in suites.STANDARD else CustomSuites().load(suite_id)
+        lang = lang or data["suite_info"]["languages"][0]
+        tasks = [t for t in suite_tasks(data, lang) if not args.tasks or t[0] in args.tasks]
     thresholds = Thresholds(args.fragile, args.tie)
     probe = FragilityProbe(OllamaBench(args.ollama), clock=time.monotonic, sleep=time.sleep)
     print(f"== {args.model} – {suite_id} ({lang}), {len(tasks)} zadań, progi: kruche < {thresholds.fragile}, "
@@ -56,7 +68,9 @@ def main(argv=None) -> int:
         if e["event"] != "f_task_done":
             return
         t = e["task"]
-        print(f"\n{t['task_id']:>4}  {LABEL.get(t['label'], t['label'])}"
+        scope = (f"  [odpowiedź: {t['answer_steps']} z {t['steps']} kroków]" if t["scope"] == "answer"
+                 else "  [cała wypowiedź]" if t["steps"] else "")
+        print(f"\n{t['task_id']:>4}  {LABEL.get(t['label'], t['label'])}{scope}"
               + (f"  ({t['reason']})" if t["reason"] else ""))
         if t["min_margin"] is not None:
             print(f"      najwęższe miejsce: krok {t['min_pos']}/{t['steps']}, odstęp {t['min_margin']:.3f}: "
@@ -64,6 +78,8 @@ def main(argv=None) -> int:
         if t["first_pos"] is not None:
             print(f"      pierwszy prawie remis: krok {t['first_pos']} po „…{t['first_context']}”: "
                   f"{pair(t['first_pair'])}  (kroków kruchych: {t['fragile_steps']}, remisów: {t['tie_steps']})")
+        if t["after_fragile"]:
+            print(f"      po odpowiedzi (bez wpływu na etykietę): kruchych {t['after_fragile']}, remisów {t['after_tie']}")
         answer = " ".join(t["answer"].split())
         print(f"      odpowiedź: {answer[:100]}{'…' if len(answer) > 100 else ''}")
     run = probe.run(args.model, tasks, thresholds, report=report)
