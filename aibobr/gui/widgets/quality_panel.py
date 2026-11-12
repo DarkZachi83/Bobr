@@ -321,6 +321,12 @@ class QualityPanel(BenchmarkPanel):
         targets, tests, attempts = self.targets(), self.tests(), int(self.attempts.get())
         if not targets or not tests or self.running:
             return
+        self.bos_gate(targets, lambda tg, statuses, pairs: self._start(tg, tests, attempts, statuses, pairs))
+
+    def _start(self, targets, tests, attempts, statuses, pairs) -> None:
+        self.bos_pairs = pairs                      # poprawiona wersja → oryginał (porównanie „oba”)
+        self.steps_total = len(targets) * self._tasks(tests) * attempts
+        self.estimated = self.estimate(targets, tests, attempts)
         self.running = True
         self.stop.clear()
         self.started = time.monotonic()
@@ -347,8 +353,8 @@ class QualityPanel(BenchmarkPanel):
         self._clock()
         self.worker.run_with_progress(
             "quality",
-            lambda report: self.c.run_quality(targets, tests, report, self.stop, attempts=attempts, hw=hw,
-                                              sandbox=self._sandbox()),
+            lambda report: self._recorded("quality", self.c.run_quality(
+                targets, tests, report, self.stop, attempts=attempts, hw=hw, sandbox=self._sandbox()), statuses),
             self._progress, self._done, self._failed)
 
     def _clock(self) -> None:
@@ -482,7 +488,40 @@ class QualityPanel(BenchmarkPanel):
                                    a=frac(a.correct, a.evaluated), en=frac(b.correct, b.evaluated)))
             if parts:
                 lines.append(f"{model}: " + " · ".join(parts))
+        lines += self.bos_comparison()
         self.label_line.configure(text="\n".join(lines))
+
+    def bos_comparison(self) -> list[str]:
+        """„Oba – porównanie” (decyzja autora 12.11, pkt 5): oryginał i poprawiona wersja tego samego testu obok
+        siebie; każde zadanie, które zmieniło wynik, z opisem z ostatniej diagnostyki kruchości oryginału:
+        kruche/remis – „przeważony remis”, stabilne – „rzeczywista różnica wejścia”."""
+        out = []
+        results = {(r["model"], r["suite"], r["lang"]): r["summary"].overall for r in self.q_results}
+        tasks: dict = {}
+        for model, suite, lang, r, _, _ in self.task_rows.values():
+            tasks.setdefault((model, suite, lang), {})[r.task_id] = r.correct
+        for variant, original in (getattr(self, "bos_pairs", None) or {}).items():
+            for (model, suite, lang), a in results.items():
+                b = results.get((variant, suite, lang))
+                if model != original or b is None:
+                    continue
+                version = (self.suite_data.get(suite) or {}).get("suite_info", {}).get("version")
+                db = self.c.bench_db
+                frag = db.last_fragility(original, suite, lang, version) if db is not None else {}
+                before, after = tasks.get((original, suite, lang), {}), tasks.get((variant, suite, lang), {})
+                changes = []
+                for task_id, was in before.items():
+                    now = after.get(task_id)
+                    if was is None or now is None or was == now:
+                        continue
+                    label = frag.get(task_id)
+                    why = (t("d.cmp.flip") if label in ("fragile", "tie") else t("d.cmp.real") if label == "stable"
+                           else t("d.cmp.nodiag"))
+                    changes.append(f"{task_id} {MARK[was]}→{MARK[now]} ({why})")
+                out.append(t("d.cmp.line", model=original, test=test_name(suite, lang), a=frac(a.correct, a.evaluated),
+                             b=frac(b.correct, b.evaluated),
+                             changes=", ".join(changes) if changes else t("d.cmp.same")))
+        return out
 
     def _show_breakdown(self) -> None:
         sel = self.rtable.selection()

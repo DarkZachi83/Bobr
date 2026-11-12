@@ -118,7 +118,7 @@ class DiagnosticsPanel(BenchmarkPanel):
 
     def _busy_buttons(self, busy: bool) -> None:
         state = ["disabled"] if busy else ["!disabled"]
-        for b in (self.bos_button, self.bos_again, self.f_button):
+        for b in (self.bos_button, self.bos_again, self.bos_fix, self.f_button):
             b.state(state)
         self.stop_button.state(["!disabled"] if busy else ["disabled"])
         if not busy:
@@ -138,6 +138,8 @@ class DiagnosticsPanel(BenchmarkPanel):
         self.bos_button.pack(side="left")
         self.bos_again = ttk.Button(bar, text=t("d.bos.again"), command=lambda: self.check_bos(True))
         self.bos_again.pack(side="left", padx=6)
+        self.bos_fix = ttk.Button(bar, text=t("d.bos.fix"), command=self.fix_bos)
+        self.bos_fix.pack(side="left")
         pane = ttk.Panedwindow(tab, orient="vertical")
         pane.pack(fill="both", expand=True)
         top = ttk.Frame(pane, style="Inner.TFrame")
@@ -189,6 +191,33 @@ class DiagnosticsPanel(BenchmarkPanel):
                         without=count_text(check.without), with_text=count_text(check.with_text),
                         effective=count_text(check.effective)), "muted"))
         self._set(self.bos_text, parts)
+
+    def fix_bos(self) -> None:
+        """Poprawiona wersja zaznaczonego modelu (brak albo podwójny token) – za zgodą, oryginał nietknięty."""
+        from aibobr.diagnostics.bos import variant_name
+        from aibobr.sources.factory import OLLAMA_PREFIX
+        sel = self.btable.selection()
+        check = self.bos_data.get(sel[0]) if sel else None
+        if check is None or self.running:
+            return
+        if not check.warning:
+            self.stage.configure(text=t("d.bos.nothing_to_fix"))
+            return
+        name = variant_name(check.model)
+        if not self.confirm(t("d.bos.fix"), t("d.bos.fix_confirm", name=name)):
+            return
+        self.running, self.mode = True, "fix"
+        self.total, self.done_count, self.cached_count = 1, 0, 0
+        self._busy_buttons(True)
+        self.stage.configure(text=t("d.gate.creating", names=name))
+
+        def done(made):
+            vt, vcheck = made
+            if vcheck is not None:
+                self.stage.configure(text=t("d.bos.fixed", name=self._model_name(vt), status=t(f"d.bos.{vcheck.status}")))
+        self.worker.run_with_progress("diag_fix", lambda report: self.c.create_bos_variant(
+            OLLAMA_PREFIX + check.model, check, report), self._progress,
+            lambda made: (self._done(None), done(made)), self._failed)
 
     def check_bos(self, force: bool) -> None:
         targets = self.targets()
@@ -405,6 +434,7 @@ class DiagnosticsPanel(BenchmarkPanel):
         self.plan.configure(text=t("bench.none_checked") if not targets else t("d.plan", models=len(targets)))
         for b in (self.bos_button, self.bos_again, self.f_button):
             b.state(["!disabled"] if targets else ["disabled"])
+        self.bos_fix.state(["!disabled"])                  # działa na zaznaczony wiersz tabeli, nie na listę modeli
 
     def start(self) -> None:                          # przycisk startu benchmarku – tu nieużywany
         pass

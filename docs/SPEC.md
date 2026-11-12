@@ -1116,5 +1116,18 @@ test, język, wersja testu).
 wynik = ostatni dla modelu i skrótu pliku), `diag_sessions`, `diag_tasks`; kolumna `bos_status` w `runs`
 i `quality_runs` (wypełniana od PR 4).
 
+**Przed pomiarem i naprawa** (PR 4). Benchmark i test jakości najpierw sprawdzają token początku wybranych
+modeli (zapamiętany wynik – zwykle natychmiast; błąd sprawdzenia nie blokuje pomiaru); kruchość – gdy brak
+zapamiętanego wyniku, sprawdza sama. Przy `missing`/`double` okno „Jaki test wykonać?”
+(`aibobr/gui/dialogs/bos_choice.py`) z podpowiedziami; „z poprawionym” i „oba” tworzą w Ollamie (`/api/create`:
+`from` – oryginał, ten sam plik bez kopiowania; `template` – szablon z jednym tokenem początku: przy braku tekst
+tokenu na początku, przy podwójnym – bez tokenu w szablonie) wersję `<ostatni człon nazwy małymi literami>-bos`
+z tym samym znacznikiem, raz (gdy jest – bez tworzenia), i sprawdzają ją jak każdy model. Wybór zgody = utworzenie
+(okno mówi, co powstanie). „Oba” – oryginał i wersja w jednym przebiegu; w zakładce Jakość linia porównania
+z każdym zadaniem, które zmieniło wynik, i opisem z ostatniej diagnostyki kruchości oryginału: kruche/remis –
+„przeważony remis”, stabilne – „rzeczywista różnica wejścia”, brak – „bez diagnostyki kruchości”. Stan tokenu
+początku każdego modelu zapisany w `runs.bos_status` / `quality_runs.bos_status`. Karta Token początku: „Utwórz
+poprawioną wersję” dla zaznaczonego modelu (z potwierdzeniem).
+
 **PR-y:** 1) token początku – logika i narzędzie terminalowe; 2) kruchość; 3) zakładka, baza (schemat 3),
 Historia; 4) naprawa i wybór rodzaju testu; 5) README, SPEC, wersja 0.12.0.

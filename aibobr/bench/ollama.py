@@ -111,6 +111,14 @@ class OllamaBench:
                 return m.get("digest") or None
         return None
 
+    def create(self, name: str, source: str, template: str) -> None:
+        """Nowy model w Ollamie z istniejącego (ten sam plik wag, bez kopiowania) i innym szablonem – poprawiona
+        wersja z tokenem początku. Tylko za zgodą użytkownika (okno wyboru rodzaju testu)."""
+        r = self.http.post_json(f"{self.host}/api/create", {"model": name, "from": source, "template": template,
+                                                             "stream": False}, timeout=TIMEOUT)
+        if isinstance(r, dict) and r.get("error"):
+            raise RuntimeError(str(r["error"]))
+
     def load(self, model: str, num_ctx: int) -> Optional[float]:
         """Wczytuje model bez liczenia promptu (puste zapytanie) z tym samym num_ctx, co zadanie –
         inny num_ctx to ponowne wczytanie. Zwraca load_duration silnika w s (None – brak pola)."""

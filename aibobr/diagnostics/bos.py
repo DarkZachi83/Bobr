@@ -220,3 +220,21 @@ class BosProbe:
             return result(UNKNOWN, "no_bos_text", without, with_text)
         effective = with_text if has else without
         return result(verdict(expects, effective), "measured", without, with_text, effective)
+
+
+def variant_name(model: str) -> str:
+    """Nazwa poprawionej wersji: ostatni człon nazwy małymi literami + „-bos”, ten sam znacznik.
+    hf.co/speakleash/Bielik-Minitron-7B-v3.0-Instruct-GGUF:Q4_K_M → bielik-minitron-7b-v3.0-instruct-gguf-bos:Q4_K_M"""
+    name, _, tag = model.partition(":")
+    base = name.rstrip("/").split("/")[-1].lower()
+    return f"{base}-bos" + (f":{tag}" if tag else "")
+
+
+def fixed_template(template: str, check: BosCheck) -> Optional[str]:
+    """Szablon Ollamy z poprawionym tokenem początku: brak – tekst tokenu na początku; podwójny – bez tokenu
+    w szablonie (zostaje ten od Ollamy). None – nie ma czego poprawiać albo nie wiadomo jak."""
+    if check.status == MISSING and check.bos_text:
+        return check.bos_text + (template or "")
+    if check.status == DOUBLE and check.bos_text and check.bos_text in (template or ""):
+        return template.replace(check.bos_text, "", 1)
+    return None

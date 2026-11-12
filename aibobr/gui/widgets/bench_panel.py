@@ -595,6 +595,76 @@ class BenchmarkPanel(ttk.Frame):
         self.log("INFO", t("speed.exported", path=str(folder)))
 
     # ------------------------------------------------------------------ pomiar
+    # ------------------------------------------------------------------ token początku przed pomiarem (0.12)
+    def ask_bos(self, checks: list, variants: dict) -> Optional[str]:
+        """Okno wyboru rodzaju testu (zaczep – testy podmieniają): as_is / fixed / both / None (anuluj)."""
+        from aibobr.gui.dialogs.bos_choice import BosChoiceDialog
+        return BosChoiceDialog.ask(self, checks, variants)
+
+    def bos_gate(self, targets: list[str], proceed: Callable, on_cancel: Callable = lambda: None) -> None:
+        """Przed benchmarkiem i testem jakości (decyzje autora 12.11, pkt 3 A i 5): sprawdzenie tokenu początku
+        (zapamiętane na wersję pliku – zwykle natychmiast); przy braku albo podwójnym – pytanie o rodzaj testu.
+        proceed(cele, {cel: stan}, {poprawiona wersja: oryginał}). Błąd sprawdzenia nie blokuje pomiaru."""
+        from aibobr.diagnostics.bos import variant_name
+        from aibobr.sources.factory import OLLAMA_PREFIX
+        self.running = True                       # od tej chwili pomiar „trwa” (przyciski, zamykanie okna)
+        self.on_status(t("d.gate.checking"))
+
+        def cancel():
+            self.running = False
+            self.on_status("")
+            on_cancel()
+
+        def checked(checks):
+            if not self.winfo_exists():
+                return
+            by_model = {c.model: c for c in checks or []}
+            statuses = {tg: by_model[self._model_name(tg)].status for tg in targets
+                        if self._model_name(tg) in by_model}
+            warn = [c for c in checks or [] if c.warning]
+            if not warn:
+                return proceed(targets, statuses, {})
+            variants = {c.model: variant_name(c.model) for c in warn}
+            choice = self.ask_bos(warn, variants)
+            if choice is None:
+                return cancel()
+            if choice == "as_is":
+                return proceed(targets, statuses, {})
+            self.on_status(t("d.gate.creating", names=", ".join(variants.values())))
+
+            def created(made):
+                new, pairs = [], {}
+                for tg in targets:
+                    name = self._model_name(tg)
+                    if name not in made:
+                        new.append(tg)
+                        continue
+                    vt, vcheck = made[name]
+                    statuses[vt] = vcheck.status if vcheck is not None else None
+                    pairs[self._model_name(vt)] = name
+                    new += [tg, vt] if choice == "both" else [vt]
+                self.running = False                  # select_targets nie działa w trakcie pomiaru
+                self.select_targets(new)
+                self.running = True
+                proceed(new, statuses, pairs)
+
+            def create_failed(e):
+                messagebox.showerror(t("d.choice.title"), t("d.gate.create_failed", error=str(e)), parent=self)
+                cancel()
+            self.worker.run_with_progress(
+                "bos_create", lambda report: {c.model: self.c.create_bos_variant(OLLAMA_PREFIX + c.model, c, report)
+                                              for c in warn}, lambda e: None, created, create_failed)
+        self.worker.run_with_progress("bos_gate", lambda report: self.c.check_bos(targets, report),
+                                      lambda e: None, checked, lambda e: checked([]))
+
+    def _recorded(self, kind: str, result: dict, statuses: dict) -> dict:
+        """Wynik pomiaru + zapis, z jakim tokenem początku go liczono (wątek pomiaru; błąd zapisu nie psuje wyniku)."""
+        try:
+            self.c.record_bos_status(kind, (result or {}).get("session_id"), statuses)
+        except Exception:
+            pass
+        return result
+
     def start(self) -> None:
         contexts, (run, skip, skipped) = self.contexts(), self._plan_jobs()
         runs = int(self.runs.get())             # odczyt tu – zmienne Tk nie z wątku w tle
@@ -607,6 +677,10 @@ class BenchmarkPanel(ttk.Frame):
         except ValueError:
             messagebox.showinfo(t("bench.title"), t("stats.need_hw"), parent=self)
             return
+        self.bos_gate(run, lambda targets, statuses, pairs: self._start(targets, skip, skipped, contexts, runs, hw,
+                                                                        statuses))
+
+    def _start(self, run, skip, skipped, contexts, runs, hw, statuses) -> None:
         from aibobr.gui.dialogs.cooling import ThreadsafeAsk
         self.hw = hw
         self.running = True
@@ -632,8 +706,9 @@ class BenchmarkPanel(ttk.Frame):
         self._clock()
         self.worker.run_with_progress(
             "bench",
-            lambda report: self.c.run_speed_benchmark(run, hw, report, self.stop, runs=runs, contexts=contexts,
-                                                      on_timeout=self.ask, skip_contexts=skip),
+            lambda report: self._recorded("speed", self.c.run_speed_benchmark(
+                run, hw, report, self.stop, runs=runs, contexts=contexts, on_timeout=self.ask, skip_contexts=skip),
+                statuses),
             self._progress, self._done, self._failed)
 
     def _clock(self) -> None:

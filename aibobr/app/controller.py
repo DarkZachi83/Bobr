@@ -432,6 +432,34 @@ class AppController:
             out.append(check)
         return out
 
+    def create_bos_variant(self, target: str, check, report=lambda e: None, *, bench=None, db=None,
+                           probe_kw=None):
+        """Poprawiona wersja modelu w Ollamie (decyzja autora 12.11, pkt 5): ten sam plik, szablon z jednym tokenem
+        początku; oryginał nietknięty. Gdy wersja już jest – nie tworzymy drugi raz. Po utworzeniu sprawdzamy ją
+        tak samo jak każdy model. Zwraca (cel „ollama:…”, wynik sprawdzenia)."""
+        from aibobr.bench.ollama import OllamaBench
+        from aibobr.diagnostics.bos import fixed_template, variant_name
+        from aibobr.sources.factory import OLLAMA_PREFIX
+        bench = bench or OllamaBench(self.ollama_host())
+        model = self._model_name(target)
+        name = variant_name(model)
+        if bench.digest(name) is None:
+            template = fixed_template(bench.show(model).get("template") or "", check)
+            if template is None:
+                raise ValueError(f"nothing to fix: {check.status}")
+            report({"event": "bos_create", "model": model, "variant": name})
+            bench.create(name, model, template)
+        result = self.check_bos([OLLAMA_PREFIX + name], report, bench=bench, db=db, probe_kw=probe_kw)
+        return OLLAMA_PREFIX + name, (result[0] if result else None)
+
+    def record_bos_status(self, kind: str, session_id: Optional[str], statuses: dict) -> None:
+        """Po pomiarze: z jakim tokenem początku liczono wynik każdego modelu (kolumna bos_status)."""
+        db = self.bench_db
+        if db is None or not session_id:
+            return
+        for model, status in statuses.items():
+            db.set_bos_status(kind, session_id, self._model_name(model), status)
+
     def run_fragility(self, target: str, test, report=lambda e: None, stop=lambda: False, *, thresholds=None,
                       tasks=None, bench=None, db=None, probe_kw=None) -> dict:
         """Kruchość promptu: zadania testu jakości (standardowego albo własnego) dla jednego modelu; osobny
@@ -456,6 +484,12 @@ class AppController:
         except Exception:
             digest = version = None
         cached = db.bos_check(model, digest) if db is not None else None     # skrót nieznany – ostatnie sprawdzenie
+        if cached is None:                   # sprawdzenie automatyczne (decyzja autora 12.11, pkt 3 A) – raz na wersję
+            try:
+                found = self.check_bos([target], report, stop, bench=bench, db=db, probe_kw=probe_kw)
+                cached = found[0] if found else None
+            except Exception:
+                cached = None
         sid = None
         if db is not None:
             sid = db.start_diag_session(started_at=now(), model=model, digest=digest, suite=suite_id,
