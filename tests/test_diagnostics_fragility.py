@@ -83,6 +83,13 @@ class AnswerScope(unittest.TestCase):
         self.assertEqual((f.scope, f.label), ("whole", "tie"))
         self.assertEqual(fr.classify("x", lps).scope, "whole")              # bez sprawdzenia – cała wypowiedź
 
+    def test_long_text_answer_is_whole_scope(self):
+        """H15 Minitrona: długie objaśnienie, ocena nie wydziela słowa – liczy się cała wypowiedź, nie „odpowiedź”."""
+        spec = {"type": "text", "expected": ["przysłówek"]}
+        lps = toks("Słowo", " jest", " przysł", ("ó", 0.52, "ów", 0.47), "wkiem", ".", " To", " część", " mowy")
+        f = fr.classify("H15", lps, spec=spec)
+        self.assertEqual((f.scope, f.answer_steps, f.label), ("whole", None, "fragile"))
+
     def test_choice_and_json(self):
         choice = {"type": "choice", "expected": "Środa", "options": ["Poniedziałek", "Wtorek", "Środa"]}
         lps = toks("Środa", ".", (" Bo", 0.5, " Ponieważ", 0.49))
