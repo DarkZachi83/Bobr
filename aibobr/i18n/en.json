@@ -1102,5 +1102,6 @@
   "d.bos.export": "Export to CSV...",
   "q.ed.hint.category": "Pick from the list or type your own.",
   "d.cmp.at": "step {pos}, gap {margin} (\"{a}\" vs \"{b}\")",
-  "d.cmp.nosteps": "no divergence-step data - run fragility again"
+  "d.cmp.nosteps": "no divergence-step data - run fragility again",
+  "q.note_custom": "Your own test - the result speaks about these tasks and nothing more. The fewer the tasks, the more careful the conclusions; three attempts check answer stability, they do not multiply tasks."
 }
