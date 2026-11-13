@@ -1134,5 +1134,17 @@ z każdym zadaniem, które zmieniło wynik, i opisem z ostatniej diagnostyki kru
 początku każdego modelu zapisany w `runs.bos_status` / `quality_runs.bos_status`. Karta Token początku: „Utwórz
 poprawioną wersję” dla zaznaczonego modelu (z potwierdzeniem).
 
+**Krok rozbieżności (0.12.1, decyzja autora 13.11.2026).** Opis zmienionego zadania w porównaniu „oba” bierze
+odstęp z **pierwszego kroku, w którym odpowiedź poprawionej wersji odchodzi od odpowiedzi oryginału**, a nie
+najmniejszy odstęp w całej odpowiedzi. Powód – przebieg autora na „Zazolc gesla jazn”: prompt kruchy (0,026 przy
+„ół”/„ól”), ale odpowiedzi rozchodzą się w kroku 1 („az” wobec „aż”), gdzie odstęp był ≥ 0,10 – stara etykieta
+„przeważony remis” była nieuzasadniona. Diagnostyka zapisuje każdy krok (`diag_tasks.steps_json`, schemat 4:
+token, p1, drugi token, p2); `divergence()` znajduje pierwszy krok, w którym tekst drugiej odpowiedzi nie
+zgadza się z tokenem oryginału (albo krok końca, gdy druga odpowiedź trwa dalej); odstęp < próg „kruche” –
+„przeważony remis”, inaczej – „rzeczywista różnica wejścia”, z krokiem, odstępem i parą tokenów. Gdy
+diagnostyka nie ma kroków (sprzed 0.12.1) albo jej odpowiedź różni się od odpowiedzi oryginału w teście – „bez
+danych kroku rozbieżności”. `tools/kruchosc.py --steps` wypisuje każdy krok; `kruchosc.csv` ma kolumnę
+`steps_json`.
+
 **PR-y:** 1) token początku – logika i narzędzie terminalowe; 2) kruchość; 3) zakładka, baza (schemat 3),
 Historia; 4) naprawa i wybór rodzaju testu; 5) README, SPEC, wersja 0.12.0.

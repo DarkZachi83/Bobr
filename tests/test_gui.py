@@ -722,8 +722,12 @@ class GuiSmokeTest(unittest.TestCase):
         db = w.c.bench_db
         ds = db.start_diag_session(started_at="2026-11-12T10:00:00+01:00", model="minitron", suite="bos_test",
                                    suite_version="1", lang="pl", fragile_threshold=0.1, tie_threshold=0.02)
-        db.add_diag_task(ds, 1, TaskFragility("T1", "tie"))
-        db.add_diag_task(ds, 2, TaskFragility("T2", "stable"))
+        # kroki odpowiedzi oryginału z diagnostyki (0.12.1): o opisie decyduje odstęp w pierwszym kroku rozbieżności
+        db.add_diag_task(ds, 1, TaskFragility("T1", "tie", answer="41",
+                                              step_data=[["4", 0.95, "3", 0.02], ["1", 0.5, "2", 0.49]]))
+        db.add_diag_task(ds, 2, TaskFragility("T2", "fragile", answer="Zazółć",           # kruche gdzie indziej,
+                                              step_data=[["Z", 0.45, '"', 0.40], ["az", 0.6, "aż", 0.25],
+                                                         ["ółć", 0.9, None, None]]))     # rozbieżność – model pewny
         db.finish_diag_session(ds, finished_at="x")
         q._suites_changed()
         for key, var in q.test_vars.items():
@@ -753,8 +757,8 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertEqual(sorted(q.targets()), ["ollama:minitron", "ollama:minitron-bos"])
         label = q.label_line.cget("text")
         self.assertIn("Token początku – minitron, Bos (PL): jak podaje Ollama 0/2, poprawiony 2/2", label)
-        self.assertIn("T1 ✗→✓ (przeważony remis)", label)
-        self.assertIn("T2 ✗→✓ (rzeczywista różnica wejścia)", label)
+        self.assertIn("T1 ✗→✓ (przeważony remis: krok 1, odstęp 0.010 („1” wobec „2”))", label)
+        self.assertIn("T2 ✗→✓ (rzeczywista różnica wejścia: krok 1, odstęp 0.350 („az” wobec „aż”))", label)
         runs = db.quality_runs(q.q_session)
         self.assertEqual({r["model"]: r["bos_status"] for r in runs}, {"minitron": "missing", "minitron-bos": "ok"})
         # drugi raz: wersja już jest – bez tworzenia; „jak podaje Ollama” – tylko oryginał

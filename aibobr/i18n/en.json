@@ -1100,5 +1100,7 @@
   "d.bos.fixed": "Created {name}: {status}",
   "d.bos.nothing_to_fix": "This model needs no fix.",
   "d.bos.export": "Export to CSV...",
-  "q.ed.hint.category": "Pick from the list or type your own."
+  "q.ed.hint.category": "Pick from the list or type your own.",
+  "d.cmp.at": "step {pos}, gap {margin} (\"{a}\" vs \"{b}\")",
+  "d.cmp.nosteps": "no divergence-step data - run fragility again"
 }

@@ -493,13 +493,18 @@ class QualityPanel(BenchmarkPanel):
 
     def bos_comparison(self) -> list[str]:
         """„Oba – porównanie” (decyzja autora 12.11, pkt 5): oryginał i poprawiona wersja tego samego testu obok
-        siebie; każde zadanie, które zmieniło wynik, z opisem z ostatniej diagnostyki kruchości oryginału:
-        kruche/remis – „przeważony remis”, stabilne – „rzeczywista różnica wejścia”."""
+        siebie; każde zadanie, które zmieniło wynik, z opisem z ostatniej diagnostyki kruchości oryginału.
+        Od 0.12.1 (decyzja autora 13.11): decyduje odstęp w **pierwszym kroku rozbieżności** odpowiedzi – prawie
+        remis tam → „przeważony remis”, model pewny → „rzeczywista różnica wejścia”; z liczbą i miejscem. Gdy
+        diagnostyka nie ma kroków (sprzed 0.12.1) albo jej odpowiedź różni się od odpowiedzi z testu – brak opisu."""
+        from aibobr.diagnostics.fragility import divergence, divergence_label
         out = []
         results = {(r["model"], r["suite"], r["lang"]): r["summary"].overall for r in self.q_results}
         tasks: dict = {}
+        answers: dict = {}
         for model, suite, lang, r, _, _ in self.task_rows.values():
             tasks.setdefault((model, suite, lang), {})[r.task_id] = r.correct
+            answers.setdefault((model, suite, lang), {})[r.task_id] = r.answer
         for variant, original in (getattr(self, "bos_pairs", None) or {}).items():
             for (model, suite, lang), a in results.items():
                 b = results.get((variant, suite, lang))
@@ -507,16 +512,25 @@ class QualityPanel(BenchmarkPanel):
                     continue
                 version = (self.suite_data.get(suite) or {}).get("suite_info", {}).get("version")
                 db = self.c.bench_db
-                frag = db.last_fragility(original, suite, lang, version) if db is not None else {}
+                frag = db.last_fragility_tasks(original, suite, lang, version) if db is not None else {}
+                thresholds = self.c.fragility_thresholds()
                 before, after = tasks.get((original, suite, lang), {}), tasks.get((variant, suite, lang), {})
                 changes = []
                 for task_id, was in before.items():
                     now = after.get(task_id)
                     if was is None or now is None or was == now:
                         continue
-                    label = frag.get(task_id)
-                    why = (t("d.cmp.flip") if label in ("fragile", "tie") else t("d.cmp.real") if label == "stable"
-                           else t("d.cmp.nodiag"))
+                    diag = frag.get(task_id)
+                    same = diag is not None and (diag.get("answer") or "") == answers.get(
+                        (original, suite, lang), {}).get(task_id, "")
+                    div = divergence(diag.get("steps_json"), answers.get((variant, suite, lang), {}).get(
+                        task_id, "")) if same else None
+                    kind = divergence_label(div, thresholds)
+                    if kind == "unknown":
+                        why = t("d.cmp.nodiag") if diag is None else t("d.cmp.nosteps")
+                    else:
+                        why = t(f"d.cmp.{kind}") + ": " + t("d.cmp.at", pos=div.pos, margin=f"{div.margin:.3f}",
+                                                             a=div.first[0], b=div.second[0] if div.second else "–")
                     changes.append(f"{task_id} {MARK[was]}→{MARK[now]} ({why})")
                 out.append(t("d.cmp.line", model=original, test=test_name(suite, lang), a=frac(a.correct, a.evaluated),
                              b=frac(b.correct, b.evaluated),
