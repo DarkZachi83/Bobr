@@ -48,6 +48,7 @@ def main(argv=None) -> int:
     ap.add_argument("--tasks", nargs="*", help="tylko te zadania, np. S1 S9")
     ap.add_argument("--prompt", help="dowolne polecenie zamiast testu (ocena całej wypowiedzi)")
     ap.add_argument("--max-tokens", type=int, default=256, help="limit tokenów dla --prompt")
+    ap.add_argument("--steps", action="store_true", help="każdy krok odpowiedzi: token, dwóch kandydatów, odstęp")
     ap.add_argument("--fragile", type=float, default=FRAGILE, help=f"próg „kruche” (domyślnie {FRAGILE})")
     ap.add_argument("--tie", type=float, default=TIE, help=f"próg „remis” (domyślnie {TIE})")
     ap.add_argument("--ollama", default="http://localhost:11434")
@@ -80,6 +81,12 @@ def main(argv=None) -> int:
                   f"{pair(t['first_pair'])}  (kroków kruchych: {t['fragile_steps']}, remisów: {t['tie_steps']})")
         if t["after_fragile"]:
             print(f"      po odpowiedzi (bez wpływu na etykietę): kruchych {t['after_fragile']}, remisów {t['after_tie']}")
+        if args.steps:
+            for n, (token, p1, token2, p2) in enumerate(t.get("step_data") or []):
+                margin = p1 - (p2 or 0.0)
+                mark = " REMIS" if margin < thresholds.tie else " kruche" if margin < thresholds.fragile else ""
+                second = f"{tok(token2)} {p2:.3f}" if token2 is not None else "–"
+                print(f"      krok {n:>3}: {tok(token):<14} {p1:.3f} | {second:<20} odstęp {margin:.3f}{mark}")
         answer = " ".join(t["answer"].split())
         print(f"      odpowiedź: {answer[:100]}{'…' if len(answer) > 100 else ''}")
     run = probe.run(args.model, tasks, thresholds, report=report)

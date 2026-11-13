@@ -293,8 +293,8 @@ or your own) with these probabilities, each from scratch, and marks every task *
 (gap below 0.10) or **tie** (below 0.02) – thresholds are yours to set. Only the answer and what precedes it
 count; near-ties in an explanation after the answer are shown separately (and docstrings in code do not
 count). The Quality tab then shows fragility next to each task, and in a *both – comparison* run every task
-that changed gets a note: **tie tipped over** (the task was fragile) or **real input difference** (it was
-stable). The author's own BOS experiment turned out to sit on a fragile prompt – a good reason to measure
+that changed gets a note decided at the **first step where the two answers differ**: **tie tipped over**
+(a near-tie right there) or **real input difference** (the model was sure there) – with the step and the gap. The author's own BOS experiment turned out to sit on a fragile prompt – a good reason to measure
 before concluding. Results go to History and export to CSV (`kruchosc.csv`, `token_poczatku.csv`,
 `manifest.json`).
 
@@ -324,7 +324,7 @@ python tools/pomiar_predkosci.py <model> [--runs 3]   # speed benchmark from the
 python tools/test_jakosci.py <model> [--attempts 3]   # quality tests from the terminal (separate database)
 python tools/test_jakosci.py <model> --tests my_test/ko my_test/en   # your own test from the editor
 python tools/sprawdz_bos.py [models]                  # beginning token (BOS) check, changes nothing in Ollama
-python tools/kruchosc.py <model> [--test scisly_v1/pl] [--prompt "..."]   # prompt fragility (logprobs)
+python tools/kruchosc.py <model> [--test scisly_v1/pl] [--prompt "..."] [--steps]   # prompt fragility (logprobs)
 python main.py --fake-hw tests/fake_hardware/windows_amd_rx7900xtx.json   # pretend hardware
 python tools/build_catalog.py                 # rebuild the model list from catalog_sources.txt
 python tools/build_exe.py                     # PyInstaller build (CI does this for v* tags)
@@ -624,8 +624,9 @@ na remis, drobna zmiana na wejściu może przestawić odpowiedź. AI Bóbr uruch
 **stabilne**, **kruche** (odstęp poniżej 0,10) albo **remis** (poniżej 0,02) – progi ustawiasz sam. Liczą się
 tylko odpowiedź i to, co przed nią; prawie remisy w objaśnieniu po odpowiedzi są pokazane osobno (docstringi
 w kodzie się nie liczą). Zakładka Jakość pokazuje potem kruchość przy każdym zadaniu, a w przebiegu *oba –
-porównanie* każde zadanie, które zmieniło wynik, dostaje opis: **przeważony remis** (zadanie było kruche) albo
-**rzeczywista różnica wejścia** (było stabilne). Eksperyment BOS autora okazał się stać na kruchym prompcie –
+porównanie* każde zadanie, które zmieniło wynik, dostaje opis rozstrzygany w **pierwszym kroku, w którym
+odpowiedzi się rozchodzą**: **przeważony remis** (tam był prawie remis) albo **rzeczywista różnica wejścia**
+(tam model był pewny) – z numerem kroku i odstępem. Eksperyment BOS autora okazał się stać na kruchym prompcie –
 dobry powód, żeby mierzyć, zanim się wyciągnie wnioski. Wyniki trafiają do Historii i eksportu CSV
 (`kruchosc.csv`, `token_poczatku.csv`, `manifest.json`).
 

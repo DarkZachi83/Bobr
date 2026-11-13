@@ -1100,5 +1100,8 @@
   "d.bos.fixed": "Utworzono {name}: {status}",
   "d.bos.nothing_to_fix": "Ten model nie wymaga poprawki.",
   "d.bos.export": "Eksportuj do CSV…",
-  "q.ed.hint.category": "Wybierz z listy albo wpisz własną."
+  "q.ed.hint.category": "Wybierz z listy albo wpisz własną.",
+  "d.cmp.at": "krok {pos}, odstęp {margin} („{a}” wobec „{b}”)",
+  "d.cmp.nosteps": "bez danych kroku rozbieżności – uruchom kruchość ponownie",
+  "q.note_custom": "Własny test – wynik mówi o tych zadaniach i o niczym więcej. Im mniej zadań, tym ostrożniej z wnioskami; trzy próby sprawdzają stabilność odpowiedzi, a nie mnożą zadań."
 }

@@ -436,6 +436,13 @@ class QualityPanel(BenchmarkPanel):
         return t(f"d.label.{label}") if label in ("stable", "fragile", "tie") else ""
 
     @staticmethod
+    def _note(suite_ids) -> str:
+        """Zastrzeżenie o 15 zadaniach – tylko dla testów standardowych; własny test ma własną liczbę zadań
+        (zgłoszenie autora 13.11: „15 zadań…” pod testem z jednym zadaniem)."""
+        from aibobr.quality import suites
+        return t("q.note") if any(s in suites.STANDARD for s in suite_ids) else t("q.note_custom")
+
+    @staticmethod
     def _category(category: str) -> str:
         return t(f"q.cat.{category}") if has_key(f"q.cat.{category}") else category
 
@@ -493,13 +500,18 @@ class QualityPanel(BenchmarkPanel):
 
     def bos_comparison(self) -> list[str]:
         """„Oba – porównanie” (decyzja autora 12.11, pkt 5): oryginał i poprawiona wersja tego samego testu obok
-        siebie; każde zadanie, które zmieniło wynik, z opisem z ostatniej diagnostyki kruchości oryginału:
-        kruche/remis – „przeważony remis”, stabilne – „rzeczywista różnica wejścia”."""
+        siebie; każde zadanie, które zmieniło wynik, z opisem z ostatniej diagnostyki kruchości oryginału.
+        Od 0.12.1 (decyzja autora 13.11): decyduje odstęp w **pierwszym kroku rozbieżności** odpowiedzi – prawie
+        remis tam → „przeważony remis”, model pewny → „rzeczywista różnica wejścia”; z liczbą i miejscem. Gdy
+        diagnostyka nie ma kroków (sprzed 0.12.1) albo jej odpowiedź różni się od odpowiedzi z testu – brak opisu."""
+        from aibobr.diagnostics.fragility import divergence, divergence_label
         out = []
         results = {(r["model"], r["suite"], r["lang"]): r["summary"].overall for r in self.q_results}
         tasks: dict = {}
+        answers: dict = {}
         for model, suite, lang, r, _, _ in self.task_rows.values():
             tasks.setdefault((model, suite, lang), {})[r.task_id] = r.correct
+            answers.setdefault((model, suite, lang), {})[r.task_id] = r.answer
         for variant, original in (getattr(self, "bos_pairs", None) or {}).items():
             for (model, suite, lang), a in results.items():
                 b = results.get((variant, suite, lang))
@@ -507,16 +519,25 @@ class QualityPanel(BenchmarkPanel):
                     continue
                 version = (self.suite_data.get(suite) or {}).get("suite_info", {}).get("version")
                 db = self.c.bench_db
-                frag = db.last_fragility(original, suite, lang, version) if db is not None else {}
+                frag = db.last_fragility_tasks(original, suite, lang, version) if db is not None else {}
+                thresholds = self.c.fragility_thresholds()
                 before, after = tasks.get((original, suite, lang), {}), tasks.get((variant, suite, lang), {})
                 changes = []
                 for task_id, was in before.items():
                     now = after.get(task_id)
                     if was is None or now is None or was == now:
                         continue
-                    label = frag.get(task_id)
-                    why = (t("d.cmp.flip") if label in ("fragile", "tie") else t("d.cmp.real") if label == "stable"
-                           else t("d.cmp.nodiag"))
+                    diag = frag.get(task_id)
+                    same = diag is not None and (diag.get("answer") or "") == answers.get(
+                        (original, suite, lang), {}).get(task_id, "")
+                    div = divergence(diag.get("steps_json"), answers.get((variant, suite, lang), {}).get(
+                        task_id, "")) if same else None
+                    kind = divergence_label(div, thresholds)
+                    if kind == "unknown":
+                        why = t("d.cmp.nodiag") if diag is None else t("d.cmp.nosteps")
+                    else:
+                        why = t(f"d.cmp.{kind}") + ": " + t("d.cmp.at", pos=div.pos, margin=f"{div.margin:.3f}",
+                                                             a=div.first[0], b=div.second[0] if div.second else "–")
                     changes.append(f"{task_id} {MARK[was]}→{MARK[now]} ({why})")
                 out.append(t("d.cmp.line", model=original, test=test_name(suite, lang), a=frac(a.correct, a.evaluated),
                              b=frac(b.correct, b.evaluated),
@@ -531,14 +552,15 @@ class QualityPanel(BenchmarkPanel):
         s = run["summary"]
         out = [f"{run['model']} · {test_name(run['suite'], run['lang'])}", "", t("q.by_category")]
         for cat, v in s.by_category.items():
-            out.append(f"  {t('q.cat.' + cat):<24} {frac(v.correct, v.evaluated):>6}"
+            out.append(f"  {self._category(cat):<24} {frac(v.correct, v.evaluated):>6}"
                        + (f"   ({t('q.not_evaluated', n=v.total - v.evaluated)})" if v.partial else ""))
         out += ["", t("q.by_level")]
         for lvl in ("easy", "medium", "hard"):
             v = s.by_level.get(lvl)
             if v:
                 out.append(f"  {t('q.level.' + lvl):<24} {frac(v.correct, v.evaluated):>6}")
-        out += ["", t("q.format_line", n=s.format_noncompliant), t("q.manual_line", n=s.manual), "", t("q.note")]
+        out += ["", t("q.format_line", n=s.format_noncompliant), t("q.manual_line", n=s.manual), "",
+                self._note([run["suite"]])]
         self._set(self.breakdown, "\n".join(out))
 
     def _show_task(self) -> None:
@@ -660,7 +682,8 @@ class QualityPanel(BenchmarkPanel):
                          + (f" · {t('q.coverage', evaluated=run['evaluated'], total=run['total'])}"
                             if (run['evaluated'] or 0) < (run['total'] or 0) else ""))
             cats = json.loads(run["by_category_json"] or "{}")
-            lines.append("   " + " · ".join(f"{t('q.cat.' + k)} {frac(v['correct'], v['evaluated'])}" for k, v in cats.items()))
+            lines.append("   " + " · ".join(f"{self._category(k)} {frac(v['correct'], v['evaluated'])}"
+                                            for k, v in cats.items()))
             for task in db.quality_tasks(run["id"]):
                 mark = MARK[None if task["correct"] is None else bool(task["correct"])]
                 lines.append(f"   {task['task_id']:>4} {mark} {t('q.reason.' + (task['reason'] or 'wrong'))}"
@@ -671,7 +694,7 @@ class QualityPanel(BenchmarkPanel):
         win.geometry("860x600")
         text = self._text(win)
         text.pack(fill="both", expand=True)
-        self._set(text, "\n".join(lines) + "\n" + t("q.note"))
+        self._set(text, "\n".join(lines) + "\n" + self._note([r["suite"] for r in db.quality_runs(sid)]))
         self.details_window = win
 
     def export_history(self) -> None:

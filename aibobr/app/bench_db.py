@@ -10,6 +10,8 @@ Wersja schematu w `PRAGMA user_version`:
   3 – od 0.12: diagnostyka – `bos_checks` (token początku, jeden wynik na model i wersję pliku),
       `diag_sessions` + `diag_tasks` (kruchość promptu); kolumna `bos_status` w `runs` i `quality_runs`
       (z jakim tokenem początku liczono wynik).
+  4 – od 0.12.1: `diag_tasks.steps_json` – każdy krok odpowiedzi z dwoma kandydatami (krok rozbieżności
+      w porównaniu „oba”).
 
 Brak odczytu (czujnik niedostępny, pole nieobecne w odpowiedzi silnika) = NULL, nigdy 0.
 Przed migracją robimy kopię pliku (API kopii SQLite), migracja idzie w jednej transakcji.
@@ -24,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS perf (
@@ -345,7 +347,10 @@ CREATE INDEX diag_tasks_session ON diag_tasks(session_id, task_no);
 ALTER TABLE runs ADD COLUMN bos_status TEXT;
 ALTER TABLE quality_runs ADD COLUMN bos_status TEXT
 """
-MIGRATIONS = {1: SCHEMA_V1, 2: SCHEMA_V2, 3: SCHEMA_V3}
+SCHEMA_V4 = """
+ALTER TABLE diag_tasks ADD COLUMN steps_json TEXT
+"""
+MIGRATIONS = {1: SCHEMA_V1, 2: SCHEMA_V2, 3: SCHEMA_V3, 4: SCHEMA_V4}
 QUALITY_TABLES = ("quality_sessions", "quality_runs", "quality_tasks")
 DIAG_TABLES = ("bos_checks", "diag_sessions", "diag_tasks")
 
@@ -684,7 +689,7 @@ class BenchDb:
             "tie_steps": d.get("tie_steps"), "first_pos": d.get("first_pos"), "first_pair_json": d.get("first_pair"),
             "first_context": d.get("first_context"), "scope": d.get("scope"), "answer_steps": d.get("answer_steps"),
             "after_fragile": d.get("after_fragile"), "after_tie": d.get("after_tie"), "answer": d.get("answer"),
-            "reason": d.get("reason")})
+            "reason": d.get("reason"), "steps_json": d.get("step_data")})
 
     def diag_sessions(self, model: Optional[str] = None) -> list[dict]:
         if not self.path.exists():
@@ -696,7 +701,7 @@ class BenchDb:
     def diag_tasks(self, session_id: str) -> list[dict]:
         rows = self._select("SELECT * FROM diag_tasks WHERE session_id = ? ORDER BY task_no", [session_id])
         for row in rows:
-            for key in ("min_pair_json", "first_pair_json"):
+            for key in ("min_pair_json", "first_pair_json", "steps_json"):
                 row[key] = json.loads(row[key]) if row[key] else None
         return rows
 
@@ -721,6 +726,18 @@ class BenchDb:
         with closing(self._connect()) as db, db:
             db.execute(f"UPDATE {table} SET bos_status = ? WHERE session_id = ? AND model = ?",
                        [status, session_id, model])
+
+    def last_fragility_tasks(self, model: str, suite: str, lang: str, suite_version: Optional[str] = None) -> dict:
+        """Jak last_fragility, ale pełne wiersze zadań (z krokami) – do kroku rozbieżności w porównaniu „oba”."""
+        if not self.path.exists():
+            return {}
+        sql = ("SELECT id FROM diag_sessions WHERE model = ? AND suite = ? AND lang = ? AND status = 'finished'")
+        args = [model, suite, lang]
+        if suite_version is not None:
+            sql += " AND suite_version = ?"
+            args.append(suite_version)
+        rows = self._select(sql + " ORDER BY started_at DESC LIMIT 1", args)
+        return {t["task_id"]: t for t in self.diag_tasks(rows[0]["id"])} if rows else {}
 
     def delete_diag_session(self, session_id: str) -> None:
         with closing(self._connect()) as db, db:

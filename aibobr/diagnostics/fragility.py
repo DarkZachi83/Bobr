@@ -70,6 +70,7 @@ class TaskFragility:
     answer_steps: Optional[int] = None       # ile kroków do końca odpowiedzi (włącznie)
     after_fragile: int = 0                   # kroki poniżej progu „kruche” po odpowiedzi (bez wpływu na etykietę)
     after_tie: int = 0
+    step_data: Optional[list] = None         # każdy krok: [token, p1, token2, p2] – do kroku rozbieżności (0.12.1)
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -210,8 +211,51 @@ def classify(task_id: str, logprobs: Optional[list], answer: str = "",
                          len(fragile), len(ties), first.pos if first else None,
                          (first.first, first.second) if first else None, context, answer,
                          scope=scope, answer_steps=len(head) if scope == "answer" else None,
+                         step_data=[[s.token, round(s.first[1], 6), s.second[0] if s.second else None,
+                                     round(s.second[1], 6) if s.second else None] for s in st],
                          after_fragile=sum(1 for s in tail if s.margin < thresholds.fragile),
                          after_tie=sum(1 for s in tail if s.margin < thresholds.tie))
+
+
+@dataclass(frozen=True)
+class Divergence:
+    """Pierwszy krok, w którym inna odpowiedź odchodzi od zdiagnozowanej, i odstęp w tym kroku."""
+    pos: int
+    margin: float
+    first: tuple                             # (token, p) – wybór w zdiagnozowanej odpowiedzi
+    second: Optional[tuple]                  # (token, p) – drugi kandydat
+    context: str                             # tekst tuż przed rozbieżnością
+
+
+def divergence(step_data: Optional[list], other: str) -> Optional[Divergence]:
+    """Gdzie odpowiedź `other` po raz pierwszy różni się od odpowiedzi z diagnostyki (jej kroki: step_data) –
+    i jaki był tam odstęp. Decyzja autora 13.11.2026: o „przeważonym remisie” decyduje odstęp w pierwszym kroku
+    rozbieżności, a nie najmniejszy odstęp w całej odpowiedzi (Minitron: rozbieżność „az”/„aż” w kroku 1 przy
+    odstępie ≥ 0,10, a prawie remisy były gdzie indziej). None – brak danych albo odpowiedzi identyczne."""
+    if not step_data:
+        return None
+    pos = 0
+    for n, (token, p1, token2, p2) in enumerate(step_data):
+        end = pos + len(token)
+        if other[pos:end] != token:
+            margin = p1 - (p2 or 0.0)
+            text = "".join(s[0] for s in step_data[:n])
+            return Divergence(n, round(margin, 6), (token, p1), (token2, p2) if token2 is not None else None,
+                              text[-CONTEXT_CHARS:])
+        pos = end
+    if len(other) > pos:                   # zdiagnozowana odpowiedź się skończyła, a druga trwa dalej
+        last = step_data[-1]
+        return Divergence(len(step_data) - 1, round(last[1] - (last[3] or 0.0), 6), (last[0], last[1]),
+                          (last[2], last[3]) if last[2] is not None else None, "")
+    return None
+
+
+def divergence_label(div: Optional[Divergence], thresholds: Thresholds) -> str:
+    """flip – w kroku rozbieżności prawie remis (przeważony remis); real – model był tam pewny (rzeczywista
+    różnica wejścia); unknown – brak danych z diagnostyki."""
+    if div is None:
+        return "unknown"
+    return "flip" if div.margin < thresholds.fragile else "real"
 
 
 @dataclass

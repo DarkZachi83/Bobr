@@ -243,7 +243,7 @@ def export_quality_session(db, session_id: str, parent: str | Path) -> Path:
 
 D_TASK_COLS = ("task_no", "task_id", "label", "steps", "min_margin", "min_pos", "min_pair_json", "fragile_steps",
                "tie_steps", "first_pos", "first_pair_json", "first_context", "scope", "answer_steps", "after_fragile",
-               "after_tie", "reason", "answer")
+               "after_tie", "reason", "answer", "steps_json")
 BOS_COLS = ("model", "digest", "checked_at", "status", "reason", "expects", "add_bos", "gguf_template_has",
             "gguf_template_source", "bos_text", "template_has", "without_count", "with_text_count", "effective",
             "runtime_version", "app_version")

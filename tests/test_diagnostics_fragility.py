@@ -194,5 +194,26 @@ class Client(unittest.TestCase):
         self.assertEqual(g.logprobs, [{"token": "x", "logprob": -0.1}])
 
 
+class Divergence(unittest.TestCase):
+    """0.12.1 (decyzja autora 13.11): opis zmiany z odstępu w pierwszym kroku rozbieżności."""
+    STEPS = [["Z", 0.425, '"', 0.361], ["az", 0.7, "aż", 0.2], ["ół", 0.408, "ól", 0.383], ["ć", 0.99, None, None]]
+
+    def test_minitron_case_real_not_flip(self):
+        d = fr.divergence(self.STEPS, "Zażółć")
+        self.assertEqual((d.pos, d.margin, d.first, d.second, d.context), (1, 0.5, ("az", 0.7), ("aż", 0.2), "Z"))
+        self.assertEqual(fr.divergence_label(d, Thresholds()), "real")       # prawie remisy były gdzie indziej
+
+    def test_flip_and_identical_and_longer(self):
+        self.assertEqual(fr.divergence_label(fr.divergence(self.STEPS, "Zazólć"), Thresholds()), "flip")
+        self.assertIsNone(fr.divergence(self.STEPS, "Zazółć"))
+        self.assertEqual(fr.divergence(self.STEPS, "Zazółć gęślą").pos, 3)  # dalszy ciąg po końcu odpowiedzi
+        self.assertEqual(fr.divergence_label(None, Thresholds()), "unknown")
+        self.assertIsNone(fr.divergence(None, "x"))
+
+    def test_classify_keeps_steps(self):
+        f = fr.classify("S9", FRAGILE)
+        self.assertEqual(f.step_data[1], [" wtorek", 0.52, " piątek", 0.45])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -139,11 +139,26 @@ class DiagnosticsSchemaTest(unittest.TestCase):
             old.start_quality_run(qs, model="m", suite="scisly_v1", lang="pl", started_at="x", correct=12)
         before = dump(path, "quality_runs")
         db = BenchDb(path, today="2026-11-12")
-        self.assertEqual(db.schema_version(), 3)
+        self.assertEqual(db.schema_version(), bench_db.SCHEMA_VERSION)
         self.assertEqual(db.backup.name, "benchmarks.sqlite.bak-2026-11-12")
         self.assertEqual([row[:-1] for row in dump(path, "quality_runs")], before)
         self.assertEqual(dump(db.backup, "quality_runs"), before)
         self.assertEqual(db.bos_checks(), [])
+
+    def test_upgrade_from_012_adds_steps(self):
+        from aibobr.diagnostics.fragility import TaskFragility
+        path = Path(tempfile.mkdtemp()) / "benchmarks.sqlite"
+        with mock.patch.object(bench_db, "SCHEMA_VERSION", 3):              # baza z 0.12.0
+            old = BenchDb(path, today="2026-11-12")
+            ds = old.start_diag_session(started_at="x", model="m", suite="s", lang="pl")
+            old._insert("diag_tasks", {"session_id": ds, "task_no": 1, "task_id": "T1", "label": "stable"})
+        db = BenchDb(path, today="2026-11-13")
+        self.assertEqual(db.schema_version(), 4)
+        self.assertEqual(db.backup.name, "benchmarks.sqlite.bak-2026-11-13")
+        self.assertIsNone(db.diag_tasks(ds)[0]["steps_json"])                 # stare wiersze – bez kroków
+        db.add_diag_task(ds, 2, TaskFragility("T2", "stable", step_data=[["a", 0.9, "b", 0.1]]))
+        db.finish_diag_session(ds, finished_at="y")
+        self.assertEqual(db.last_fragility_tasks("m", "s", "pl")["T2"]["steps_json"], [["a", 0.9, "b", 0.1]])
 
     def test_bos_checks_latest_per_model_and_digest(self):
         from aibobr.diagnostics.bos import BosCheck
