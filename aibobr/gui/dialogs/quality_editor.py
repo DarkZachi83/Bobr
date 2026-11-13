@@ -574,11 +574,27 @@ class TestEditor(tk.Toplevel):
         self._commit()
         self._show_task(int(sel[0]))
 
+    def _category_names(self) -> dict[str, str]:
+        """Wyświetlana nazwa → zapisywana kategoria: standardowe (klucz, np. „przeksztalcanie” → „przekształcanie
+        zdań”) i wszystkie kategorie z tego testu."""
+        names = {}
+        for sid in suites.STANDARD:
+            for x in suites.load(sid)["tasks"]:
+                names[cat_name(x["category"])] = x["category"]
+        for x in (self.data or {}).get("tasks") or []:
+            c = str(x.get("category") or "").strip()
+            if c:
+                names.setdefault(cat_name(c), c)
+        return names
+
     def add_task(self) -> None:
         if self.data is None or self.readonly:
             return
         self._commit()
-        self.data["tasks"].append(custom.new_task(self.data))
+        task = custom.new_task(self.data)
+        if self.index is not None and self.index < len(self.data["tasks"]):   # kategoria jak w bieżącym zadaniu
+            task["category"] = self.data["tasks"][self.index].get("category", "")
+        self.data["tasks"].append(task)
         self._fill_tasks()
         self._show_task(len(self.data["tasks"]) - 1)
         self._update_info()
@@ -652,11 +668,15 @@ class TestEditor(tk.Toplevel):
         langs = self.data["suite_info"]["languages"]
         tid = task.get("id", "?")
         ttk.Label(self.form, text=t("q.ed.task_title", id=tid), font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
-        cats = sorted({str(x.get("category", "")) for x in self.data["tasks"] if x.get("category")})
         self._label(t("q.ed.field.category"))
-        var = tk.StringVar(value=str(task.get("category", "")))
-        cb = ttk.Combobox(self.form, textvariable=var, values=cats, width=30)
+        # Podpowiedzi: kategorie z tego testu i z testów standardowych (nazwy po polsku/angielsku); można wpisać
+        # własną. Zgłoszenie autora 13.11.2026: przy nowym teście lista była pusta i wyglądała na zepsutą.
+        self.cat_names = self._category_names()
+        current = str(task.get("category", ""))
+        var = tk.StringVar(value=cat_name(current) if current in self.cat_names.values() else current)
+        cb = ttk.Combobox(self.form, textvariable=var, values=sorted(self.cat_names, key=str.casefold), width=30)
         cb.pack(anchor="w")
+        ttk.Label(self.form, text=t("q.ed.hint.category"), foreground=COLORS["muted"]).pack(anchor="w")
         self.inputs["category"] = (var, cb)
         row = ttk.Frame(self.form)
         row.pack(fill="x", pady=(6, 0))
@@ -757,7 +777,8 @@ class TestEditor(tk.Toplevel):
         task = self.data["tasks"][self.index]
         langs = info["languages"]
         tid = task.get("id", "?")
-        task["category"] = self._get("category").strip()
+        typed = self._get("category").strip()
+        task["category"] = getattr(self, "cat_names", {}).get(typed, typed)    # nazwa z listy → klucz kategorii
         levels = {t(f"q.level.{l}"): l for l in suites.LEVELS}
         task["level"] = levels.get(self._get("level"), task.get("level"))
         mt = self._get("max_tokens").strip()

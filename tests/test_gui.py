@@ -852,6 +852,14 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertIn("T1 · Treść zadania (PL) – brak treści zadania", texts)
         self.assertFalse(folder.exists() and any(folder.iterdir()))
         # wypełnienie: liczba
+        values = ed.inputs["category"][1].cget("values")
+        self.assertIn("Ortografia", values)                          # podpowiedzi także przy nowym, pustym teście
+        self.assertIn("Przekształcanie", values)
+        ed.inputs["category"][0].set("Przekształcanie")
+        ed._commit()
+        self.assertEqual(ed.data["tasks"][0]["category"], "przeksztalcanie")   # zapisany klucz, nie nazwa
+        ed._show_task(0)
+        self.assertEqual(ed.inputs["category"][0].get(), "Przekształcanie")
         ed.inputs["category"][0].set("rachunki")
         ed.inputs["prompt.pl"][1].insert("1.0", "Ile to 6 × 7? Podaj tylko liczbę.")
         ed.inputs["type"][0].set("liczba")
@@ -864,6 +872,7 @@ class GuiSmokeTest(unittest.TestCase):
         # drugie zadanie: Python z tabelą przypadków, błąd składni wiersza
         ed.add_task()
         self.assertEqual(ed.data["tasks"][1]["id"], "T2")
+        self.assertEqual(ed.data["tasks"][1]["category"], "rachunki")         # kategoria jak w poprzednim zadaniu
         ed.inputs["category"][0].set("kod")
         ed.inputs["prompt.pl"][1].insert("1.0", "Napisz add(a, b).")
         ed.inputs["type"][0].set("kod Pythona")
