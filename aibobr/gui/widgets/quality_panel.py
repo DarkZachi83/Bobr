@@ -436,6 +436,13 @@ class QualityPanel(BenchmarkPanel):
         return t(f"d.label.{label}") if label in ("stable", "fragile", "tie") else ""
 
     @staticmethod
+    def _note(suite_ids) -> str:
+        """Zastrzeżenie o 15 zadaniach – tylko dla testów standardowych; własny test ma własną liczbę zadań
+        (zgłoszenie autora 13.11: „15 zadań…” pod testem z jednym zadaniem)."""
+        from aibobr.quality import suites
+        return t("q.note") if any(s in suites.STANDARD for s in suite_ids) else t("q.note_custom")
+
+    @staticmethod
     def _category(category: str) -> str:
         return t(f"q.cat.{category}") if has_key(f"q.cat.{category}") else category
 
@@ -531,14 +538,15 @@ class QualityPanel(BenchmarkPanel):
         s = run["summary"]
         out = [f"{run['model']} · {test_name(run['suite'], run['lang'])}", "", t("q.by_category")]
         for cat, v in s.by_category.items():
-            out.append(f"  {t('q.cat.' + cat):<24} {frac(v.correct, v.evaluated):>6}"
+            out.append(f"  {self._category(cat):<24} {frac(v.correct, v.evaluated):>6}"
                        + (f"   ({t('q.not_evaluated', n=v.total - v.evaluated)})" if v.partial else ""))
         out += ["", t("q.by_level")]
         for lvl in ("easy", "medium", "hard"):
             v = s.by_level.get(lvl)
             if v:
                 out.append(f"  {t('q.level.' + lvl):<24} {frac(v.correct, v.evaluated):>6}")
-        out += ["", t("q.format_line", n=s.format_noncompliant), t("q.manual_line", n=s.manual), "", t("q.note")]
+        out += ["", t("q.format_line", n=s.format_noncompliant), t("q.manual_line", n=s.manual), "",
+                self._note([run["suite"]])]
         self._set(self.breakdown, "\n".join(out))
 
     def _show_task(self) -> None:
@@ -660,7 +668,8 @@ class QualityPanel(BenchmarkPanel):
                          + (f" · {t('q.coverage', evaluated=run['evaluated'], total=run['total'])}"
                             if (run['evaluated'] or 0) < (run['total'] or 0) else ""))
             cats = json.loads(run["by_category_json"] or "{}")
-            lines.append("   " + " · ".join(f"{t('q.cat.' + k)} {frac(v['correct'], v['evaluated'])}" for k, v in cats.items()))
+            lines.append("   " + " · ".join(f"{self._category(k)} {frac(v['correct'], v['evaluated'])}"
+                                            for k, v in cats.items()))
             for task in db.quality_tasks(run["id"]):
                 mark = MARK[None if task["correct"] is None else bool(task["correct"])]
                 lines.append(f"   {task['task_id']:>4} {mark} {t('q.reason.' + (task['reason'] or 'wrong'))}"
@@ -671,7 +680,7 @@ class QualityPanel(BenchmarkPanel):
         win.geometry("860x600")
         text = self._text(win)
         text.pack(fill="both", expand=True)
-        self._set(text, "\n".join(lines) + "\n" + t("q.note"))
+        self._set(text, "\n".join(lines) + "\n" + self._note([r["suite"] for r in db.quality_runs(sid)]))
         self.details_window = win
 
     def export_history(self) -> None:

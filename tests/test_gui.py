@@ -757,6 +757,13 @@ class GuiSmokeTest(unittest.TestCase):
         self.assertIn("T2 ✗→✓ (rzeczywista różnica wejścia)", label)
         runs = db.quality_runs(q.q_session)
         self.assertEqual({r["model"]: r["bos_status"] for r in runs}, {"minitron": "missing", "minitron-bos": "ok"})
+        q.rtable.selection_set(q.rtable.get_children()[0])           # rozbicie własnego testu (zgłoszenie 13.11)
+        self.pump(seconds=0.1)
+        text = q.breakdown.get("1.0", "end")
+        self.assertNotIn("q.cat.", text)
+        self.assertIn("  x ", text)
+        self.assertIn("Własny test", text)
+        self.assertNotIn("15 zadań", text)
         # drugi raz: wersja już jest – bez tworzenia; „jak podaje Ollama” – tylko oryginał
         q.ask_bos = lambda checks, variants: "as_is"
         q.select_targets(["ollama:minitron"])
